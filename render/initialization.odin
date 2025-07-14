@@ -6,7 +6,6 @@ import "core:log"
 import "core:slice"
 import "core:strings"
 
-
 import "vendor:glfw"
 import vk "vendor:vulkan"
 
@@ -30,6 +29,7 @@ set_logger :: proc(logger: log.Logger) {
 
 init_context :: proc(ctx: ^RenderContext, window: glfw.WindowHandle) {
 	ctx.window = window
+	ctx.image_index = 0
 }
 
 create_instance :: proc(ctx: ^RenderContext) {
@@ -177,86 +177,6 @@ destroy_logical_device :: proc(ctx: ^RenderContext) {
 	vk.DestroyDevice(ctx.device, nil)
 }
 
-create_swapchain :: proc(ctx: ^RenderContext) {
-	indices := find_queue_families(ctx.physical_device, ctx.surface)
-
-	// Setup swapchain.
-	support, result := query_swapchain_support(
-		ctx.physical_device,
-		ctx.surface,
-		context.temp_allocator,
-	)
-	if result != .SUCCESS {
-		log.panicf("vulkan: query swapchain failed: %v", result)
-	}
-
-	surface_format := choose_swapchain_surface_format(support.formats)
-	present_mode := choose_swapchain_present_mode(support.presentModes)
-	extent := choose_swapchain_extent(ctx.window, support.capabilities)
-
-	image_count := support.capabilities.minImageCount + 1
-	if support.capabilities.maxImageCount > 0 && image_count > support.capabilities.maxImageCount {
-		image_count = support.capabilities.maxImageCount
-	}
-
-	create_info := vk.SwapchainCreateInfoKHR {
-		sType            = .SWAPCHAIN_CREATE_INFO_KHR,
-		surface          = ctx.surface,
-		minImageCount    = image_count,
-		imageFormat      = surface_format.format,
-		imageColorSpace  = surface_format.colorSpace,
-		imageExtent      = extent,
-		imageArrayLayers = 1,
-		imageUsage       = {.COLOR_ATTACHMENT},
-		preTransform     = support.capabilities.currentTransform,
-		compositeAlpha   = {.OPAQUE},
-		presentMode      = present_mode,
-		clipped          = true,
-	}
-
-	if indices.graphics != indices.present {
-		create_info.imageSharingMode = .CONCURRENT
-		create_info.queueFamilyIndexCount = 2
-		create_info.pQueueFamilyIndices = raw_data([]u32{indices.graphics.?, indices.present.?})
-	}
-
-	swapchain: vk.SwapchainKHR
-	must(vk.CreateSwapchainKHR(ctx.device, &create_info, nil, &swapchain))
-
-	ctx.swapchain = new(SwapChain)
-	ctx.swapchain.swapchain = swapchain
-	ctx.swapchain.format = surface_format
-	ctx.swapchain.extent = extent
-	setup_swapchain_images(ctx.swapchain, ctx.device)
-
-	ctx.swapchain.render_finished_semaphores = make([]vk.Semaphore, len(ctx.swapchain.images))
-	sem_info := vk.SemaphoreCreateInfo {
-		sType = .SEMAPHORE_CREATE_INFO,
-	}
-	for _, i in ctx.swapchain.images {
-		//must(vk.CreateSemaphore(ctx.device, &sem_info, nil, &ctx.image_available_semaphores[i]))
-		must(
-			vk.CreateSemaphore(
-				ctx.device,
-				&sem_info,
-				nil,
-				&ctx.swapchain.render_finished_semaphores[i],
-			),
-		)
-	}
-}
-
-destroy_swapchain :: proc(ctx: ^RenderContext) {
-	for sem in ctx.swapchain.render_finished_semaphores {vk.DestroySemaphore(ctx.device, sem, nil)}
-	for view in ctx.swapchain.image_views {
-		vk.DestroyImageView(ctx.device, view, nil)
-	}
-	delete(ctx.swapchain.image_views)
-	delete(ctx.swapchain.images)
-	vk.DestroySwapchainKHR(ctx.device, ctx.swapchain.swapchain, nil)
-}
-
-
 create_render_pass :: proc(ctx: ^RenderContext) {
 	color_attachment := vk.AttachmentDescription {
 		format         = ctx.swapchain.format.format,
@@ -306,127 +226,6 @@ destroy_render_pass :: proc(ctx: ^RenderContext) {
 	vk.DestroyRenderPass(ctx.device, ctx.render_pass, nil)
 }
 
-create_framebuffers :: proc(ctx: ^RenderContext) {
-	ctx.swapchain.frame_buffers = make([]vk.Framebuffer, len(ctx.swapchain.image_views))
-	for view, i in ctx.swapchain.image_views {
-		attachments := []vk.ImageView{view}
-
-		frame_buffer := vk.FramebufferCreateInfo {
-			sType           = .FRAMEBUFFER_CREATE_INFO,
-			renderPass      = ctx.render_pass,
-			attachmentCount = 1,
-			pAttachments    = raw_data(attachments),
-			width           = ctx.swapchain.extent.width,
-			height          = ctx.swapchain.extent.height,
-			layers          = 1,
-		}
-		must(vk.CreateFramebuffer(ctx.device, &frame_buffer, nil, &ctx.swapchain.frame_buffers[i]))
-	}
-}
-
-destroy_framebuffers :: proc(ctx: ^RenderContext) {
-	for frame_buffer in ctx.swapchain.frame_buffers {
-		vk.DestroyFramebuffer(ctx.device, frame_buffer, nil)
-	}
-	delete(ctx.swapchain.frame_buffers)
-}
-
-create_graphic_pipeline :: proc(ctx: ^RenderContext) {
-	shader_stages := [2]vk.PipelineShaderStageCreateInfo{}
-
-	vert_shader_module := create_shader_module(ctx.device, SHADER_VERT)
-	shader_stages[0] = vk.PipelineShaderStageCreateInfo {
-		sType  = .PIPELINE_SHADER_STAGE_CREATE_INFO,
-		stage  = {.VERTEX},
-		module = vert_shader_module,
-		pName  = "main",
-	}
-
-	frag_shader_module := create_shader_module(ctx.device, SHADER_FRAG)
-	shader_stages[1] = vk.PipelineShaderStageCreateInfo {
-		sType  = .PIPELINE_SHADER_STAGE_CREATE_INFO,
-		stage  = {.FRAGMENT},
-		module = frag_shader_module,
-		pName  = "main",
-	}
-
-	defer vk.DestroyShaderModule(ctx.device, vert_shader_module, nil)
-	defer vk.DestroyShaderModule(ctx.device, frag_shader_module, nil)
-
-	dynamic_states := []vk.DynamicState{.VIEWPORT, .SCISSOR}
-	dynamic_state := vk.PipelineDynamicStateCreateInfo {
-		sType             = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		dynamicStateCount = 2,
-		pDynamicStates    = raw_data(dynamic_states),
-	}
-
-	vertex_input_info := vk.PipelineVertexInputStateCreateInfo {
-		sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	}
-
-	input_assembly := vk.PipelineInputAssemblyStateCreateInfo {
-		sType    = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		topology = .TRIANGLE_LIST,
-	}
-
-	viewport_state := vk.PipelineViewportStateCreateInfo {
-		sType         = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		viewportCount = 1,
-		scissorCount  = 1,
-	}
-
-	rasterizer := vk.PipelineRasterizationStateCreateInfo {
-		sType       = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		polygonMode = .FILL,
-		lineWidth   = 1,
-		cullMode    = {.BACK},
-		frontFace   = .CLOCKWISE,
-	}
-
-	multisampling := vk.PipelineMultisampleStateCreateInfo {
-		sType                = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		rasterizationSamples = {._1},
-		minSampleShading     = 1,
-	}
-
-	color_blend_attachment := vk.PipelineColorBlendAttachmentState {
-		colorWriteMask = {.R, .G, .B, .A},
-	}
-
-	color_blending := vk.PipelineColorBlendStateCreateInfo {
-		sType           = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		attachmentCount = 1,
-		pAttachments    = &color_blend_attachment,
-	}
-
-	pipeline_layout := vk.PipelineLayoutCreateInfo {
-		sType = .PIPELINE_LAYOUT_CREATE_INFO,
-	}
-	must(vk.CreatePipelineLayout(ctx.device, &pipeline_layout, nil, &ctx.pipeline_layout))
-
-	pipeline := vk.GraphicsPipelineCreateInfo {
-		sType               = .GRAPHICS_PIPELINE_CREATE_INFO,
-		stageCount          = 2,
-		pStages             = &shader_stages[0],
-		pVertexInputState   = &vertex_input_info,
-		pInputAssemblyState = &input_assembly,
-		pViewportState      = &viewport_state,
-		pRasterizationState = &rasterizer,
-		pMultisampleState   = &multisampling,
-		pColorBlendState    = &color_blending,
-		pDynamicState       = &dynamic_state,
-		layout              = ctx.pipeline_layout,
-		renderPass          = ctx.render_pass,
-		subpass             = 0,
-		basePipelineIndex   = -1,
-	}
-	must(vk.CreateGraphicsPipelines(ctx.device, 0, 1, &pipeline, nil, &ctx.pipeline))
-}
-
-destroy_graphic_pipline :: proc(ctx: ^RenderContext) {
-	vk.DestroyPipelineLayout(ctx.device, ctx.pipeline_layout, nil)
-	vk.DestroyPipeline(ctx.device, ctx.pipeline, nil)
-}
 
 create_command_pool :: proc(ctx: ^RenderContext) {
 	indices := find_queue_families(ctx.physical_device, ctx.surface)
@@ -768,88 +567,22 @@ create_shader_module :: proc(device: vk.Device, code: []byte) -> (module: vk.Sha
 	return
 }
 
-setup_swapchain_images :: proc(swapchain: ^SwapChain, device: vk.Device) {
-	count: u32
-	must(vk.GetSwapchainImagesKHR(device, swapchain.swapchain, &count, nil))
-
-	swapchain.images = make([]vk.Image, count)
-	swapchain.image_views = make([]vk.ImageView, count)
-	must(vk.GetSwapchainImagesKHR(device, swapchain.swapchain, &count, raw_data(swapchain.images)))
-
-	for image, i in swapchain.images {
-		create_info := vk.ImageViewCreateInfo {
-			sType = .IMAGE_VIEW_CREATE_INFO,
-			image = image,
-			viewType = .D2,
-			format = swapchain.format.format,
-			subresourceRange = {aspectMask = {.COLOR}, levelCount = 1, layerCount = 1},
-		}
-		must(vk.CreateImageView(device, &create_info, nil, &swapchain.image_views[i]))
-	}
-}
-
-recreate_swapchain :: proc(ctx: ^RenderContext) {
-	// Don't do anything when minimized.
-	for w, h := glfw.GetFramebufferSize(ctx.window);
-	    w == 0 || h == 0;
-	    w, h = glfw.GetFramebufferSize(ctx.window) {
-		glfw.WaitEvents()
-
-		// Handle closing while minimized.
-		if glfw.WindowShouldClose(ctx.window) {break}
-	}
-
-	vk.DeviceWaitIdle(ctx.device)
-
-	destroy_framebuffers(ctx)
-	destroy_swapchain(ctx)
-
-	create_swapchain(ctx)
-	create_framebuffers(ctx)
-}
-
-record_command_buffer :: proc(
-	ctx: ^RenderContext,
-	command_buffer: vk.CommandBuffer,
-	image_index: u32,
-) {
-	begin_info := vk.CommandBufferBeginInfo {
-		sType = .COMMAND_BUFFER_BEGIN_INFO,
-	}
-	must(vk.BeginCommandBuffer(command_buffer, &begin_info))
-
-	clear_color := vk.ClearValue{}
-	clear_color.color.float32 = {0.0, 0.0, 0.0, 1.0}
-
-	render_pass_info := vk.RenderPassBeginInfo {
-		sType = .RENDER_PASS_BEGIN_INFO,
-		renderPass = ctx.render_pass,
-		framebuffer = ctx.swapchain.frame_buffers[image_index],
-		renderArea = {extent = ctx.swapchain.extent},
-		clearValueCount = 1,
-		pClearValues = &clear_color,
-	}
-	vk.CmdBeginRenderPass(command_buffer, &render_pass_info, .INLINE)
-
-	vk.CmdBindPipeline(command_buffer, .GRAPHICS, ctx.pipeline)
+record_command_buffer :: proc(ctx: ^RenderContext) {
+	vk.CmdBindPipeline(ctx.command_buffer, .GRAPHICS, ctx.pipeline)
 
 	viewport := vk.Viewport {
 		width    = f32(ctx.swapchain.extent.width),
 		height   = f32(ctx.swapchain.extent.height),
 		maxDepth = 1.0,
 	}
-	vk.CmdSetViewport(command_buffer, 0, 1, &viewport)
+	vk.CmdSetViewport(ctx.command_buffer, 0, 1, &viewport)
 
 	scissor := vk.Rect2D {
 		extent = ctx.swapchain.extent,
 	}
-	vk.CmdSetScissor(command_buffer, 0, 1, &scissor)
+	vk.CmdSetScissor(ctx.command_buffer, 0, 1, &scissor)
 
-	vk.CmdDraw(command_buffer, 3, 1, 0, 0)
-
-	vk.CmdEndRenderPass(command_buffer)
-
-	must(vk.EndCommandBuffer(command_buffer))
+	vk.CmdDraw(ctx.command_buffer, 3, 1, 0, 0)
 }
 
 byte_arr_str :: proc(arr: ^[$N]byte) -> string {
