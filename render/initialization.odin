@@ -568,6 +568,16 @@ create_shader_module :: proc(device: vk.Device, code: []byte) -> (module: vk.Sha
 }
 
 record_command_buffer :: proc(ctx: ^RenderContext) {
+	vertices: []Vertex = {
+		{{0.0, -0.5}, {1.0, 0.0, 0.0}},
+		{{0.5, 0.5}, {0.0, 1.0, 0.0}},
+		{{-0.5, 0.5}, {0.0, 0.0, 1.0}},
+	}
+
+	size := cast(vk.DeviceSize)(size_of(vertices[0]) * len(vertices))
+	buffer := create_buffer(ctx, size, {.VERTEX_BUFFER}, {.HOST_COHERENT, .HOST_VISIBLE})
+	fill_buffer(ctx, buffer, size, raw_data(vertices))
+
 	vk.CmdBindPipeline(ctx.command_buffer, .GRAPHICS, ctx.pipeline)
 
 	viewport := vk.Viewport {

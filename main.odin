@@ -3,6 +3,7 @@ package main
 import "base:runtime"
 
 import "core:log"
+import "core:math/linalg/glsl"
 import "core:slice"
 import "core:strings"
 import "core:time"
@@ -12,6 +13,8 @@ import "vendor:glfw"
 import vk "vendor:vulkan"
 
 g_ctx: runtime.Context
+
+vec3 :: [3]f32
 
 main :: proc() {
 	context.logger = log.create_console_logger()
@@ -58,13 +61,52 @@ main :: proc() {
 	render.create_sync_obj(&render_ctx)
 	defer render.destroy_sync_obj(&render_ctx)
 
+
+	vertices: []render.Vertex = {
+		{{0.0, -0.5}, {1.0, 0.0, 0.0}},
+		{{0.5, 0.5}, {0.0, 1.0, 0.0}},
+		{{-0.5, 0.5}, {0.0, 0.0, 1.0}},
+	}
+
+	size := cast(vk.DeviceSize)(size_of(vertices[0]) * len(vertices))
+	buffer := render.create_buffer(
+		&render_ctx,
+		size,
+		{.VERTEX_BUFFER},
+		{.HOST_COHERENT, .HOST_VISIBLE},
+	)
+	defer render.destroy_buffer(&render_ctx, &buffer)
+	render.fill_buffer(&render_ctx, buffer, size, raw_data(vertices))
+
+
 	for !glfw.WindowShouldClose(window) {
 		free_all(context.temp_allocator)
 
 		glfw.PollEvents()
 
 		render.begin_render(&render_ctx)
-		render.record_command_buffer(&render_ctx)
+		// Begin Render  ------------------------------
+
+		vk.CmdBindPipeline(render_ctx.command_buffer, .GRAPHICS, render_ctx.pipeline)
+
+		viewport := vk.Viewport {
+			width    = f32(render_ctx.swapchain.extent.width),
+			height   = f32(render_ctx.swapchain.extent.height),
+			maxDepth = 1.0,
+		}
+		vk.CmdSetViewport(render_ctx.command_buffer, 0, 1, &viewport)
+
+		scissor := vk.Rect2D {
+			extent = render_ctx.swapchain.extent,
+		}
+		vk.CmdSetScissor(render_ctx.command_buffer, 0, 1, &scissor)
+
+		offset := vk.DeviceSize{}
+		vk.CmdBindVertexBuffers(render_ctx.command_buffer, 0, 1, &buffer.buffer, &offset)
+
+		vk.CmdDraw(render_ctx.command_buffer, 3, 1, 0, 0)
+
+		// End Render  ------------------------------
 		render.end_render(&render_ctx)
 	}
 	vk.DeviceWaitIdle(render_ctx.device)

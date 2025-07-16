@@ -1,5 +1,6 @@
 package render
 
+import "base:intrinsics"
 import "base:runtime"
 
 import "core:log"
@@ -60,11 +61,17 @@ SwapChain :: struct {
 	render_finished_semaphores: []vk.Semaphore,
 }
 
+Buffer :: struct {
+	buffer: vk.Buffer,
+	memory: vk.DeviceMemory,
+}
+
 BeginRenderError :: enum {
 	None,
 	OutOfDate,
 	NotEnded,
 }
+
 
 begin_render :: proc(ctx: ^RenderContext) -> BeginRenderError {
 	if ctx.render_started {
@@ -163,4 +170,90 @@ end_render :: proc(ctx: ^RenderContext) {
 	}
 
 	defer ctx.render_started = false
+}
+
+find_memory_type :: proc(
+	physical_device: vk.PhysicalDevice,
+	type_filter: u32,
+	properties: vk.MemoryPropertyFlags,
+) -> (
+	memory_type: u32,
+	err: bool,
+) {
+	mem_property: vk.PhysicalDeviceMemoryProperties
+	vk.GetPhysicalDeviceMemoryProperties(physical_device, &mem_property)
+
+	for i: u32 = 0; i < mem_property.memoryTypeCount; i += 1 {
+		if (type_filter & (1 << i) != 0) &&
+		   (mem_property.memoryTypes[i].propertyFlags >= properties) {
+			return i, false
+		}
+	}
+
+	return 0, true
+}
+
+create_buffer :: proc(
+	ctx: ^RenderContext,
+	size: vk.DeviceSize,
+	usage: vk.BufferUsageFlags,
+	properties: vk.MemoryPropertyFlags,
+	//vertices: []Vertex,
+) -> Buffer {
+	//cast(vk.DeviceSize)(size_of(vertices[0]) * len(vertices))
+	// usage {.VERTEX_BUFFER}
+	buffer_info := vk.BufferCreateInfo {
+		sType       = .BUFFER_CREATE_INFO,
+		size        = size,
+		usage       = usage,
+		sharingMode = .EXCLUSIVE,
+	}
+
+	buffer: Buffer
+	must(vk.CreateBuffer(ctx.device, &buffer_info, nil, &buffer.buffer))
+
+	mem_requirements: vk.MemoryRequirements
+	vk.GetBufferMemoryRequirements(ctx.device, buffer.buffer, &mem_requirements)
+
+	memory_type, err := find_memory_type(
+		ctx.physical_device,
+		mem_requirements.memoryTypeBits,
+		properties,
+	)
+	if err {
+		log.fatal("Failed to find suitable memory type!")
+	}
+
+	alloc_info := vk.MemoryAllocateInfo {
+		sType           = .MEMORY_ALLOCATE_INFO,
+		allocationSize  = mem_requirements.size,
+		memoryTypeIndex = memory_type,
+	}
+
+	if vk.AllocateMemory(ctx.device, &alloc_info, nil, &buffer.memory) != .SUCCESS {
+		log.fatal("Failed to allocate buffer memory")
+	}
+
+	vk.BindBufferMemory(ctx.device, buffer.buffer, buffer.memory, 0)
+
+	return buffer
+}
+
+fill_buffer :: proc(
+	ctx: ^RenderContext,
+	buffer: Buffer,
+	buffer_size: vk.DeviceSize,
+	vertices: rawptr,
+) {
+	data: rawptr
+	vk.MapMemory(ctx.device, buffer.memory, 0, buffer_size, {}, &data)
+	intrinsics.mem_copy(data, vertices, buffer_size)
+	vk.UnmapMemory(ctx.device, buffer.memory)
+}
+
+destroy_buffer :: proc(ctx: ^RenderContext, buffer: ^Buffer) {
+	vk.DestroyBuffer(ctx.device, buffer.buffer, nil)
+	vk.FreeMemory(ctx.device, buffer.memory, nil)
+	buffer.buffer = 0
+	buffer.memory = 0
 }
