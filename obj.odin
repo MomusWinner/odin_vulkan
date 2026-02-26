@@ -1,0 +1,112 @@
+package ve
+
+import "core:fmt"
+import "core:hash"
+import "core:io"
+import "core:log"
+import "core:os"
+import "core:strconv"
+import "core:strings"
+import "math"
+
+ObjMesh :: struct {
+	name:     string,
+	vertices: []Vertex,
+	indices:  []u16,
+}
+
+import_obj :: proc(path: string, allocator := context.allocator) -> ([]ObjMesh, bool) {
+	parse_f :: proc(s: string) -> (pos: int, tex_coord: int, norm: int) {
+		indexes := strings.split(s, "/", context.temp_allocator)
+		pos, _ = strconv.parse_int(indexes[0])
+		pos -= 1
+
+		tex_coord, _ = strconv.parse_int(indexes[1])
+		tex_coord -= 1
+
+		norm, _ = strconv.parse_int(indexes[2])
+		norm -= 1
+
+		return
+	}
+
+	data, ok := read_file(path, context.temp_allocator)
+	if !ok {
+		log.errorf("Couldn't load file by path: %s", path)
+		return nil, false
+	}
+
+	data_string := string(data)
+
+	meshes := make([dynamic]ObjMesh, context.allocator)
+
+	name := ""
+	vertices := make([dynamic]Vertex, context.allocator)
+	indices := make([dynamic]u16, context.allocator)
+
+	index_by_vertex: map[u32]u16 = make(map[u32]u16, context.temp_allocator)
+
+	pos := make([dynamic]vec3, context.temp_allocator)
+	norm := make([dynamic]vec3, context.temp_allocator)
+	texCoord := make([dynamic]vec2, context.temp_allocator)
+
+	for line in strings.split_lines_iterator(&data_string) {
+		elements := strings.split(line, " ", context.temp_allocator)
+		if elements[0] == "o" {
+			if name != "" {
+				append(&meshes, ObjMesh{name = elements[1], vertices = vertices[:], indices = indices[:]})
+				clear(&vertices)
+				clear(&indices)
+			}
+			name = elements[1]
+		}
+		if elements[0] == "v" {
+			x, _ := strconv.parse_f32(elements[1])
+			y, _ := strconv.parse_f32(elements[2])
+			z, _ := strconv.parse_f32(elements[3])
+			append(&pos, vec3{x, y, z})
+		}
+		if elements[0] == "vn" {
+			x, _ := strconv.parse_f32(elements[1])
+			y, _ := strconv.parse_f32(elements[2])
+			z, _ := strconv.parse_f32(elements[3])
+			append(&norm, vec3{x, y, z})
+		}
+		if elements[0] == "vt" {
+			u, _ := strconv.parse_f32(elements[1])
+			v, _ := strconv.parse_f32(elements[2])
+			append(&texCoord, vec2{u, v})
+		}
+
+		// f v/vt/vn
+		if elements[0] == "f" {
+			values := elements[1:]
+			length := len(values)
+			if (length >= 3) {
+				line_indices := make([]u16, length, context.temp_allocator)
+				for i in 0 ..< length {
+					p, t, n := parse_f(values[i])
+					a := [3]int{p, t, n}
+					hash := hash.fnv32a(transmute([]byte)(a[:]))
+					index, ok := index_by_vertex[hash]
+					if !ok {
+						append(&vertices, Vertex{position = pos[p], tex_coord = texCoord[t], normal = norm[n]})
+						index = cast(u16)len(vertices) - 1
+						index_by_vertex[hash] = index
+					}
+					line_indices[i] = index
+				}
+				for i := 1; i < length - 1; i += 1 {
+					append(&indices, line_indices[0])
+					append(&indices, line_indices[i])
+					append(&indices, line_indices[i + 1])
+				}
+			} else {
+				panic("incorrect cout of elements in \"f\"")
+			}
+		}
+	}
+	append(&meshes, ObjMesh{name = name, vertices = vertices[:], indices = indices[:]})
+
+	return meshes[:], true
+}

@@ -1,0 +1,804 @@
+package ve
+
+import "base:runtime"
+import "core:log"
+import "core:os"
+import "core:slice"
+import "core:strings"
+import "lib/vma"
+import "vendor:glfw"
+import vk "vendor:vulkan"
+
+when ODIN_OS == .Darwin {
+	// NOTE: just a bogus import of the system library,
+	// needed so we can add a linker flag to point to /usr/local/lib (where vulkan is installed by default)
+	// when trying to load vulkan.
+	@(require, extra_linker_flags = "-rpath /usr/local/lib")
+	foreign import __ "system:System.framework"
+}
+
+@(private)
+g_context: runtime.Context // used for system callback procedures
+
+@(private)
+_init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
+	g_context = context
+
+	ctx.gfx.initialized = true
+	ctx.gfx.window = window
+
+	_init_vulkan_state()
+	ctx.gfx.cmd = _create_draw_command_buffers(ctx.gfx.vk_state) // TODO:
+	_init_limits()
+
+	_init_swapchaint_cfg()
+
+	_init_g_res_manager()
+	_init_pipeline_manager(ODIN_DEBUG)
+	_init_surface_manager()
+	_init_sync_obj()
+	_init_swapchain(init_info.swapchain_sample_count)
+	_init_deffered_destructor()
+	_init_material_manager()
+	_init_uniform_buffer_manager()
+	_init_bindless()
+	_init_temp_pools()
+	_init_buildin_resources()
+}
+
+@(private)
+_destroy_gfx :: proc() {
+	_destroy_buildin()
+	_destroy_temp_pools()
+	_destroy_bindless()
+	_destroy_material_manager()
+	_destroy_uniform_buffer_manager()
+	_destroy_deffered_destructor()
+	_destroy_descriptor_layout_manager()
+	_destroy_sync_obj()
+	_destroy_swapchain()
+	_destroy_pipeline_manager()
+	_destroy_surface_manager()
+	_destroy_g_res_manager()
+	_destroy_vulkan_state()
+
+	ctx.gfx = Graphics{}
+}
+
+@(private = "file")
+_init_vulkan_state :: proc() {
+	_create_instance()
+	_create_surface()
+	_pick_physical_device()
+	_create_logical_device()
+	_create_vma_allocator()
+	_create_descriptor_pool()
+	_create_command_pool()
+}
+
+@(private = "file")
+_destroy_vulkan_state :: proc() {
+	vma.DestroyAllocator(ctx.gfx.vk_state.allocator)
+	_destroy_command_pool()
+	_destroy_descriptor_pool()
+
+	_destroy_logical_device()
+	_destroy_surface()
+	_destroy_instance()
+	delete(ctx.gfx.vk_state.enabled_layer_names)
+}
+
+@(private = "file")
+_vk_messenger_callback :: proc "system" (
+	messageSeverity: vk.DebugUtilsMessageSeverityFlagsEXT,
+	messageTypes: vk.DebugUtilsMessageTypeFlagsEXT,
+	pCallbackData: ^vk.DebugUtilsMessengerCallbackDataEXT,
+	pUserData: rawptr,
+) -> b32 {
+	context = g_context
+
+	level: log.Level
+	if .ERROR in messageSeverity {
+		level = .Error
+	} else if .WARNING in messageSeverity {
+		level = .Warning
+	} else if .INFO in messageSeverity {
+		level = .Info
+	} else {
+		level = .Debug
+	}
+
+	log.logf(level, "VULKAN: %s", pCallbackData.pMessage)
+	return false
+}
+
+@(private = "file")
+_create_instance :: proc() {
+	vk.load_proc_addresses_global(rawptr(glfw.GetInstanceProcAddress))
+	assert(vk.CreateInstance != nil, "vulkan function pointers not loaded")
+
+	instance_info := vk.InstanceCreateInfo {
+		sType            = .INSTANCE_CREATE_INFO,
+		pApplicationInfo = &vk.ApplicationInfo {
+			sType = .APPLICATION_INFO,
+			pApplicationName = "Hello Triangle",
+			applicationVersion = vk.MAKE_VERSION(1, 0, 0),
+			pEngineName = "No Engine",
+			engineVersion = vk.MAKE_VERSION(1, 0, 0),
+			apiVersion = VULKAN_API_VERSION,
+		},
+	}
+
+	extensions := slice.clone_to_dynamic(glfw.GetRequiredInstanceExtensions(), context.temp_allocator)
+
+	// MacOS is a special snowflake ;)
+	when ODIN_OS == .Darwin {
+		create_info.flags |= {.ENUMERATE_PORTABILITY_KHR}
+		append(&extensions, vk.KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
+	}
+
+	when ENABLE_VALIDATION_LAYERS {
+		ctx.gfx.vk_state.enabled_layer_names = make([]cstring, 1)
+		ctx.gfx.vk_state.enabled_layer_names[0] = "VK_LAYER_KHRONOS_validation"
+		instance_info.ppEnabledLayerNames = raw_data(ctx.gfx.vk_state.enabled_layer_names)
+		instance_info.enabledLayerCount = 1
+
+		append(&extensions, vk.EXT_DEBUG_UTILS_EXTENSION_NAME)
+
+		// Severity based on logger level.
+		severity: vk.DebugUtilsMessageSeverityFlagsEXT
+		if context.logger.lowest_level <= .Error {
+			severity |= {.ERROR}
+		}
+		if context.logger.lowest_level <= .Warning {
+			severity |= {.WARNING}
+		}
+		if context.logger.lowest_level <= .Info {
+			severity |= {.INFO}
+		}
+		if context.logger.lowest_level <= .Debug {
+			severity |= {.VERBOSE}
+		}
+
+		dbg_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
+			sType           = .DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			messageSeverity = severity,
+			messageType     = {.GENERAL, .VALIDATION, .PERFORMANCE}, // all of them.
+			pfnUserCallback = _vk_messenger_callback,
+		}
+		instance_info.pNext = &dbg_create_info
+	}
+
+	instance_info.enabledExtensionCount = u32(len(extensions))
+	instance_info.ppEnabledExtensionNames = raw_data(extensions)
+
+	must(vk.CreateInstance(&instance_info, nil, &ctx.gfx.vk_state.instance))
+
+	vk.load_proc_addresses_instance(ctx.gfx.vk_state.instance)
+
+	when ENABLE_VALIDATION_LAYERS {
+		dbg_messenger: vk.DebugUtilsMessengerEXT
+		must(vk.CreateDebugUtilsMessengerEXT(ctx.gfx.vk_state.instance, &dbg_create_info, nil, &dbg_messenger))
+		ctx.gfx.vk_state.dbg_messenger = dbg_messenger
+	}
+}
+
+@(private = "file")
+_destroy_instance :: proc() {
+	when ENABLE_VALIDATION_LAYERS {
+		dbg_messenger, ok := ctx.gfx.vk_state.dbg_messenger.?
+		assert(ok)
+		vk.DestroyDebugUtilsMessengerEXT(ctx.gfx.vk_state.instance, dbg_messenger, nil)
+	}
+	vk.DestroyInstance(ctx.gfx.vk_state.instance, nil)
+}
+
+@(private = "file")
+_create_surface :: proc() {
+	must(glfw.CreateWindowSurface(ctx.gfx.vk_state.instance, ctx.gfx.window^, nil, &ctx.gfx.vk_state.surface))
+}
+
+@(private = "file")
+_destroy_surface :: proc() {
+	vk.DestroySurfaceKHR(ctx.gfx.vk_state.instance, ctx.gfx.vk_state.surface, nil)
+}
+
+@(private = "file")
+_physical_device_extensions :: proc(
+	device: vk.PhysicalDevice,
+	allocator := context.temp_allocator,
+) -> (
+	exts: []vk.ExtensionProperties,
+	res: vk.Result,
+) {
+	count: u32
+	vk.EnumerateDeviceExtensionProperties(device, nil, &count, nil) or_return
+
+	exts = make([]vk.ExtensionProperties, count, allocator)
+	vk.EnumerateDeviceExtensionProperties(device, nil, &count, raw_data(exts)) or_return
+
+	return
+}
+
+@(private = "file")
+_pick_physical_device :: proc() {
+	score_physical_device :: proc(device: vk.PhysicalDevice) -> (score: int) {
+		features: Physical_Device_Features
+		_get_physical_device_features(device, &features)
+		success, msg := _validate_physical_device_features(features)
+		if !success {
+			log.info(" !", msg)
+			return 0
+		}
+
+		props: vk.PhysicalDeviceProperties
+		vk.GetPhysicalDeviceProperties(device, &props)
+
+		name := byte_arr_str(&props.deviceName)
+		log.infof("-- %q", name)
+		defer log.infof(" * device %q scored %v", name, score)
+
+		// Need certain extensions supported.
+		{
+			extensions, result := _physical_device_extensions(device, context.temp_allocator)
+			if result != .SUCCESS {
+				log.infof(" ! enumerate device extension properties failed: %v", result)
+				return 0
+			}
+
+			required_loop: for required in DEVICE_EXTENSIONS {
+				for &extension in extensions {
+					extension_name := byte_arr_str(&extension.extensionName)
+					if extension_name == string(required) {
+						continue required_loop
+					}
+				}
+
+				log.infof(" ! device does not support required extension %q", required)
+				return 0
+			}
+		}
+
+		// Check if swapchain is adequately supported.
+		{
+			support, result := _query_swapchain_support(device, ctx.gfx.vk_state.surface, context.temp_allocator)
+			if result != .SUCCESS {
+				log.infof(" ! query swapchain support failure: %v", result)
+				return 0
+			}
+
+			// Need at least a format and present mode.
+			if len(support.formats) == 0 || len(support.presentModes) == 0 {
+				log.info(" ! device does not support swapchain")
+				return 0
+			}
+		}
+
+		families := _find_queue_families(device, ctx.gfx.vk_state.surface)
+		if _, has_graphics := families.graphics.?; !has_graphics {
+			log.info(" ! device does not have a graphics queue")
+			return 0
+		}
+		if _, has_present := families.present.?; !has_present {
+			log.info(" ! device does not have a presentation queue")
+			return 0
+		}
+
+		// Favor GPUs.
+		switch props.deviceType {
+		case .DISCRETE_GPU:
+			score += 300_000
+		case .INTEGRATED_GPU:
+			score += 200_000
+		case .VIRTUAL_GPU:
+			score += 100_000
+		case .CPU, .OTHER:
+		}
+		log.infof(" * scored %i based on device type %v", score, props.deviceType)
+
+		// Maximum texture size.
+		score += int(props.limits.maxImageDimension2D)
+		log.infof(
+			" * added the max 2D image dimensions (texture size) of %v to the score",
+			props.limits.maxImageDimension2D,
+		)
+		return
+	}
+
+	count: u32
+	must(vk.EnumeratePhysicalDevices(ctx.gfx.vk_state.instance, &count, nil))
+	if count == 0 {log.panic("vulkan: no GPU found")}
+
+	devices := make([]vk.PhysicalDevice, count, context.temp_allocator)
+	must(vk.EnumeratePhysicalDevices(ctx.gfx.vk_state.instance, &count, raw_data(devices)))
+
+
+	log.info("////////////////////////////////////////")
+	log.info("// START EVALUATING DEVICES")
+	log.info("////////////////////////////////////////")
+	best_device_score := -1
+	for device in devices {
+		if score := score_physical_device(device); score > best_device_score {
+			ctx.gfx.vk_state.physical_device = device
+			best_device_score = score
+		}
+	}
+
+	if best_device_score <= 0 {
+		log.panic("vulkan: no suitable GPU found")
+	}
+
+	vk.GetPhysicalDeviceProperties(ctx.gfx.vk_state.physical_device, &ctx.gfx.vk_state.physical_device_property)
+}
+
+@(private = "file")
+_create_logical_device :: proc() {
+	indices := _find_queue_families(ctx.gfx.vk_state.physical_device, ctx.gfx.vk_state.surface)
+	// TODO: this is kinda messy.
+	indices_set := make(map[u32]struct {
+		}, allocator = context.temp_allocator)
+	indices_set[indices.graphics.?] = {}
+	indices_set[indices.present.?] = {}
+
+	queue_create_infos := make([dynamic]vk.DeviceQueueCreateInfo, 0, len(indices_set), context.temp_allocator)
+	for _ in indices_set {
+		append(
+			&queue_create_infos,
+			vk.DeviceQueueCreateInfo {
+				sType = .DEVICE_QUEUE_CREATE_INFO,
+				queueFamilyIndex = indices.graphics.?,
+				queueCount = 1,
+				pQueuePriorities = raw_data([]f32{1}),
+			}, // Scheduling priority between 0 and 1.
+		)
+	}
+
+	features: Physical_Device_Features
+
+	get_required_physical_device_features(&features)
+
+	device_create_info := vk.DeviceCreateInfo {
+		sType                   = .DEVICE_CREATE_INFO,
+		pNext                   = &features.features,
+		pQueueCreateInfos       = raw_data(queue_create_infos),
+		queueCreateInfoCount    = cast(u32)(len(queue_create_infos)),
+		enabledLayerCount       = cast(u32)len(ctx.gfx.vk_state.enabled_layer_names),
+		ppEnabledLayerNames     = raw_data(ctx.gfx.vk_state.enabled_layer_names),
+		ppEnabledExtensionNames = raw_data(DEVICE_EXTENSIONS),
+		enabledExtensionCount   = cast(u32)(len(DEVICE_EXTENSIONS)),
+	}
+
+	must(vk.CreateDevice(ctx.gfx.vk_state.physical_device, &device_create_info, nil, &ctx.gfx.vk_state.device))
+
+	vk.GetDeviceQueue(ctx.gfx.vk_state.device, indices.graphics.?, 0, &ctx.gfx.vk_state.graphics_queue)
+	vk.GetDeviceQueue(ctx.gfx.vk_state.device, indices.present.?, 0, &ctx.gfx.vk_state.present_queue)
+}
+
+@(private)
+_create_vma_allocator :: proc() {
+	vulkan_functions := vma.create_vulkan_functions()
+	create_info := vma.AllocatorCreateInfo {
+		vulkanApiVersion = VULKAN_API_VERSION,
+		physicalDevice   = ctx.gfx.vk_state.physical_device,
+		device           = ctx.gfx.vk_state.device,
+		instance         = ctx.gfx.vk_state.instance,
+		pVulkanFunctions = &vulkan_functions,
+	}
+
+	must(vma.CreateAllocator(&create_info, &ctx.gfx.vk_state.allocator), "failed to create vma.Allocator")
+}
+
+@(private = "file")
+_destroy_logical_device :: proc() {
+	vk.DestroyDevice(ctx.gfx.vk_state.device, nil)
+}
+
+@(private = "file")
+_create_command_pool :: proc() {
+	indices := _find_queue_families(ctx.gfx.vk_state.physical_device, ctx.gfx.vk_state.surface)
+	pool_info := vk.CommandPoolCreateInfo {
+		sType            = .COMMAND_POOL_CREATE_INFO,
+		flags            = {.RESET_COMMAND_BUFFER},
+		queueFamilyIndex = indices.graphics.?,
+	}
+	must(vk.CreateCommandPool(ctx.gfx.vk_state.device, &pool_info, nil, &ctx.gfx.vk_state.command_pool))
+}
+
+@(private = "file")
+_destroy_command_pool :: proc() {
+	vk.DestroyCommandPool(ctx.gfx.vk_state.device, ctx.gfx.vk_state.command_pool, nil)
+}
+
+@(private = "file")
+_create_draw_command_buffers :: proc(vks: Vulkan_State) -> Command_Buffer {
+	alloc_info := vk.CommandBufferAllocateInfo {
+		sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
+		commandPool        = vks.command_pool,
+		level              = .PRIMARY,
+		commandBufferCount = 1,
+	}
+	cmd: Command_Buffer
+	must(vk.AllocateCommandBuffers(vks.device, &alloc_info, &cmd))
+
+	return cmd
+}
+
+@(private = "file")
+_get_sample_count :: proc(limits: vk.PhysicalDeviceLimits) -> vk.SampleCountFlag {
+	counts := limits.framebufferColorSampleCounts
+	if ._64 in counts {
+		return ._64
+	} else if ._32 in counts {
+		return ._32
+	} else if ._16 in counts {
+		return ._16
+	} else if ._8 in counts {
+		return ._8
+	} else if ._4 in counts {
+		return ._4
+	} else if ._2 in counts {
+		return ._2
+	}
+
+	return ._1
+}
+
+@(private)
+_init_limits :: proc() {
+	vk_limits := ctx.gfx.vk_state.physical_device_property.limits
+
+	ctx.gfx.limits = Graphics_Limits {
+		max_sampler_anisotropy = vk_limits.maxSamplerAnisotropy,
+		max_sample_count       = _get_sample_count(vk_limits),
+	}
+}
+
+get_limits :: proc() -> Graphics_Limits {
+	return ctx.gfx.limits
+}
+
+@(private = "file")
+_init_sync_obj :: proc() {
+	sem_info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+	}
+	fence_info := vk.FenceCreateInfo {
+		sType = .FENCE_CREATE_INFO,
+		flags = {.SIGNALED},
+	}
+	must(vk.CreateFence(ctx.gfx.vk_state.device, &fence_info, nil, &ctx.gfx.fence))
+	must(vk.CreateSemaphore(ctx.gfx.vk_state.device, &sem_info, nil, &ctx.gfx.image_available_semaphore))
+}
+
+@(private = "file")
+_destroy_sync_obj :: proc() {
+	vk.DestroySemaphore(ctx.gfx.vk_state.device, ctx.gfx.image_available_semaphore, nil)
+	vk.DestroyFence(ctx.gfx.vk_state.device, ctx.gfx.fence, nil)
+}
+
+@(private = "file")
+byte_arr_str :: proc(arr: ^[$N]byte) -> string {
+	return strings.truncate_to_byte(string(arr[:]), 0)
+}
+
+@(private = "file")
+_get_physical_device_features :: proc(device: vk.PhysicalDevice, features: ^Physical_Device_Features) {
+	features.dynamic_rendering_local_read.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES
+	features.dynamic_rendering_local_read.dynamicRenderingLocalRead = true
+
+	features.dynamic_rendering.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
+	features.dynamic_rendering.dynamicRendering = true
+	features.dynamic_rendering.pNext = &features.dynamic_rendering_local_read
+
+	features.descriptor_indexing.sType = .PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
+	features.descriptor_indexing.pNext = &features.dynamic_rendering
+
+	features.synchronization.sType = .PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
+	features.synchronization.pNext = &features.descriptor_indexing
+
+	features.features.sType = .PHYSICAL_DEVICE_FEATURES_2
+	features.features.pNext = &features.synchronization
+
+	vk.GetPhysicalDeviceFeatures2(device, &features.features)
+}
+
+@(private = "file")
+_validate_physical_device_features :: proc(features: Physical_Device_Features) -> (bool, string) {
+	// DYNAMIC RENDERING LOCAL READ 
+	if !features.dynamic_rendering_local_read.dynamicRenderingLocalRead {
+		return false, "device does not support dynamic rendering local read"
+	}
+
+	// DYNAMIC RENDERING 
+	if !features.dynamic_rendering.dynamicRendering {
+		return false, "device does not support dynamic rendering"
+	}
+
+	// DESCRIPTOR INDEXING
+	if !features.descriptor_indexing.shaderSampledImageArrayNonUniformIndexing {
+		return false, "device does not support descriptor indexing shaderSampledImageArrayNonUniformIndexing"
+	}
+	if !features.descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind {
+		return false, "device does not support descriptor indexing descriptorBindingSampledImageUpdateAfterBind"
+	}
+	if !features.descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing {
+		return false, "device does not support descriptor indexing shaderUniformBufferArrayNonUniformIndexing"
+	}
+	if !features.descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind {
+		return false, "device does not support descriptor indexing descriptorBindingUniformBufferUpdateAfterBind"
+	}
+	if !features.descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing {
+		return false, "device does not support descriptor indexing  shaderStorageBufferArrayNonUniformIndexing"
+	}
+	if !features.descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind {
+		return false, "device does not support descriptor indexing descriptorBindingStorageBufferUpdateAfterBind"
+	}
+	if !features.descriptor_indexing.runtimeDescriptorArray {
+		return false, "device does not support descriptor indexing runtimeDescriptorArray"
+	}
+	if !features.descriptor_indexing.descriptorBindingPartiallyBound {
+		return false, "device does not support descriptor indexing descriptorBindingPartiallyBound"
+	}
+
+	// SYNCHRONIZATION 2
+	if !features.synchronization.synchronization2 {
+		return false, "device does not support synchronization2"
+	}
+
+	// FEATURES
+	if !features.features.features.samplerAnisotropy {
+		return false, "device does not support anisotropy"
+	}
+	if !features.features.features.geometryShader {
+		return false, "device does not support geometry shaders"
+	}
+
+	return true, ""
+}
+
+get_required_physical_device_features :: proc(features: ^Physical_Device_Features) {
+	// DYNAMIC RENDERING 
+	features.dynamic_rendering_local_read.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES
+	features.dynamic_rendering_local_read.pNext = nil
+	features.dynamic_rendering_local_read.dynamicRenderingLocalRead = true
+
+	// DYNAMIC RENDERING 
+	features.dynamic_rendering.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
+	features.dynamic_rendering.pNext = &features.dynamic_rendering_local_read
+	features.dynamic_rendering.dynamicRendering = true
+
+	// DESCRIPTOR INDEXING
+	features.descriptor_indexing.sType = .PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
+	features.descriptor_indexing.pNext = &features.dynamic_rendering
+	features.descriptor_indexing.shaderSampledImageArrayNonUniformIndexing = true
+	features.descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind = true
+	features.descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing = true
+	features.descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind = true
+	features.descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing = true
+	features.descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind = true
+	features.descriptor_indexing.runtimeDescriptorArray = true
+	features.descriptor_indexing.descriptorBindingPartiallyBound = true
+
+	// SYNCHRONIZATION2
+	features.synchronization.sType = .PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
+	features.synchronization.pNext = &features.descriptor_indexing
+	features.synchronization.synchronization2 = true
+
+	// FEATURES
+	features.features.sType = .PHYSICAL_DEVICE_FEATURES_2
+	features.features.pNext = &features.synchronization
+	features.features.features.geometryShader = true
+	features.features.features.samplerAnisotropy = true
+}
+
+@(private = "file")
+_init_buildin_resources :: proc() {
+	ctx.gfx.buildin = new(Buildin_Resource)
+	ctx.gfx.buildin.unit_square = create_primitive_square()
+	ctx.gfx.buildin.pipeline.text_h = _text_default_pipeline()
+	ctx.gfx.buildin.pipeline.primitive_h = create_primitive_pipeline()
+}
+
+@(private = "file")
+_destroy_buildin :: proc() {
+	delete(ctx.gfx.buildin.square.materials)
+	ctx.gfx.buildin.square.materials = {}
+	destroy_model(&ctx.gfx.buildin.square)
+	destroy_mesh(&ctx.gfx.buildin.unit_square)
+	free(ctx.gfx.buildin)
+}
+
+_init_swapchaint_cfg :: proc() {
+	ctx.gfx.swapchain_cfg.depth_format = _find_depth_format(ctx.gfx.vk_state.physical_device, false)
+	ctx.gfx.swapchain_cfg.depth_stencil_format = _find_depth_format(ctx.gfx.vk_state.physical_device, true)
+	device := ctx.gfx.vk_state.physical_device
+	vk_surface := ctx.gfx.vk_state.surface
+
+	{
+		count: u32
+		must(vk.GetPhysicalDeviceSurfaceFormatsKHR(device, vk_surface, &count, nil))
+
+		formats := make([]vk.SurfaceFormatKHR, count, context.temp_allocator)
+		must(vk.GetPhysicalDeviceSurfaceFormatsKHR(device, vk_surface, &count, raw_data(formats)))
+		ctx.gfx.swapchain_cfg.vk_surface_format = _choose_swapchain_surface_format(formats)
+	}
+
+	{
+		count: u32
+		must(vk.GetPhysicalDeviceSurfacePresentModesKHR(device, vk_surface, &count, nil))
+
+		present_modes := make([]vk.PresentModeKHR, count, context.temp_allocator)
+		must(vk.GetPhysicalDeviceSurfacePresentModesKHR(device, vk_surface, &count, raw_data(present_modes)))
+		ctx.gfx.swapchain_cfg.present_mode = _choose_swapchain_present_mode(present_modes)
+	}
+}
+
+@(private = "file")
+@(require_results)
+_choose_swapchain_surface_format :: proc(formats: []vk.SurfaceFormatKHR) -> vk.SurfaceFormatKHR {
+	for format in formats {
+		if format.format == .B8G8R8A8_SRGB && format.colorSpace == .SRGB_NONLINEAR {
+			return format
+		}
+	}
+
+	// Fallback non optimal.
+	return formats[0]
+}
+
+@(private = "file")
+@(require_results)
+_choose_swapchain_present_mode :: proc(modes: []vk.PresentModeKHR) -> vk.PresentModeKHR {
+	// We would like mailbox for the best tradeoff between tearing and latency.
+	for mode in modes {
+		if mode == .MAILBOX {
+			return .MAILBOX
+		}
+	}
+	log.error("Fifo selected")
+
+	// As a fallback, fifo (basically vsync) is always available.
+	return .FIFO
+}
+
+@(private)
+_find_depth_format :: proc(physical_device: vk.PhysicalDevice, support_stencil: bool) -> vk.Format {
+	if support_stencil {
+		return _find_supported_format(
+			physical_device,
+			{.D32_SFLOAT_S8_UINT, .D24_UNORM_S8_UINT},
+			.OPTIMAL,
+			{.DEPTH_STENCIL_ATTACHMENT},
+		)
+	}
+
+	return _find_supported_format(
+		physical_device,
+		// .D32_SFLOAT, 
+		{.D32_SFLOAT},
+		.OPTIMAL,
+		{.DEPTH_STENCIL_ATTACHMENT},
+	)
+
+}
+
+@(private)
+_has_stencil_component :: proc(format: vk.Format) -> bool {
+	return format == .D32_SFLOAT_S8_UINT || format == .D24_UNORM_S8_UINT
+}
+
+@(private)
+_find_memory_type :: proc(
+	physical_device: vk.PhysicalDevice,
+	type_filter: u32,
+	properties: vk.MemoryPropertyFlags,
+) -> (
+	memory_type: u32,
+	ok: bool,
+) {
+	mem_property: vk.PhysicalDeviceMemoryProperties
+	vk.GetPhysicalDeviceMemoryProperties(physical_device, &mem_property)
+
+	for i: u32 = 0; i < mem_property.memoryTypeCount; i += 1 {
+		if (type_filter & (1 << i) != 0) && (mem_property.memoryTypes[i].propertyFlags >= properties) {
+			return i, true
+		}
+	}
+
+	return 0, false
+}
+
+@(private)
+_find_supported_format :: proc(
+	physical_device: vk.PhysicalDevice,
+	candidates: []vk.Format,
+	tiling: vk.ImageTiling,
+	features: vk.FormatFeatureFlags,
+) -> vk.Format {
+	for format in candidates {
+		props: vk.FormatProperties
+		vk.GetPhysicalDeviceFormatProperties(physical_device, format, &props)
+
+		if (tiling == .OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+			return format
+		} else if (tiling == .LINEAR && (props.optimalTilingFeatures & features) == features) {
+			return format
+		}
+	}
+
+	panic("failed to find supported format!")
+}
+
+@(private)
+QueueFamilyIndices :: struct {
+	graphics: Maybe(u32),
+	present:  Maybe(u32),
+}
+
+@(private)
+_find_queue_families :: proc(device: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> (ids: QueueFamilyIndices) {
+	count: u32
+	vk.GetPhysicalDeviceQueueFamilyProperties(device, &count, nil)
+
+	families := make([]vk.QueueFamilyProperties, count, context.temp_allocator)
+	vk.GetPhysicalDeviceQueueFamilyProperties(device, &count, raw_data(families))
+
+	for family, i in families {
+		if .GRAPHICS in family.queueFlags && .COMPUTE in family.queueFlags {
+			ids.graphics = cast(u32)i
+		}
+
+		supported: b32
+		vk.GetPhysicalDeviceSurfaceSupportKHR(device, u32(i), surface, &supported)
+		if supported {
+			ids.present = cast(u32)i
+		}
+
+		_, has_graphics := ids.graphics.?
+		_, has_present := ids.present.?
+
+		if has_graphics && has_present {
+			break
+		}
+	}
+
+	return
+}
+
+@(private)
+Swapchain_Support :: struct {
+	capabilities: vk.SurfaceCapabilitiesKHR,
+	formats:      []vk.SurfaceFormatKHR,
+	presentModes: []vk.PresentModeKHR,
+}
+
+@(private)
+_query_swapchain_support :: proc(
+	device: vk.PhysicalDevice,
+	surface: vk.SurfaceKHR,
+	allocator := context.temp_allocator,
+) -> (
+	support: Swapchain_Support,
+	result: vk.Result,
+) {
+	// NOTE: looks like a wrong binding with the third arg being a multipointer.
+	vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &support.capabilities) or_return
+
+	{
+		count: u32
+		vk.GetPhysicalDeviceSurfaceFormatsKHR(device, surface, &count, nil) or_return
+
+		support.formats = make([]vk.SurfaceFormatKHR, count, allocator)
+		vk.GetPhysicalDeviceSurfaceFormatsKHR(device, surface, &count, raw_data(support.formats)) or_return
+	}
+
+	{
+		count: u32
+		vk.GetPhysicalDeviceSurfacePresentModesKHR(device, surface, &count, nil) or_return
+
+		support.presentModes = make([]vk.PresentModeKHR, count, allocator)
+		vk.GetPhysicalDeviceSurfacePresentModesKHR(device, surface, &count, raw_data(support.presentModes)) or_return
+	}
+
+	return
+}

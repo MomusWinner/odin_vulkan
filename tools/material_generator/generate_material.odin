@@ -1,0 +1,1191 @@
+package material_generator
+
+// TODO: конвертация из [n]struct to [n]data
+
+import "core:flags"
+import "core:fmt"
+import "core:odin/ast"
+import "core:odin/parser"
+import "core:os"
+import "core:path/filepath"
+import "core:slice"
+import "core:strconv"
+import "core:strings"
+import "core:terminal/ansi"
+
+MATERIAL_ATTRIBUTE :: "material"
+UNIFORM_BUFFER_ATTRIBUTE :: "uniform_buffer"
+
+STRUCT_RULES :: `
+/// RULES /////////////////////////////////////////////////////////////////////
+1. Only the following simple types are allowed:
+   i32, f32, b32, math.vec2, math.vec3, math.vec4,
+   math.mat3, math.mat4, ve.Texture_Handle, ve.Buffer_Handle.
+
+Example:
+--
+Rule_1 :: struct {
+  a: i32,
+  b: f32,
+  c: vec3,
+  ...
+}
+--
+
+2. The user's types should consist of the types described in rule 1.
+Example:
+--
+Custom :: struct {
+  a: vec4,
+  b: mat4,
+  ..
+}
+
+Rule_2 :: struct {
+  a: i32,
+  b: Custom,
+}
+--
+
+3. Arrays must have a predefined size, and the element type must match:
+   math.vec4, math.mat4, or a custom structure that conforms to rule 2.
+
+Example
+--
+Custom :: struct {
+  a: vec4,
+  b: i32,
+}
+
+Rule_3 :: struct {
+  values:        [5]vec4,
+  custom_values: [3]Custom
+}
+--
+////////////////////////////////////////////////////////////////////////////////
+`
+
+
+Field_Type :: enum {
+	None,
+	Int,
+	Bool,
+	Float,
+	Vector2,
+	Vector3,
+	Vector4,
+	Mat4,
+	Texture_Handle,
+	Buffer_Handle,
+	Array,
+	Custom,
+}
+
+Struct_Type :: enum {
+	None,
+	Material,
+	Uniform_Buffer,
+}
+
+Array_Field :: struct {
+	length:              int,
+	element_type:        Field_Type,
+	element_type_string: string,
+}
+
+Field :: struct {
+	name:        string,
+	type:        Field_Type,
+	type_string: string,
+	array:       Array_Field,
+}
+
+Struct :: struct {
+	name:   string,
+	type:   Struct_Type,
+	fields: []Field,
+	path:   string,
+	err:    string,
+}
+
+Package_Info :: struct {
+	alias: string,
+	path:  string,
+}
+
+Store :: struct {
+	structures:             map[string]Struct,
+	correct_struct_def_seq: [dynamic]string,
+}
+
+store: Store
+
+main :: proc() {
+	Options :: struct {
+		src_dir:          string `args:"required" usage:"Package directory containing original material types @(material)."`,
+		outpute_glsl_dir: string `args:"required" usage:"Shaders directory."`,
+		ve_import:        string `usage:"Path to ve package. (libs/ve, <empty>)"`,
+		rules:            bool `usage:"See rules."`,
+	}
+
+	opt: Options
+	style: flags.Parsing_Style = .Odin
+
+	flags.parse_or_exit(&opt, os.args, style)
+
+	if opt.rules == true {
+		fmt.println(STRUCT_RULES)
+		return
+	}
+
+	gfx_pkg_info := parse_package_info(opt.ve_import)
+
+	generate_materials(
+		filepath.clean(opt.src_dir, context.temp_allocator),
+		filepath.join({opt.outpute_glsl_dir, "gen_types.h"}, context.temp_allocator),
+		filepath.join({opt.src_dir, "gen_materials.odin"}, context.temp_allocator),
+		gfx_pkg_info,
+	)
+}
+
+generate_materials :: proc(
+	src_path: string,
+	outpute_glsl_path: string,
+	outpute_odin_path: string,
+	gfx_package: Package_Info,
+	loc := #caller_location,
+) {
+	if !os.is_dir_path(src_path) {
+		error("Unable to find directory src-path: \"%s\"", src_path)
+	}
+
+	if !os.is_dir_path(filepath.dir(outpute_glsl_path, context.temp_allocator)) {
+		error("Unable to find outpute-glsl dir: \"%s\"", outpute_glsl_path)
+	}
+
+	if !os.is_dir_path(filepath.dir(outpute_odin_path, context.temp_allocator)) {
+		error("Unable to find outpute-odin dir: \"%s\"", outpute_odin_path)
+	}
+
+	c := context
+	context.allocator = context.temp_allocator
+
+	pkg, ok := parser.parse_package_from_path(src_path)
+	if !ok {
+		error("Failed to parse package by path %", src_path)
+	}
+
+	parse_structures(pkg, loc)
+	context = c
+
+	generate_odin(outpute_odin_path, pkg.name, gfx_package)
+	generate_glsl(outpute_glsl_path, pkg.name, loc)
+}
+
+get_conv_proc_name :: proc(name: string) -> string {return fmt.aprintf("conv_%s_to_data", strings.to_lower(name))}
+get_conv_array_proc_name :: proc(name: string) -> string {
+	return fmt.aprintf("conv_%s_array_to_data", strings.to_lower(name))
+}
+get_data_struct_name :: proc(name: string) -> string {return fmt.aprintf("__%s_Data", name)}
+get_glsl_struct_name :: proc(name: string) -> string {
+	glsl_struct_name, _ := strings.replace_all(name, "_", "")
+	return glsl_struct_name
+}
+
+generate_glsl :: proc(path: string, package_name: string, loc := #caller_location) {
+	f, ok := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644)
+	defer os.close(f)
+
+	if ok != nil {
+		error("Failed opening '%s' folder", path)
+	}
+
+	fmt.fprintfln(f, "#ifndef {0:s}\n#define {0:s}\n", fmt.tprintf("GEN_TYPES_%s_H", strings.to_upper(package_name)))
+
+	fmt.fprintln(f, "#include \"buildin:base/bindless.h\"\n")
+
+
+	for name in store.correct_struct_def_seq {
+		s := store.structures[name]
+
+		switch s.type {
+		case .Material:
+			fmt.fprintfln(f, "// {0:s}", s.name)
+
+			glsl_struct_name := get_glsl_struct_name(s.name)
+			fmt.fprintfln(f, "RegisterUniform(%s, {{", glsl_struct_name)
+
+			for field in s.fields {
+				assert(field.type != .None)
+				fmt.fprintfln(f, "	%s %s;", field_to_glsl_type(field), field.name)
+			}
+
+			fmt.fprintfln(f, "}});\n")
+
+			func_name, r_ok := strings.replace_all(glsl_struct_name, "Material", "")
+			fmt.fprintfln(
+				f,
+				"#define getMtrl{1:s}() GetResource({0:s}, PushConstants.material)",
+				glsl_struct_name,
+				func_name,
+			)
+			fmt.fprintfln(f, "\n")
+		case .Uniform_Buffer:
+			fmt.fprintfln(f, "// {0:s}", s.name)
+
+			glsl_struct_name := get_glsl_struct_name(s.name)
+			fmt.fprintfln(f, "RegisterUniform(%s, {{", glsl_struct_name)
+
+			for field in s.fields {
+				assert(field.type != .None)
+				fmt.fprintfln(f, "	%s %s;", field_to_glsl_type(field), field.name)
+			}
+
+			fmt.fprintfln(f, "}});\n")
+
+			func_name, r_ok := strings.replace_all(glsl_struct_name, "Ubo", "")
+			func_name, r_ok = strings.replace_all(func_name, "UBO", "")
+
+			fmt.fprintfln(f, "#define getUbo{1:s}(handle) GetResource({0:s}, handle)", glsl_struct_name, func_name)
+			fmt.fprintfln(f, "\n")
+		case .None:
+			fmt.fprintfln(f, "// {0:s}", s.name)
+
+			glsl_struct_name := get_glsl_struct_name(s.name)
+			fmt.fprintfln(f, "struct %s {{", glsl_struct_name)
+
+			for field in s.fields {
+				assert(field.type != .None)
+				fmt.fprintfln(f, "	%s %s;", field_to_glsl_type(field), field.name)
+			}
+
+			fmt.fprintfln(f, "}};\n")
+		}
+	}
+
+	fmt.fprint(f, "#endif")
+}
+
+generate_odin :: proc(path: string, package_name: string, gfx_pkg_info: Package_Info, loc := #caller_location) {
+	f, ok := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644)
+	defer os.close(f)
+
+	if ok != nil {
+		error("Failed opening '%s' folder", path)
+	}
+
+	fmt.fprintfln(f, "package %s\n", package_name)
+	fmt.fprintfln(f, "import \"core:math/linalg/glsl\"")
+	if gfx_pkg_info.path != "" {
+		fmt.fprintfln(f, "import {0:s} \"{1:s}\"", gfx_pkg_info.alias, gfx_pkg_info.path)
+	}
+
+	gfx_pref := ""
+
+	if gfx_pkg_info.alias != "" {
+		gfx_pref = fmt.aprintf("%s.", gfx_pkg_info.alias)
+	} else if gfx_pkg_info.path != "" {
+		path := strings.split(gfx_pkg_info.path, "/")
+		gfx_pref = fmt.aprintf("%s.", path[len(path) - 1])
+	}
+
+	for name in store.correct_struct_def_seq {
+		s := store.structures[name]
+		switch s.type {
+		case .Material:
+			generate_odin_material_struct(f, s, gfx_pref)
+		case .Uniform_Buffer:
+			generate_odin_uniform_buffer_struct(f, s, gfx_pref)
+		case .None:
+			generate_odin_common_struct(f, s, gfx_pref)
+		}
+	}
+}
+
+generate_odin_common_struct :: proc(f: os.Handle, s: Struct, gfx_pref: string) {
+	fmt.fprintfln(f, `
+
+///////////////////////////
+// %s
+/////////////dependence////
+
+	`, s.name)
+	fmt.fprintfln(f, "%s :: struct {{", get_data_struct_name(s.name))
+
+	for field in calculate_std140_layout(s.fields) {
+		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref))
+	}
+	fmt.fprintln(f, "}")
+
+	fmt.fprintf(
+		f,
+		`
+{0:s} :: proc(src: {1:s}, loc := #caller_location) -> {2:s} {{
+	data := {2:s} {{
+	`,
+		get_conv_proc_name(s.name),
+		s.name,
+		get_data_struct_name(s.name),
+	)
+
+	for field in s.fields {
+		print_field_to_data_field(f, "src", field, gfx_pref)
+	}
+
+	fmt.fprintln(f, "	}\n	return data\n}")
+
+	fmt.fprintf(
+		f,
+		`
+{0:s} :: proc(src: [$N]{1:s}, loc := #caller_location) -> (data: [N]{2:s}) {{
+	for i in 0 ..< N {{
+		data[i] = {3:s}(src[i])
+	}}
+	return
+}}
+`,
+		get_conv_array_proc_name(s.name),
+		s.name,
+		get_data_struct_name(s.name),
+		get_conv_proc_name(s.name),
+	)
+}
+
+generate_odin_material_struct :: proc(f: os.Handle, s: Struct, gfx_pref: string) {
+	fmt.fprintfln(f, `
+
+///////////////////////////
+// %s
+//////////////material/////
+
+	`, s.name)
+	fmt.fprintfln(f, "%s :: struct {{", get_data_struct_name(s.name))
+
+	for field in calculate_std140_layout(s.fields) {
+		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref))
+	}
+	fmt.fprintln(f, "} \n")
+
+	proc_postfix := struct_name_to_postfix(s.name, "_material", context.temp_allocator)
+
+	fmt.fprintfln(
+		f,
+		`
+create_mtrl_{0:s} :: proc(pipeline_h: {2:s}Render_Pipeline_Handle, loc := #caller_location) -> {2:s}Material_Handle {{
+	m := {2:s}Material{{}}
+	m.pipeline_h = pipeline_h
+	material_data := new({1:s})
+	m.data = material_data
+	m.type = typeid_of(^{1:s})
+	m.dirty = true
+	m.apply = mtrl_{0:s}_apply
+
+	buffer := {2:s}create_uniform_buffer(size_of({3:s}), loc)
+	m.buffer_h = {2:s}store_buffer(buffer, loc)
+`,
+		proc_postfix,
+		s.name,
+		gfx_pref,
+		get_data_struct_name(s.name),
+	)
+
+	for field in s.fields {
+		default_value, has_default_value := get_field_type_default_value(field.type, gfx_pref).?
+		if !has_default_value do continue
+
+		fmt.fprintfln(f, "	material_data.{0:s} = {1:s}", field.name, default_value)
+	}
+
+	fmt.fprintfln(f, `
+	return {0:s}store_material(m) 
+}}`, gfx_pref)
+
+	for field in s.fields {
+		fmt.fprintf(
+			f,
+			`
+mtrl_{0:s}_set_{2:s} :: proc(m: ^{4:s}Material, {2:s}: {3:s}, loc := #caller_location) {{
+	assert(m != nil, loc = loc)
+	assert(m.type == typeid_of(^{1:s}), loc = loc)
+	mat := cast(^{1:s})m.data
+	mat.{2:s} = {2:s}
+	m.dirty = true
+}}
+mtrl_{0:s}_get_{2:s} :: proc(m: {4:s}Material, loc := #caller_location) -> {3:s}{{
+	assert(m.type == typeid_of(^{1:s}), loc = loc)
+	mat := cast(^{1:s})m.data
+	return mat.{2:s}
+}}`,
+			proc_postfix,
+			s.name,
+			field.name,
+			field_to_odin_type(field, gfx_pref),
+			gfx_pref,
+		)
+	}
+
+	fmt.fprintf(
+		f,
+		`
+mtrl_{0:s}_apply :: proc(m: ^{2:s}Material, loc := #caller_location) {{
+	assert(m != nil, loc = loc)
+	assert(m.type == typeid_of(^{1:s}), loc = loc)
+	if !m.dirty do return
+	mat := cast(^{1:s})m.data
+	mtrl_data := {3:s} {{
+	`,
+		proc_postfix,
+		s.name,
+		gfx_pref,
+		get_data_struct_name(s.name),
+	)
+
+	for field in s.fields {
+		print_field_to_data_field(f, "mat", field, gfx_pref)
+	}
+
+	fmt.fprintf(
+		f,
+		`
+	}}
+
+	buffer := {1:s}get_buffer_h(m.buffer_h, loc)
+	{1:s}fill_buffer(buffer, size_of({0:s}), &mtrl_data, 0, loc)
+	m.dirty = false
+}}`,
+		get_data_struct_name(s.name),
+		gfx_pref,
+	)
+}
+
+generate_odin_uniform_buffer_struct :: proc(f: os.Handle, s: Struct, gfx_pref: string) {
+	fmt.fprintfln(f, `
+
+///////////////////////////
+// %s
+//////////unform_buffer////
+
+	`, s.name)
+	fmt.fprintfln(f, "%s :: struct {{", get_data_struct_name(s.name))
+
+	for field in calculate_std140_layout(s.fields) {
+		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref))
+	}
+	fmt.fprintln(f, "} \n")
+
+	proc_postfix := struct_name_to_postfix(s.name, "_ubo", context.temp_allocator)
+
+	fmt.fprintfln(
+		f,
+		`
+create_ubo_{0:s} :: proc(loc := #caller_location) -> {2:s}Uniform_Buffer_Handle {{
+	u: {2:s}Uniform_Buffer
+	uniform_data := new({1:s})
+	u.data = uniform_data
+	u.type = typeid_of(^{1:s})
+	u.dirty = true
+	u.apply = ubo_{0:s}_apply
+
+	buffer := {2:s}create_uniform_buffer(size_of({3:s}), loc)
+	u.buffer_h = {2:s}store_buffer(buffer, loc)
+`,
+		proc_postfix,
+		s.name,
+		gfx_pref,
+		get_data_struct_name(s.name),
+	)
+
+	for field in s.fields {
+		default_value, has_default_value := get_field_type_default_value(field.type, gfx_pref).?
+		if !has_default_value do continue
+
+		fmt.fprintfln(f, "	uniform_data.{0:s} = {1:s}", field.name, default_value)
+	}
+
+	fmt.fprintfln(f, `
+	return {0:s}store_uniform_buffer(u)
+}}
+	`, gfx_pref)
+
+	for field in s.fields {
+		fmt.fprintf(
+			f,
+			`
+ubo_{0:s}_set_{2:s} :: proc(u: ^{4:s}Uniform_Buffer, {2:s}: {3:s}, loc := #caller_location) {{
+	assert(u != nil, loc = loc)
+	assert(u.type == typeid_of(^{1:s}), loc = loc)
+	ubo := cast(^{1:s})u.data
+	ubo.{2:s} = {2:s}
+	u.dirty = true
+}}
+ubo_{0:s}_get_{2:s} :: proc(u: {4:s}Uniform_Buffer, loc := #caller_location) -> {3:s}{{
+	assert(u.type == typeid_of(^{1:s}), loc = loc)
+	ubo := cast(^{1:s})u.data
+	return ubo.{2:s}
+}}`,
+			proc_postfix,
+			s.name,
+			field.name,
+			field_to_odin_type(field, gfx_pref),
+			gfx_pref,
+		)
+	}
+
+	fmt.fprintf(
+		f,
+		`
+ubo_{0:s}_apply :: proc(u: ^{2:s}Uniform_Buffer, loc := #caller_location) {{
+	assert(u != nil, loc = loc)
+	assert(u.type == typeid_of(^{1:s}), loc = loc)
+	if !u.dirty do return
+	ubo := cast(^{1:s})u.data
+	ubo_data := {3:s} {{
+	`,
+		proc_postfix,
+		s.name,
+		gfx_pref,
+		get_data_struct_name(s.name),
+	)
+
+	for field in s.fields {
+		print_field_to_data_field(f, "ubo", field, gfx_pref)
+	}
+
+	fmt.fprintf(
+		f,
+		`
+	}}
+
+	buffer := {1:s}get_buffer_h(u.buffer_h, loc)
+	{1:s}fill_buffer(buffer, size_of({0:s}), &ubo_data, 0, loc)
+	u.dirty = false
+}}`,
+		get_data_struct_name(s.name),
+		gfx_pref,
+	)
+}
+
+print_field_to_data_field :: proc(f: os.Handle, source_name: string, field: Field, gfx_pref: string) {
+	if (field.type == .Texture_Handle) {
+		fmt.fprintfln(
+			f,
+			"	{0:s} = {2:s}.{0:s}.index if {1:s}has_texture_h({2:s}.{0:s}) else max(u32),",
+			field.name,
+			gfx_pref,
+			source_name,
+		)
+	} else if (field.type == .Buffer_Handle) {
+		fmt.fprintfln(
+			f,
+			"	{0:s} = {2:s}.{0:s}.index if {1:s}has_buffer_h({2:s}.{0:s}) else max(u32),",
+			field.name,
+			gfx_pref,
+			source_name,
+		)
+	} else if (field.type == .Custom) {
+		fmt.fprintfln(f, "	{0:s} = {1:s}({2:s}.{0:s}),", field.name, get_conv_proc_name(field.type_string), source_name)
+	} else if (field.type == .Array && field.array.element_type == .Custom) {
+		fmt.fprintfln(
+			f,
+			"	{0:s} = {1:s}({2:s}.{0:s}),",
+			field.name,
+			get_conv_array_proc_name(field.array.element_type_string),
+			source_name,
+		)
+	} else {
+		fmt.fprintfln(f, "	{0:s} = {1:s}.{0:s},", field.name, source_name)
+	}
+}
+
+get_field_type_default_value :: proc(field_type: Field_Type, gfx_pref: string) -> Maybe(string) {
+	switch field_type {
+	case .None, .Int, .Bool, .Float, .Vector2, .Vector3, .Vector4, .Mat4, .Array, .Custom:
+		return nil
+	case .Texture_Handle:
+		return fmt.tprintf("%sNil_Texture_Handle", gfx_pref)
+	case .Buffer_Handle:
+		return fmt.tprintf("%sNil_Buffer_Handle", gfx_pref)
+	}
+	return nil
+}
+
+get_data_field_for_odin :: proc(field: Field, gfx_pref: string) -> string {
+	assert(field.type != .None)
+	if field.type == .Texture_Handle || field.type == .Buffer_Handle {
+		return fmt.aprintf("	%s: u32,", field.name)
+	} else if field.type == .Custom {
+		return fmt.aprintf("	%s: %s,", field.name, get_data_struct_name(field.type_string))
+	} else if field.type == .Array && field.array.element_type == .Custom {
+		return fmt.aprintf(
+			"	%s: [%d]%s,",
+			field.name,
+			field.array.length,
+			get_data_struct_name(field.array.element_type_string),
+		)
+	} else {
+		return fmt.aprintf("	%s: %s,", field.name, field_to_odin_type(field, gfx_pref))
+	}
+}
+
+struct_name_to_postfix :: proc(name: string, postfix: string, allocator := context.allocator) -> string {
+	lower_name := strings.to_lower(name, allocator)
+	if len(lower_name) >= len(postfix) && lower_name[len(lower_name) - len(postfix):] == postfix {
+		return lower_name[:len(lower_name) - len(postfix)]
+	}
+	return lower_name
+}
+
+parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) {
+	ok: bool
+
+	Parse_Data :: struct {
+		structures: map[string]Struct,
+		refs:       map[string][dynamic]string,
+		unresolved: [dynamic]string,
+		resolved:   [dynamic]string,
+		heads:      [dynamic]string,
+	}
+
+	p := Parse_Data{}
+
+	Second_Pass_Strcut :: struct {
+		ast_struct_type: ^ast.Struct_Type,
+		ast_attributes:  []^ast.Attribute,
+		name:            string,
+		path:            string,
+	}
+	// Common struct should be parsed first, because Material Struct and Uniform Struct can refer to it.
+	second_pass := make([dynamic]Second_Pass_Strcut)
+	available_names := make([dynamic]string)
+
+	get_all_dep :: proc(s: string, p: ^Parse_Data) -> [dynamic]string {
+		get_deps :: proc(s: string, p: ^Parse_Data) -> [dynamic]string {
+			deps: [dynamic]string // TODO: fix allocation
+			append(&deps, s)
+
+			r, ok := p.refs[s]
+			if !ok do return deps
+
+			for dep_name in r {
+				d := get_deps(dep_name, p)
+				append(&deps, ..d[:])
+			}
+
+			return deps
+		}
+
+		r, ok := p.refs[s]
+		if !ok do return nil
+
+		deps := make([dynamic]string)
+		for dep_name in r {
+			d := get_deps(dep_name, p)
+			append(&deps, ..d[:])
+		}
+
+		return deps
+	}
+
+	resolve :: proc(s: string, p: ^Parse_Data) {
+		// already resolved
+		if slice.contains(p.resolved[:], s) do return
+
+		index, ok := slice.linear_search(p.unresolved[:], s)
+		assert(ok)
+
+		unordered_remove(&p.unresolved, index)
+		append(&p.resolved, s)
+
+		need_resolve: [dynamic]string
+		for us in p.unresolved {
+			srefs, ok := p.refs[us]
+			if !ok do continue
+			unresolved_refs := len(srefs)
+			resolved_refs := 0
+
+			for r in srefs {
+				for rs in p.resolved {
+					if rs == r {
+						resolved_refs += 1
+					}
+				}
+			}
+			assert(resolved_refs <= unresolved_refs)
+
+			if resolved_refs == unresolved_refs {
+				append(&need_resolve, us)
+			}
+		}
+
+		for r in need_resolve {
+			resolve(r, p)
+		}
+	}
+
+	for path, file in pkg.files {
+		for decl in file.decls {
+			name: string
+
+			value_decl: ^ast.Value_Decl
+			if value_decl, ok = decl.derived.(^ast.Value_Decl); !ok || len(value_decl.values) < 1 {
+				continue
+			}
+
+			value := value_decl.values[0]
+
+			ast_struct_type: ^ast.Struct_Type
+			if ast_struct_type, ok = value.derived.(^ast.Struct_Type); !ok {
+				continue
+			}
+			if ident, ok := value_decl.names[0].derived.(^ast.Ident); ok {
+				append(
+					&second_pass,
+					Second_Pass_Strcut {
+						name = ident.name,
+						path = path,
+						ast_struct_type = ast_struct_type,
+						ast_attributes = value_decl.attributes[:],
+					},
+				)
+				append(&available_names, ident.name)
+			}
+		}
+	}
+
+	for sp in second_pass {
+		s := Struct{}
+		fields := make([dynamic]Field)
+		s.name = sp.name
+		s.path = sp.path
+
+		struct_type := get_struct_type(sp.ast_attributes)
+
+		for field_prs in sp.ast_struct_type.fields.list {
+			field, err := parse_field(field_prs, available_names[:])
+			if err != "" {
+				s.err = err
+				break
+			}
+
+			append(&fields, field)
+		}
+
+		s.fields = fields[:]
+		s.type = struct_type
+		s.path = sp.path
+
+		add_refs :: proc(p: ^Parse_Data, owner: string, dep: string) {
+			_, ok := p.refs[owner]
+			if !ok do p.refs[owner] = make([dynamic]string)
+			append(&p.refs[owner], dep)
+		}
+
+		for field in fields {
+			if field.type == .Custom {
+				add_refs(&p, s.name, field.type_string)
+			} else if field.type == .Array && field.array.element_type == .Custom {
+				add_refs(&p, s.name, field.array.element_type_string)
+			}
+		}
+
+		has_deps: bool
+		for master, slave in p.refs {
+			if master == s.name {
+				has_deps = true
+				break
+			}
+		}
+
+		p.structures[s.name] = s
+		append(&p.unresolved, s.name)
+
+		if !has_deps do append(&p.heads, s.name)
+	}
+
+	for h in p.heads do resolve(p.structures[h].name, &p)
+
+	has_errors: bool
+	for name, s in p.structures {
+		if s.type != .Material && s.type != .Uniform_Buffer {
+			continue
+		}
+
+		SEP :: "----------------------------"
+
+		print_struct_err :: proc(s: Struct) {
+			err_printfln(`
+Unable process struct: %s (type: %s)
+File: %s
+ERROR: %s`, s.name, s.type, s.path, s.err)
+		}
+
+		if s.err != "" {
+			print_struct_err(s)
+			err_printfln(SEP)
+			has_errors = true
+		}
+
+		for d in get_all_dep(name, &p) {
+			dep := p.structures[d]
+			if dep.err != "" {
+				print_struct_err(dep)
+				err_printfln(SEP)
+				has_errors = true
+			}
+		}
+	}
+
+	if has_errors {
+		err_printfln("To view the structure declaration rules, run the program with the -rules flag.")
+	}
+
+	correct_struct_def_seq: [dynamic]string
+
+	for name, s in p.structures {
+		if s.type == .None do continue
+		deps := get_all_dep(name, &p)
+		slice.reverse(deps[:])
+		for d in deps {
+			if slice.contains(correct_struct_def_seq[:], d) do continue
+			append(&correct_struct_def_seq, d)
+		}
+		append(&correct_struct_def_seq, name)
+	}
+
+	store.correct_struct_def_seq = correct_struct_def_seq
+	store.structures = p.structures
+}
+
+get_struct_type :: proc(attributes: []^ast.Attribute) -> Struct_Type {
+	for attribute in attributes {
+		for elem in attribute.elems {
+			ident, ok := elem.derived.(^ast.Ident)
+			if ok {
+				if ident.name == MATERIAL_ATTRIBUTE {
+					return .Material
+				} else if ident.name == UNIFORM_BUFFER_ATTRIBUTE {
+					return .Uniform_Buffer
+				}
+			}
+		}
+	}
+
+	return .None
+}
+
+parse_field :: proc(f: ^ast.Field, available_struct_name: []string) -> (field: Field, err: string) {
+	field_type, field_type_string := parse_field_type(f.type)
+	field_name_expr := f.names[0]
+	field_name_expr_ident, ok := field_name_expr.derived.(^ast.Ident)
+	assert(ok)
+
+	field.name = field_name_expr_ident.name
+	field.type = field_type
+	field.type_string = field_type_string
+
+	field_error :: proc(field: Field, err: string) -> string {
+		return fmt.aprintf("Unprocessable field \"%s: %s\"\n%s", field.name, field.type_string, err)
+	}
+
+	if field.type == .None {
+		if !slice.contains(available_struct_name, field.type_string) {
+			err = field_error(field, "Type is unprocessible or does not comply with the established rules.")
+			return
+		}
+
+		field.type = .Custom
+		return
+	}
+
+	if field.type == .Array {
+		ALLOWED_ARRAY_ELEMNT_TYPE := [?]Field_Type{.Vector4, .Mat4}
+		array_type, ok_a := f.type.derived.(^ast.Array_Type)
+		assert(ok_a)
+		element_t, element_t_str := parse_field_type(array_type.elem)
+		if element_t == .Array {
+			err = field_error(field, "Two-dimensions array not supported.")
+			return
+		}
+
+		matched := slice.contains(ALLOWED_ARRAY_ELEMNT_TYPE[:], element_t)
+
+		if !matched && slice.contains(available_struct_name, element_t_str) {
+			assert(ok)
+			element_t = .Custom
+			matched = true
+		}
+
+		if !matched {
+			err = field_error(
+				field,
+				fmt.aprint("Array element type should be:", ALLOWED_ARRAY_ELEMNT_TYPE, "or user's struct."),
+			)
+			return
+		}
+
+		if array_type.len == nil {
+			err = field_error(field, "Only fixed arrays are supported.")
+			return
+		}
+		unary_expr := cast(^ast.Unary_Expr)array_type.len
+		array_length, ok_p := strconv.parse_int(unary_expr.op.text)
+		assert(ok_p)
+
+		field.array = Array_Field {
+			length              = array_length,
+			element_type        = element_t,
+			element_type_string = element_t_str,
+		}
+	}
+	return field, ""
+}
+
+parse_field_type :: proc(node: ^ast.Expr) -> (Field_Type, string) {
+	assert(node != nil)
+
+	field_type: Field_Type = .None
+	#partial switch n in node.derived {
+	case ^ast.Ident:
+		return odin_type_to_field_type(n.name), n.name
+	case ^ast.Selector_Expr:
+		return odin_type_to_field_type(n.field.name), n.field.name
+	case ^ast.Array_Type:
+		return .Array, "array"
+	}
+
+	return .None, ""
+}
+
+calculate_std140_layout :: proc(fields: []Field) -> []Field {
+	std140_fields := make([dynamic]Field)
+	current_offset := 0
+
+	pad_index := 0
+
+	for field in fields {
+		align := get_field_type_base_aligment(field)
+		size := get_field_type_size(field)
+
+		padding := (align - (current_offset % align)) % align
+
+		if padding > 0 {
+			assert(padding % 4 == 0, "Padding must be multiple of 4")
+			for i in 0 ..< padding / 4 {
+				append(&std140_fields, Field{name = fmt.aprintf("pad%d", pad_index), type = .Float})
+				pad_index += 1
+			}
+			current_offset += padding
+		}
+
+		append(&std140_fields, field)
+		current_offset += size
+	}
+
+	final_padding := (16 - (current_offset % 16)) % 16
+	for i in 0 ..< final_padding / 4 {
+		append(&std140_fields, Field{name = fmt.aprintf("pad%d", pad_index), type = .Float})
+		pad_index += 1
+	}
+
+	return std140_fields[:]
+}
+
+odin_type_to_field_type :: proc(str: string) -> Field_Type {
+	switch str {
+	case "i32":
+		return .Int
+	case "f32":
+		return .Float
+	case "b32":
+		return .Bool
+	case "vec2":
+		return .Vector2
+	case "vec3":
+		return .Vector3
+	case "vec4":
+		return .Vector4
+	case "mat4":
+		return .Mat4
+	case "Texture_Handle":
+		return .Texture_Handle
+	case "Buffer_Handle":
+		return .Buffer_Handle
+	case:
+		return .None
+	}
+}
+
+field_to_glsl_type :: proc(field: Field) -> string {
+	switch field.type {
+	case .None:
+		return ""
+	case .Int:
+		return "int"
+	case .Float:
+		return "float"
+	case .Bool:
+		return "bool"
+	case .Vector2:
+		return "vec2"
+	case .Vector3:
+		return "vec3"
+	case .Vector4:
+		return "vec4"
+	case .Mat4:
+		return "mat4"
+	case .Texture_Handle:
+		return "uint"
+	case .Buffer_Handle:
+		return "uint"
+	case .Array:
+		return fmt.aprintf(
+			"%s[%d]",
+			field_to_glsl_type(Field{type = field.array.element_type, type_string = field.array.element_type_string}),
+			field.array.length,
+		)
+	case .Custom:
+		return get_glsl_struct_name(field.type_string)
+	}
+
+	return ""
+}
+
+field_to_odin_type :: proc(field: Field, gfx_pref: string) -> string {
+	switch field.type {
+	case .None:
+		return ""
+	case .Int:
+		return "i32"
+	case .Float:
+		return "f32"
+	case .Bool:
+		return "b32"
+	case .Vector2:
+		return "glsl.vec2"
+	case .Vector3:
+		return "glsl.vec3"
+	case .Vector4:
+		return "glsl.vec4"
+	case .Mat4:
+		return "glsl.mat4"
+	case .Texture_Handle:
+		return fmt.aprintf("%sTexture_Handle", gfx_pref)
+	case .Buffer_Handle:
+		return fmt.aprintf("%sBuffer_Handle", gfx_pref)
+	case .Array:
+		return fmt.aprintf(
+			"[%d]%s",
+			field.array.length,
+			field_to_odin_type(
+				Field{type = field.array.element_type, type_string = field.array.element_type_string},
+				gfx_pref,
+			),
+		)
+	case .Custom:
+		return field.type_string
+	}
+
+	return ""
+}
+
+get_field_type_base_aligment :: proc(field: Field) -> int {
+	switch field.type {
+	case .None:
+		return 0
+	case .Float, .Int, .Bool, .Texture_Handle, .Buffer_Handle:
+		return 4
+	case .Vector2:
+		return 8
+	case .Vector3, .Vector4, .Mat4:
+		return 16
+	case .Array:
+		return 16
+	case .Custom:
+		s, ok := store.structures[field.type_string]
+		assert(ok)
+		max := 0
+		for field in s.fields {
+			if max < get_field_type_base_aligment(field) {
+				max = get_field_type_base_aligment(field)
+			}
+		}
+
+		assert(max > 0)
+
+		return max
+	}
+	return 16
+}
+
+get_field_type_size :: proc(field: Field, loc := #caller_location) -> int {
+	switch field.type {
+	case .None:
+		return 0
+	case .Float, .Int, .Bool, .Texture_Handle, .Buffer_Handle:
+		return 4
+	case .Vector2:
+		return 8
+	case .Vector3:
+		return 12
+	case .Vector4:
+		return 16
+	case .Mat4:
+		return 64
+	case .Array:
+		return(
+			field.array.length *
+			get_field_type_size(Field{type = field.array.element_type, type_string = field.array.element_type_string}) \
+		)
+	case .Custom:
+		s, ok := store.structures[field.type_string]
+		assert(ok, loc = loc)
+		size := 0
+		for field in calculate_std140_layout(s.fields) {
+			size += get_field_type_size(field)
+		}
+		return size
+	}
+	return 0
+}
+
+parse_package_info :: proc(source: string) -> Package_Info {
+	gfx_pkg_info := Package_Info{}
+
+	s, _ := strings.split(source, " ")
+	if len(s) > 2 {
+		fmt.println(
+			`Invalid ve_import format.
+Expected:
+	ve_import = "alias path"
+	ve_import = "path"
+	ve_import = ""
+
+Examples:
+	"ve"
+	"ve libs/ve"
+	""
+
+But got:`,
+			source,
+		)
+	}
+
+	if len(s) == 1 {
+		return Package_Info{alias = "", path = source}
+	} else if len(s) == 2 {
+		return Package_Info{alias = s[0], path = s[1]}
+	}
+	return Package_Info{}
+}
+
+RED :: ansi.CSI + ansi.FG_RED + ansi.SGR
+
+error :: proc(fmt_str: string, args: ..any) {
+	message := fmt.tprintf(fmt_str, ..args)
+	fmt.eprintln(RED, message)
+	os.exit(1)
+}
+
+err_printfln :: proc(fmt_str: string, args: ..any) {
+	message := fmt.eprintln(RED, fmt.tprintf(fmt_str, ..args))
+}

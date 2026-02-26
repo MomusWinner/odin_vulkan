@@ -1,0 +1,63 @@
+package ve
+
+import vk "vendor:vulkan"
+
+//  ██████╗ ██████╗  █████╗ ██████╗ ██╗  ██╗██╗ ██████╗███████╗
+// ██╔════╝ ██╔══██╗██╔══██╗██╔══██╗██║  ██║██║██╔════╝██╔════╝
+// ██║  ███╗██████╔╝███████║██████╔╝███████║██║██║     ███████╗
+// ██║   ██║██╔══██╗██╔══██║██╔═══╝ ██╔══██║██║██║     ╚════██║
+// ╚██████╔╝██║  ██║██║  ██║██║     ██║  ██║██║╚██████╗███████║
+//  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝ ╚═════╝╚══════╝
+
+GFX_DEBUG :: #config(GFX_DEBUG, ODIN_DEBUG)
+
+DEFERRED_DESTRUCTOR_SIZE :: 1000
+
+VULKAN_API_VERSION :: vk.API_VERSION_1_4
+
+// Enables Vulkan debug logging and validation layers.
+ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, ODIN_DEBUG)
+
+DEVICE_EXTENSIONS := []cstring {
+	vk.KHR_SWAPCHAIN_EXTENSION_NAME,
+	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+	// KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
+}
+
+MAX_COLOR_ATTACHMENTS :: 4
+MAX_PIPELINE_SET_COUNT :: 4
+MAX_PIPELINE_STAGE_COUNT :: 8
+MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT :: 16
+MAX_PIPELINE_BINDING_COUNT :: 128
+MAX_PIPELINE_DYNAMIC_STATE_COUNT :: 4
+MAX_PIPELINE_SHADER_CONTANT_COUNT :: 32
+
+MAX_DESCRIPTOR_UNIFORM_COUNT :: 3000
+MAX_DESCRIPTOR_UNIFORM_DYNAMIC_COUNT :: 3000 // 30
+MAX_DESCRIPTOR_IMAGE_SAMPLER_COUNT :: 3000
+MAX_DESCRIPTOR_STORAGE_COUNT :: 3000
+MAX_DESCRIPTOR_SET_COUNT :: 3000
+
+MAX_DESCRIPTOR_BINDLESS_COUNT :: 1000
+
+TEMP_POOL_MATERIAL_SIZE :: 100
+TEMP_POOL_TRANSFORM_SIZE :: 100
+
+MAX_SLOT_COUNT :: 10
+
+SAMPLER_LOD_CLAMP_NONE :: Sampler_Lod_Clamp {
+	min = 0,
+	max = vk.LOD_CLAMP_NONE,
+}
+
+DEFAULT_SAMPLER_INFO :: Sampler_Info {
+	mag_filter        = .Linear,
+	min_filter        = .Linear,
+	address_mode_u    = .Repeat,
+	address_mode_v    = .Repeat,
+	address_mode_w    = .Repeat,
+	anisotropy_enable = false,
+	border_color      = .Transparent_Black,
+	mipmap_mode       = .Linear,
+	lod_clamp         = SAMPLER_LOD_CLAMP_NONE,
+}
