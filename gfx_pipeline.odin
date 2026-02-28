@@ -126,7 +126,7 @@ Pipeline :: struct {
 }
 
 Render_Pipeline :: struct {
-	cache:       map[Surface_Info]Graphics_Pipeline,
+	cache:       map[Pipeline_Surface_Info]Graphics_Pipeline,
 	create_info: Create_Pipeline_Info,
 }
 
@@ -185,6 +185,12 @@ Vertex_Input_Description :: struct {
 	attributes: Vertex_Input_Attribute_Descriptions,
 }
 Vertex_Input_Descriptions :: sm.Small_Array(MAX_PIPELINE_BINDING_COUNT, Vertex_Input_Description)
+
+Pipeline_Surface_Info :: struct {
+	sample_count:  Sample_Count_Flag,
+	depth_format:  vk.Format,
+	color_formats: sm.Small_Array(MAX_COLOR_ATTACHMENTS, vk.Format),
+}
 
 hot_reload_shaders :: proc() {
 	_pipeline_manager_hot_reload()
@@ -396,13 +402,14 @@ render_pipeline_get_pipeline :: proc(
 	surface_info: Surface_Info,
 	loc := #caller_location,
 ) -> ^Graphics_Pipeline {
-	graphics_pipeline, ok := pipeline.cache[surface_info]
-	if ok do return &pipeline.cache[surface_info]
+	pipeline_surface := _surface_info_to_pipeline_surface_info(surface_info)
+	graphics_pipeline, ok := pipeline.cache[pipeline_surface]
+	if ok do return &pipeline.cache[pipeline_surface]
 
 	new_pipeline := _create_graphics_pipeline(pipeline.create_info, surface_info, loc)
-	pipeline.cache[surface_info] = new_pipeline
+	pipeline.cache[pipeline_surface] = new_pipeline
 
-	return &pipeline.cache[surface_info]
+	return &pipeline.cache[pipeline_surface]
 }
 
 destroy_render_pipeline :: proc(pipeline: ^Render_Pipeline) {
@@ -1206,4 +1213,13 @@ _to_vulkan_stages :: proc(flags: Shader_Stage_Flags) -> vk.ShaderStageFlags {
 	if .Compute in flags do result |= {.COMPUTE}
 
 	return result
+}
+
+_surface_info_to_pipeline_surface_info :: proc(surface: Surface_Info) -> Pipeline_Surface_Info {
+	color_formats := sm.Small_Array(MAX_COLOR_ATTACHMENTS, vk.Format){}
+	return Pipeline_Surface_Info {
+		sample_count = surface.sample_count,
+		depth_format = surface.depth_format,
+		color_formats = surface.color_formats,
+	}
 }
