@@ -10,11 +10,6 @@ import "core:strings"
 import "lib/shaderc"
 import vk "vendor:vulkan"
 
-Vertex_Input_Description :: struct {
-	binding_description:    Vertex_Input_Binding_Description,
-	attribute_descriptions: []Vertex_Input_Attribute_Description,
-}
-
 Pipeline_Set_Binding_Info :: struct {
 	binding:          u32,
 	descriptor_type:  vk.DescriptorType,
@@ -63,10 +58,6 @@ Stage_Infos :: sm.Small_Array(MAX_PIPELINE_STAGE_COUNT, Pipeline_Stage_Info)
 Pipeline_Shader_Stage_Create_Infos :: sm.Small_Array(MAX_PIPELINE_STAGE_COUNT, vk.PipelineShaderStageCreateInfo)
 Pipeline_Dynamic_States :: sm.Small_Array(MAX_PIPELINE_DYNAMIC_STATE_COUNT, vk.DynamicState)
 
-Vertex_Input_Attribute_Descriptions :: sm.Small_Array(
-	MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT,
-	Vertex_Input_Attribute_Description,
-)
 Pipeline_Set_Binding_Infos :: sm.Small_Array(MAX_PIPELINE_BINDING_COUNT, Pipeline_Set_Binding_Info)
 
 Pipeline_Set_Layout_Info :: struct {
@@ -84,30 +75,26 @@ Stencil_Op_State :: struct {
 }
 
 Create_Pipeline_Info :: struct {
-	set_infos:                Pipeline_Set_Layout_Infos,
-	bindless:                 bool,
-	stage_infos:              Stage_Infos,
-	vertex_input_description: struct {
-		input_rate:             vk.VertexInputRate,
-		binding_description:    Vertex_Input_Binding_Description,
-		attribute_descriptions: Vertex_Input_Attribute_Descriptions,
-	},
-	input_assembly:           struct {
+	set_infos:                 Pipeline_Set_Layout_Infos,
+	bindless:                  bool,
+	stage_infos:               Stage_Infos,
+	vertex_input_descriptions: Vertex_Input_Descriptions,
+	input_assembly:            struct {
 		topology: vk.PrimitiveTopology,
 	},
-	rasterizer:               struct {
+	rasterizer:                struct {
 		polygon_mode: vk.PolygonMode,
 		line_width:   f32,
 		cull_mode:    vk.CullModeFlags,
 		front_face:   vk.FrontFace,
 	},
-	attachment:               struct {
+	attachment:                struct {
 		sample_count:             Sample_Count_Flags,
 		depth_format:             vk.Format,
 		color_attachment_formats: u32,
 		color_attachment_count:   u32,
 	},
-	depth:                    struct {
+	depth:                     struct {
 		enable:             b32,
 		write_enable:       b32,
 		compare_op:         vk.CompareOp,
@@ -121,7 +108,7 @@ Create_Pipeline_Info :: struct {
 			slope_factor:    f32,
 		},
 	},
-	stencil:                  struct {
+	stencil:                   struct {
 		enable: b32,
 		front:  Stencil_Op_State,
 		back:   Stencil_Op_State,
@@ -175,6 +162,29 @@ Pipeline_Manager :: struct {
 	enable_compilation: bool,
 }
 
+Vertex_Input_Rate :: enum {
+	Vertex,
+	Instance,
+}
+
+Vertex_Input_Attribute_Description :: struct {
+	location: u32,
+	format:   Pixel_Format,
+	offset:   u32,
+}
+
+Vertex_Input_Attribute_Descriptions :: sm.Small_Array(
+	MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT,
+	Vertex_Input_Attribute_Description,
+)
+
+Vertex_Input_Description :: struct {
+	binding:    u32,
+	stride:     u32,
+	input_rate: Vertex_Input_Rate,
+	attributes: Vertex_Input_Attribute_Descriptions,
+}
+Vertex_Input_Descriptions :: sm.Small_Array(MAX_PIPELINE_BINDING_COUNT, Vertex_Input_Description)
 
 hot_reload_shaders :: proc() {
 	_pipeline_manager_hot_reload()
@@ -336,43 +346,38 @@ _shader_result_releaser :: proc "system" (userData: rawptr, includeResult: ^shad
 	free(includeResult)
 }
 
-default_shader_attribute :: proc() -> (Vertex_Input_Binding_Description, Vertex_Input_Attribute_Descriptions) {
-	bind_description := Vertex_Input_Binding_Description {
-		binding   = 0,
-		stride    = size_of(Vertex),
-		inputRate = .VERTEX,
-	}
-
+create_default_vertex_description :: proc() -> Vertex_Input_Description {
 	attribute_descriptions := Vertex_Input_Attribute_Descriptions{}
 	sm.push_back_elems(
 		&attribute_descriptions,
 		Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 0,
-			format = .R32G32B32_SFLOAT,
+			format = .RGB_f32,
 			offset = cast(u32)offset_of(Vertex, position),
 		},
 		Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 1,
-			format = .R32G32_SFLOAT,
+			format = .RG_f32,
 			offset = cast(u32)offset_of(Vertex, tex_coord),
 		},
 		Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 2,
-			format = .R32G32B32_SFLOAT,
+			format = .RGB_f32,
 			offset = cast(u32)offset_of(Vertex, normal),
 		},
 		Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 3,
-			format = .R32G32B32A32_SFLOAT,
+			format = .RGBA_f32,
 			offset = cast(u32)offset_of(Vertex, color),
 		},
 	)
 
-	return bind_description, attribute_descriptions
+	return Vertex_Input_Description {
+		binding = 0,
+		stride = size_of(Vertex),
+		input_rate = .Vertex,
+		attributes = attribute_descriptions,
+	}
 }
 
 create_render_pipeline :: proc(
@@ -386,11 +391,15 @@ create_render_pipeline :: proc(
 }
 
 // Looks up a pipeline in cache using surface settings. If not found, creates a new one.
-render_pipeline_get_pipeline :: proc(pipeline: ^Render_Pipeline, surface_info: Surface_Info) -> ^Graphics_Pipeline {
+render_pipeline_get_pipeline :: proc(
+	pipeline: ^Render_Pipeline,
+	surface_info: Surface_Info,
+	loc := #caller_location,
+) -> ^Graphics_Pipeline {
 	graphics_pipeline, ok := pipeline.cache[surface_info]
 	if ok do return &pipeline.cache[surface_info]
 
-	new_pipeline := _create_graphics_pipeline(pipeline.create_info, surface_info)
+	new_pipeline := _create_graphics_pipeline(pipeline.create_info, surface_info, loc)
 	pipeline.cache[surface_info] = new_pipeline
 
 	return &pipeline.cache[surface_info]
@@ -452,7 +461,6 @@ _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Cre
 		pColorAttachmentFormats = raw_data(sm.slice(&pipeline.surface_info.color_formats)),
 	}
 
-	vertex_binding_info: Vertex_Input_Binding_Description
 	vertex_input_sate: vk.PipelineVertexInputStateCreateInfo
 	input_assembly_state: vk.PipelineInputAssemblyStateCreateInfo
 	view_port_state: vk.PipelineViewportStateCreateInfo
@@ -465,7 +473,7 @@ _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Cre
 	dynamic_states: Pipeline_Dynamic_States
 	depth_stencil: vk.PipelineDepthStencilStateCreateInfo
 
-	_init_vertex_input_info(&vertex_input_sate, &vertex_binding_info, &create_info)
+	vertex_input_sate = _init_vertex_input_info(&create_info)
 	_init_input_assembly_info(&input_assembly_state, &create_info)
 	_init_viewport_info(&view_port_state, &create_info)
 	_init_rasterizer(&rasterization_sate, &create_info)
@@ -642,7 +650,6 @@ _create_graphics_pipeline :: proc(
 		pColorAttachmentFormats = raw_data(sm.slice(&surface_info.color_formats)),
 	}
 
-	vertex_binding_info: Vertex_Input_Binding_Description
 	vertex_input_sate: vk.PipelineVertexInputStateCreateInfo
 	input_assembly_state: vk.PipelineInputAssemblyStateCreateInfo
 	view_port_state: vk.PipelineViewportStateCreateInfo
@@ -654,7 +661,7 @@ _create_graphics_pipeline :: proc(
 	dynamic_states: Pipeline_Dynamic_States
 	depth_stencil: vk.PipelineDepthStencilStateCreateInfo
 
-	_init_vertex_input_info(&vertex_input_sate, &vertex_binding_info, &create_info)
+	vertex_input_sate = _init_vertex_input_info(&create_info, loc = loc)
 	_init_input_assembly_info(&input_assembly_state, &create_info)
 	_init_viewport_info(&view_port_state, &create_info)
 	_init_rasterizer(&rasterization_sate, &create_info)
@@ -985,22 +992,67 @@ _init_dynamic_info :: proc(
 
 @(private = "file")
 _init_vertex_input_info :: proc(
-	state_info: ^vk.PipelineVertexInputStateCreateInfo,
-	binding_info: ^Vertex_Input_Binding_Description,
 	create_info: ^Create_Pipeline_Info,
-) {
-	binding_info.binding = 0
-	binding_info.stride = create_info.vertex_input_description.binding_description.stride
-	binding_info.inputRate = create_info.vertex_input_description.input_rate
+	allocator := context.temp_allocator,
+	loc := #caller_location,
+) -> vk.PipelineVertexInputStateCreateInfo {
+	a := create_info.vertex_input_descriptions
+	when GFX_DEBUG {
+		for i_d, i in sm.slice(&create_info.vertex_input_descriptions) {
+			for j_d, j in sm.slice(&create_info.vertex_input_descriptions) {
+				if i == j do continue
+				assert(i_d.binding != j_d.binding, "Vertex input bindings should be unique.", loc)
+			}
+		}
+	}
+	desc_len := cast(u32)sm.len(create_info.vertex_input_descriptions)
 
-	state_info.sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
-	state_info.vertexBindingDescriptionCount = 1
-	state_info.vertexAttributeDescriptionCount =
-	cast(u32)create_info.vertex_input_description.attribute_descriptions.len
-	state_info.pVertexBindingDescriptions = binding_info
-	state_info.pVertexAttributeDescriptions = raw_data(
-		sm.slice(&create_info.vertex_input_description.attribute_descriptions),
+	binding_desc := make([]vk.VertexInputBindingDescription, desc_len, allocator)
+	for desc, i in sm.slice(&create_info.vertex_input_descriptions) {
+		binding_desc[i] = vk.VertexInputBindingDescription {
+			binding   = desc.binding,
+			stride    = desc.stride,
+			inputRate = .VERTEX if desc.input_rate == .Vertex else .INSTANCE,
+		}
+	}
+
+	attribute_desc := make(
+		[dynamic]vk.VertexInputAttributeDescription,
+		0,
+		MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT,
+		allocator,
 	)
+	for &desc in sm.slice(&create_info.vertex_input_descriptions) {
+		for attr in sm.slice(&desc.attributes) {
+			append(
+				&attribute_desc,
+				vk.VertexInputAttributeDescription {
+					binding = desc.binding,
+					location = attr.location,
+					format = _format_to_vk(attr.format),
+					offset = attr.offset,
+				},
+			)
+		}
+	}
+
+	assert(
+		len(attribute_desc) <= MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT,
+		fmt.tprintf(
+			"Vertex attributes exceeded: %d used (max %d).",
+			len(attribute_desc),
+			MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT,
+		),
+		loc,
+	)
+
+	return vk.PipelineVertexInputStateCreateInfo {
+		sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		vertexBindingDescriptionCount = cast(u32)len(binding_desc),
+		pVertexBindingDescriptions = raw_data(binding_desc),
+		vertexAttributeDescriptionCount = cast(u32)len(attribute_desc),
+		pVertexAttributeDescriptions = raw_data(attribute_desc),
+	}
 }
 
 @(private = "file")

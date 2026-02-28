@@ -75,7 +75,10 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	data.surface_h = ve.create_surface_fit_screen(._4)
 	surface, ok := ve.get_surface(data.surface_h)
 	assert(ok)
-	mtrl_postprocessing_set_texture(postproc_mtrl, ve.surface_add_color_attachment(surface))
+	mtrl_postprocessing_set_texture(
+		postproc_mtrl,
+		ve.surface_add_color_attachment(surface, clear_value = {.01, .01, .01, 1.0}),
+	)
 	ve.surface_add_depth_attachment(surface)
 
 	s.data = data

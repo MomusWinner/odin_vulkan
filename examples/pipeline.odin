@@ -6,47 +6,43 @@ import "core:log"
 import "core:mem/virtual"
 import vk "vendor:vulkan"
 
-default_shader_attribute :: proc() -> (ve.Vertex_Input_Binding_Description, ve.Vertex_Input_Attribute_Descriptions) {
-	bind_description := ve.Vertex_Input_Binding_Description {
-		binding   = 0,
-		stride    = size_of(ve.Vertex),
-		inputRate = .VERTEX,
-	}
-
+create_default_vertex_description :: proc() -> ve.Vertex_Input_Description {
 	attribute_descriptions := ve.Vertex_Input_Attribute_Descriptions{}
 	sm.push_back_elems(
 		&attribute_descriptions,
 		ve.Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 0,
-			format = .R32G32B32_SFLOAT,
+			format = .RGB_f32,
 			offset = cast(u32)offset_of(ve.Vertex, position),
 		},
 		ve.Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 1,
-			format = .R32G32_SFLOAT,
+			format = .RG_f32,
 			offset = cast(u32)offset_of(ve.Vertex, tex_coord),
 		},
 		ve.Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 2,
-			format = .R32G32B32_SFLOAT,
+			format = .RGB_f32,
 			offset = cast(u32)offset_of(ve.Vertex, normal),
 		},
 		ve.Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 3,
-			format = .R32G32B32A32_SFLOAT,
+			format = .RGBA_f32,
 			offset = cast(u32)offset_of(ve.Vertex, color),
 		},
 	)
 
-	return bind_description, attribute_descriptions
+	return ve.Vertex_Input_Description {
+		binding = 0,
+		stride = size_of(ve.Vertex),
+		input_rate = .Vertex,
+		attributes = attribute_descriptions,
+	}
 }
 
 create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -61,11 +57,7 @@ create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -84,7 +76,8 @@ create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -99,11 +92,7 @@ create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -122,7 +111,8 @@ create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_depth_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -137,11 +127,7 @@ create_depth_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -160,7 +146,8 @@ create_depth_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -175,11 +162,7 @@ create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -198,7 +181,8 @@ create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -209,11 +193,7 @@ create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -233,7 +213,8 @@ create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -248,11 +229,7 @@ create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.FRONT}, front_face = .COUNTER_CLOCKWISE},
@@ -264,7 +241,8 @@ create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -279,11 +257,7 @@ create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {}, front_face = .COUNTER_CLOCKWISE},
@@ -302,7 +276,8 @@ create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -327,11 +302,7 @@ create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -350,7 +321,8 @@ create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -375,11 +347,7 @@ create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -391,7 +359,8 @@ create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -406,11 +375,7 @@ create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -430,7 +395,8 @@ create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 
 
 create_mulilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -445,11 +411,7 @@ create_mulilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -468,7 +430,8 @@ create_mulilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -486,11 +449,7 @@ create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Render_Pipeline_Han
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
@@ -509,7 +468,8 @@ create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Render_Pipeline_Han
 }
 
 create_light_box_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_bind, vert_attr := default_shader_attribute()
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
@@ -524,11 +484,7 @@ create_light_box_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info := ve.Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},

@@ -277,36 +277,34 @@ destroy_text :: proc(text: ^Text, loc := #caller_location) {
 }
 
 @(private)
-_text_shader_attribute :: proc() -> (Vertex_Input_Binding_Description, Vertex_Input_Attribute_Descriptions) {
-	bind_description := Vertex_Input_Binding_Description {
-		binding   = 0,
-		stride    = size_of(FontVertex),
-		inputRate = .VERTEX,
-	}
-
+_text_shader_attribute :: proc() -> Vertex_Input_Description {
 	attribute_descriptions := Vertex_Input_Attribute_Descriptions{}
-	sm.push(
+	sm.push_back_elems(
 		&attribute_descriptions,
 		Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 0,
-			format = .R32G32B32_SFLOAT,
+			format = .RGB_f32,
 			offset = cast(u32)offset_of(FontVertex, position),
 		},
 		Vertex_Input_Attribute_Description {
-			binding = 0,
 			location = 1,
-			format = .R32G32_SFLOAT,
+			format = .RG_f32,
 			offset = cast(u32)offset_of(FontVertex, tex_coords),
 		},
 	)
 
-	return bind_description, attribute_descriptions
+	return Vertex_Input_Description {
+		binding = 0,
+		stride = size_of(FontVertex),
+		input_rate = .Vertex,
+		attributes = attribute_descriptions,
+	}
 }
 
 @(private)
 _text_default_pipeline :: proc() -> Render_Pipeline_Handle {
-	vert_bind, vert_attr := _text_shader_attribute()
+	vert_descriptions: Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, _text_shader_attribute())
 
 	set_infos := Pipeline_Set_Layout_Infos{}
 	sm.push_back(&set_infos, create_bindless_pipeline_set_info())
@@ -321,11 +319,7 @@ _text_default_pipeline :: proc() -> Render_Pipeline_Handle {
 	create_info := Create_Pipeline_Info {
 		set_infos = set_infos,
 		bindless = true,
-		vertex_input_description = {
-			input_rate = .VERTEX,
-			binding_description = vert_bind,
-			attribute_descriptions = vert_attr,
-		},
+		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
 		input_assembly = {topology = .TRIANGLE_LIST},
 		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {}, front_face = .CLOCKWISE},
