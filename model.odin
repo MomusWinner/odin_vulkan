@@ -58,6 +58,7 @@ draw_mesh :: proc(
 	material: ^Material,
 	camera: ^Camera,
 	transform: ^Gfx_Transform,
+	instance_count: u32 = 1,
 	loc := #caller_location,
 ) {
 	assert_gfx_ctx(loc)
@@ -67,7 +68,7 @@ draw_mesh :: proc(
 
 	ebo, has_ebo := mesh.ebo.?
 
-	cmd_bind_vertex_buffer(frame_data, mesh.vbo, loc = loc)
+	cmd_bind_vertex_buffer(frame_data, mesh.vbo, 0, loc = loc)
 	if has_ebo {
 		cmd_bind_index_buffer(frame_data, ebo, loc = loc)
 	}
@@ -88,9 +89,9 @@ draw_mesh :: proc(
 	cmd_push_constants(frame_data, g_pipeline, &const)
 
 	if has_ebo {
-		cmd_draw_indexed(frame_data, cast(u32)len(mesh.indices))
+		cmd_draw_indexed(frame_data, cast(u32)len(mesh.indices), instance_count)
 	} else {
-		cmd_draw(frame_data, cast(u32)len(mesh.vertices))
+		cmd_draw(frame_data, cast(u32)len(mesh.vertices), instance_count)
 	}
 }
 
@@ -123,7 +124,7 @@ draw_model :: proc(
 		mtrl, ok := get_material(model.materials[material_index])
 		assert(ok, loc = loc)
 
-		draw_mesh(frame_data, &mesh, mtrl, camera, transform, loc)
+		draw_mesh(frame_data, &mesh, mtrl, camera, transform, loc = loc)
 	}
 }
 
@@ -139,7 +140,7 @@ draw_model_solid :: proc(
 	assert_not_nil(transform, loc)
 
 	for &mesh, i in model.meshes {
-		draw_mesh(frame_data, &mesh, material, camera, transform, loc)
+		draw_mesh(frame_data, &mesh, material, camera, transform, loc = loc)
 	}
 }
 

@@ -254,7 +254,7 @@ draw_text :: proc(text: ^Text, frame_data: Frame_Data, camera: ^Camera, loc := #
 	material, mtrl_ok := get_material(text.material)
 	assert(mtrl_ok, loc = loc)
 
-	cmd_bind_vertex_buffer(frame_data, text.vbo)
+	cmd_bind_vertex_buffer(frame_data, text.vbo, 0)
 
 	g_pipeline := cmd_bind_material(frame_data, material)
 

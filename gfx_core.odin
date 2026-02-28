@@ -582,6 +582,7 @@ cmd_set_scissor :: proc(frame_data: Frame_Data, width, height: u32, offset: ivec
 cmd_bind_vertex_buffer :: proc(
 	frame_data: Frame_Data,
 	buffer: Buffer,
+	binding: u32,
 	offset := vk.DeviceSize{},
 	loc := #caller_location,
 ) {
@@ -590,7 +591,7 @@ cmd_bind_vertex_buffer :: proc(
 	offset := offset
 	buffer := buffer
 
-	vk.CmdBindVertexBuffers(frame_data.cmd, 0, 1, &buffer.buffer, &offset)
+	vk.CmdBindVertexBuffers(frame_data.cmd, binding, 1, &buffer.buffer, &offset)
 }
 
 cmd_bind_index_buffer :: proc(
@@ -617,14 +618,12 @@ cmd_push_constants :: proc(frame_data: Frame_Data, pipeline: Pipeline, const: ^$
 
 cmd_draw :: proc(frame_data: Frame_Data, vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
 	assert_frame_data(frame_data, loc)
-
 	vk.CmdDraw(frame_data.cmd, vertex_count, instance_count, 0, 0)
 }
 
 cmd_draw_indexed :: proc(frame_data: Frame_Data, vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
 	assert_frame_data(frame_data, loc)
-
-	vk.CmdDrawIndexed(frame_data.cmd, vertex_count, 1, 0, 0, 0)
+	vk.CmdDrawIndexed(frame_data.cmd, vertex_count, instance_count, 0, 0, 0)
 }
 
 cmd_bind_material :: proc(frame_data: Frame_Data, m: ^Material, loc := #caller_location) -> ^Graphics_Pipeline {
@@ -639,7 +638,7 @@ cmd_bind_render_pipeline :: proc(
 ) -> ^Graphics_Pipeline {
 	assert_frame_data(frame_data, loc)
 
-	graphics_pipeline := render_pipeline_get_pipeline(pipeline, frame_data.surface_info)
+	graphics_pipeline := render_pipeline_get_pipeline(pipeline, frame_data.surface_info, loc)
 	vk.CmdBindPipeline(frame_data.cmd, .GRAPHICS, graphics_pipeline.pipeline)
 	cmd_bind_descriptor_set_graphics(frame_data, graphics_pipeline, get_descriptor_set_bindless())
 
