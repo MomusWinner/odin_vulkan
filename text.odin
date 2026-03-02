@@ -306,9 +306,6 @@ _text_default_pipeline :: proc() -> Render_Pipeline_Handle {
 	vert_descriptions: Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, _text_shader_attribute())
 
-	set_infos := Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, create_bindless_pipeline_set_info())
-
 	stages := Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -317,16 +314,15 @@ _text_default_pipeline :: proc() -> Render_Pipeline_Handle {
 	)
 
 	create_info := Create_Pipeline_Info {
-		set_infos = set_infos,
 		bindless = true,
 		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {}, front_face = .CLOCKWISE},
+		topology = .Triangle_List,
+		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {}, front_face = .Clockwise},
 		depth = {
 			enable = true,
 			write_enable = true,
-			compare_op = .LESS,
+			compare_op = .Less,
 			bounds_test_enable = false,
 			min_bounds = 0,
 			max_bounds = 0,

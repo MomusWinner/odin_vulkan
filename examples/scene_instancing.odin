@@ -118,9 +118,6 @@ create_instancing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	sm.append(&vert_descriptions, create_default_vertex_description())
 	sm.append(&vert_descriptions, _create_instance_vertex_description())
 
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -129,21 +126,12 @@ create_instancing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	)
 
 	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
 		bindless = true,
 		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
+		topology = .Triangle_List,
+		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {.Back}, front_face = .Counter_Clockwise},
+		depth = {enable = true, write_enable = true, compare_op = .Less},
 	}
 
 	return ve.create_render_pipeline(create_info)

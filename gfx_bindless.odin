@@ -65,7 +65,7 @@ get_buffer_h :: proc(buffer_h: Buffer_Handle, loc := #caller_location) -> ^Buffe
 }
 
 @(require_results)
-create_bindless_pipeline_set_info :: proc() -> Pipeline_Set_Layout_Info {
+get_bindless_pipeline_set_info :: proc() -> Pipeline_Set_Layout_Info {
 	binding_infos := Pipeline_Set_Binding_Infos{}
 	sm.push(
 		&binding_infos,

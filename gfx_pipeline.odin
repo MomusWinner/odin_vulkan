@@ -116,19 +116,78 @@ Blending_Info :: struct {
 
 Blending_Infos :: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Blending_Info)
 
+Front_Face :: enum c.int {
+	Counter_Clockwise = 0,
+	Clockwise         = 1,
+}
+
+Polygon_Mode :: enum c.int {
+	Fill  = 0,
+	Line  = 1,
+	Point = 2,
+}
+
+Primitive_Topology :: enum c.int {
+	Point_List                    = 0,
+	Line_List                     = 1,
+	Line_Strip                    = 2,
+	Triangle_List                 = 3,
+	Triangle_Strip                = 4,
+	Triangle_Fan                  = 5,
+	Line_List_With_Adjacency      = 6,
+	Line_Strip_With_Adjacency     = 7,
+	Triangle_List_With_Adjacency  = 8,
+	Triangle_Strip_With_Adjacency = 9,
+	Patch_List                    = 10,
+}
+
+Cull_Mode_Flags :: distinct bit_set[Cull_Mode_Flag;vk.Flags]
+Cull_Mode_Flag :: enum vk.Flags {
+	Front = 0,
+	Back  = 1,
+}
+
+Compare_Op :: enum c.int {
+	Never            = 0,
+	Less             = 1,
+	Equal            = 2,
+	Less_Or_Equal    = 3,
+	Greater          = 4,
+	Not_Equal        = 5,
+	Greater_Or_Equal = 6,
+	Always           = 7,
+}
+
+Stencil_Op :: enum c.int {
+	// keeps the current value
+	Keep                = 0,
+	// sets the value to 0
+	Zero                = 1,
+	// sets the value to reference
+	Replace             = 2,
+	// increments the current value and clamps to the maximum representable unsigned value
+	Increment_And_Clamp = 3,
+	// decrements the current value and clamps to 0
+	Decrement_And_Clamp = 4,
+	// bitwise-inverts the current value
+	Invert              = 5,
+	// increments the current value and wraps to 0 when the maximum value would have been exceeded.
+	Increment_And_Wrap  = 6,
+	// decrements the current value and wraps to the maximum possible value when the value would go below 0.
+	Decrement_And_Wrap  = 7,
+}
+
 Create_Pipeline_Info :: struct {
-	set_infos:                 Pipeline_Set_Layout_Infos,
+	descriptor_set_infos:      Pipeline_Set_Layout_Infos,
 	bindless:                  bool,
 	stage_infos:               Stage_Infos,
 	vertex_input_descriptions: Vertex_Input_Descriptions,
-	input_assembly:            struct {
-		topology: vk.PrimitiveTopology,
-	},
+	topology:                  Primitive_Topology,
 	rasterizer:                struct {
-		polygon_mode: vk.PolygonMode,
+		polygon_mode: Polygon_Mode,
 		line_width:   f32,
-		cull_mode:    vk.CullModeFlags,
-		front_face:   vk.FrontFace,
+		cull_mode:    Cull_Mode_Flags,
+		front_face:   Front_Face,
 	},
 	blending_info:             struct {
 		attachment_infos: Blending_Infos,
@@ -136,7 +195,7 @@ Create_Pipeline_Info :: struct {
 	depth:                     struct {
 		enable:             b32,
 		write_enable:       b32,
-		compare_op:         vk.CompareOp,
+		compare_op:         Compare_Op,
 		bounds_test_enable: b32,
 		min_bounds:         f32,
 		max_bounds:         f32,
@@ -664,23 +723,26 @@ _create_graphics_pipeline :: proc(
 
 	create_info := create_info
 	surface_info := surface_info
+	_assert_create_pipeline_info(&create_info, loc)
 
 	shader_stages := _create_shader_stages(create_info, GFX_DEBUG, loc = loc)
 	defer _destroy_shader_stages(shader_stages)
 
-	pipelie_layout_info := Pipeline_Layout_Info {
-		layout_infos = create_info.set_infos,
+	pipeline_layout_info := Pipeline_Layout_Info {
+		layout_infos = create_info.descriptor_set_infos,
 	}
 
 	if create_info.bindless {
-		pipelie_layout_info.push_constant = Push_Constant_Range {
+		pipeline_layout_info.push_constant = Push_Constant_Range {
 			offset     = 0,
 			size       = size_of(Push_Constant),
 			stageFlags = vk.ShaderStageFlags_ALL_GRAPHICS,
 		}
+		sm.append(&create_info.descriptor_set_infos, get_bindless_pipeline_set_info())
+		pipeline_layout_info.layout_infos = create_info.descriptor_set_infos
 	}
 
-	pipeline_layout := get_pipeline_layout(pipelie_layout_info)
+	pipeline_layout := get_pipeline_layout(pipeline_layout_info)
 
 	pipeline_rendering_info := vk.PipelineRenderingCreateInfo {
 		sType                   = .PIPELINE_RENDERING_CREATE_INFO,
@@ -734,7 +796,7 @@ _create_graphics_pipeline :: proc(
 
 	pipeline := Graphics_Pipeline {
 		pipeline     = vk_pipeline,
-		layout       = pipelie_layout_info,
+		layout       = pipeline_layout_info,
 		surface_info = surface_info,
 	}
 
@@ -1032,14 +1094,6 @@ _init_vertex_input_info :: proc(
 	loc := #caller_location,
 ) -> vk.PipelineVertexInputStateCreateInfo {
 	a := create_info.vertex_input_descriptions
-	when GFX_DEBUG {
-		for i_d, i in sm.slice(&create_info.vertex_input_descriptions) {
-			for j_d, j in sm.slice(&create_info.vertex_input_descriptions) {
-				if i == j do continue
-				assert(i_d.binding != j_d.binding, "Vertex input bindings should be unique.", loc)
-			}
-		}
-	}
 	desc_len := cast(u32)sm.len(create_info.vertex_input_descriptions)
 
 	binding_desc := make([]vk.VertexInputBindingDescription, desc_len, allocator)
@@ -1093,7 +1147,7 @@ _init_vertex_input_info :: proc(
 @(private = "file")
 _init_input_assembly_info :: proc(info: ^vk.PipelineInputAssemblyStateCreateInfo, create_info: ^Create_Pipeline_Info) {
 	info.sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO
-	info.topology = create_info.input_assembly.topology
+	info.topology = cast(vk.PrimitiveTopology)create_info.topology
 }
 
 @(private = "file")
@@ -1112,10 +1166,10 @@ _init_rasterizer :: proc(info: ^vk.PipelineRasterizationStateCreateInfo, create_
 	info.depthBiasConstantFactor = create_info.depth.bias.constant_factor
 	info.depthBiasSlopeFactor = create_info.depth.bias.slope_factor
 
-	info.polygonMode = create_info.rasterizer.polygon_mode
+	info.polygonMode = cast(vk.PolygonMode)create_info.rasterizer.polygon_mode
 	info.lineWidth = create_info.rasterizer.line_width
-	info.cullMode = create_info.rasterizer.cull_mode
-	info.frontFace = create_info.rasterizer.front_face
+	info.cullMode = transmute(vk.CullModeFlags)create_info.rasterizer.cull_mode
+	info.frontFace = cast(vk.FrontFace)create_info.rasterizer.front_face
 }
 
 @(private = "file")
@@ -1172,7 +1226,7 @@ _init_depth_stencil_info :: proc(info: ^vk.PipelineDepthStencilStateCreateInfo, 
 	info.sType = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO
 	info.depthTestEnable = create_info.depth.enable
 	info.depthWriteEnable = create_info.depth.write_enable
-	info.depthCompareOp = create_info.depth.compare_op
+	info.depthCompareOp = cast(vk.CompareOp)create_info.depth.compare_op
 	info.depthBoundsTestEnable = create_info.depth.bounds_test_enable
 	info.minDepthBounds = create_info.depth.min_bounds
 	info.maxDepthBounds = create_info.depth.max_bounds
@@ -1260,5 +1314,46 @@ _surface_info_to_pipeline_surface_info :: proc(surface: Surface_Info) -> Pipelin
 		sample_count = surface.sample_count,
 		depth_format = surface.depth_format,
 		color_formats = surface.color_formats,
+	}
+}
+
+@(private = "file")
+_assert_create_pipeline_info :: #force_inline proc(create_info: ^Create_Pipeline_Info, loc := #caller_location) {
+	when GFX_DEBUG {
+		// Validate pipeline stage unique
+		for i_s, i in sm.slice(&create_info.stage_infos) {
+			for j_s, j in sm.slice(&create_info.stage_infos) {
+				if i == j do continue
+				assert(
+					i_s.stage != j_s.stage,
+					fmt.tprintf("Stage %v is duplicated. Stage must be unique across the pipeline.", i_s.stage),
+					loc,
+				)
+			}
+		}
+
+		// Validate vertex input binding unique
+		for i_d, i in sm.slice(&create_info.vertex_input_descriptions) {
+			for j_d, j in sm.slice(&create_info.vertex_input_descriptions) {
+				if i == j do continue
+				assert(i_d.binding != j_d.binding, "Vertex input bindings should be unique.", loc)
+			}
+		}
+
+		// Validate vertex input location unique
+		attribute_desc := make([dynamic]u32, 0, MAX_PIPELINE_VERTEX_INPUT_ATTRIBUTE_COUNT, context.temp_allocator)
+		for &d, i in sm.slice(&create_info.vertex_input_descriptions) {
+			for a in sm.slice(&d.attributes) {
+				assert(
+					!slice.contains(attribute_desc[:], a.location),
+					fmt.tprintf(
+						"Vertex attribute location (%d) is duplicated. Location must be unique across the pipeline.",
+						a.location,
+					),
+					loc,
+				)
+				append(&attribute_desc, a.location)
+			}
+		}
 	}
 }

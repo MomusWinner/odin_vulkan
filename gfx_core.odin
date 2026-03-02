@@ -25,35 +25,6 @@ Command_Buffer :: vk.CommandBuffer
 Pipeline_Stage_Flags :: vk.PipelineStageFlags
 Descriptor_Set :: vk.DescriptorSet
 
-Compare_Op :: enum c.int {
-	Never            = 0,
-	Less             = 1,
-	Equal            = 2,
-	Less_Or_Equal    = 3,
-	Greater          = 4,
-	Not_Equal        = 5,
-	Greater_Or_Equal = 6,
-	Always           = 7,
-}
-
-Stencil_Op :: enum c.int {
-	// keeps the current value
-	Keep                = 0,
-	// sets the value to 0
-	Zero                = 1,
-	// sets the value to reference
-	Replace             = 2,
-	// increments the current value and clamps to the maximum representable unsigned value
-	Increment_And_Clamp = 3,
-	// decrements the current value and clamps to 0
-	Decrement_And_Clamp = 4,
-	// bitwise-inverts the current value
-	Invert              = 5,
-	// increments the current value and wraps to 0 when the maximum value would have been exceeded.
-	Increment_And_Wrap  = 6,
-	// decrements the current value and wraps to the maximum possible value when the value would go below 0.
-	Decrement_And_Wrap  = 7,
-}
 
 Buildin_Resource :: struct {
 	pipeline:    struct {
@@ -1746,9 +1717,6 @@ create_primitive_pipeline :: proc() -> Render_Pipeline_Handle {
 	vert_descriptions: Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
-	set_infos := Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, create_bindless_pipeline_set_info())
-
 	stages := Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -1757,21 +1725,12 @@ create_primitive_pipeline :: proc() -> Render_Pipeline_Handle {
 	)
 
 	create_info := Create_Pipeline_Info {
-		set_infos = set_infos,
 		bindless = true,
 		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = true, front = {}, back = {}},
+		topology = .Triangle_List,
+		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {}, front_face = .Counter_Clockwise},
+		depth = {enable = true, write_enable = true, compare_op = .Less},
 	}
 
 	return create_render_pipeline(create_info)

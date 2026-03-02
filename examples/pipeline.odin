@@ -40,12 +40,27 @@ create_default_vertex_description :: proc() -> ve.Vertex_Input_Description {
 	}
 }
 
-create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+get_base_create_pipeline_info :: proc() -> ve.Create_Pipeline_Info {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
+	return ve.Create_Pipeline_Info {
+		bindless = true,
+		vertex_input_descriptions = vert_descriptions,
+		topology = .Triangle_List,
+		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {.Back}, front_face = .Counter_Clockwise},
+		depth = {
+			enable = true,
+			write_enable = true,
+			compare_op = .Less,
+			bounds_test_enable = false,
+			min_bounds = 0,
+			max_bounds = 0,
+		},
+	}
+}
+
+create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
@@ -54,34 +69,13 @@ create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/buildin/shaders/default.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -89,34 +83,13 @@ create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/postprocessing.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_depth_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -124,34 +97,13 @@ create_depth_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/depth.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -159,23 +111,8 @@ create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/light.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
@@ -185,28 +122,18 @@ create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
+	sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(&stages, ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light.vert"})
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			bias = {enable = true, constant_factor = 1.25, clamp = 0, slope_factor = 4.75},
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
+	create_info.depth.bias = {
+		enable          = true,
+		constant_factor = 1.25,
+		clamp           = 0,
+		slope_factor    = 4.75,
 	}
 
 	return ve.create_render_pipeline(create_info)
@@ -216,9 +143,6 @@ create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -227,14 +151,11 @@ create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	)
 
 	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
 		bindless = true,
 		vertex_input_descriptions = vert_descriptions,
 		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.FRONT}, front_face = .COUNTER_CLOCKWISE},
-		depth = {enable = false},
-		stencil = {enable = false},
+		topology = .Triangle_List,
+		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {.Front}, front_face = .Counter_Clockwise},
 	}
 
 	return ve.create_render_pipeline(create_info)
@@ -245,7 +166,7 @@ create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
 	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
+	sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
@@ -254,34 +175,19 @@ create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/reflect.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
+	create_info.rasterizer = {
+		polygon_mode = .Fill,
+		line_width   = 1,
+		cull_mode    = {},
+		front_face   = .Counter_Clockwise,
 	}
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -299,34 +205,18 @@ create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		reference   = 1,
 	}
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = true, front = stencil_state, back = stencil_state},
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
+	create_info.stencil = {
+		enable = true,
+		front  = stencil_state,
+		back   = stencil_state,
 	}
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -344,27 +234,18 @@ create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		reference   = 1,
 	}
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {enable = false},
-		stencil = {enable = true, front = stencil_state, back = stencil_state},
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
+	create_info.stencil = {
+		enable = true,
+		front  = stencil_state,
+		back   = stencil_state,
 	}
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -372,35 +253,14 @@ create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/hdr.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
 
 
 create_mulilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -408,72 +268,30 @@ create_mulilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/multilight.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	consts := ve.Shader_Constants{}
 	sm.append(&consts, ve.Shader_Constant{id = 0, value = {bool = horizontal}})
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/gaussian_blur.vert", consts = consts},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/gaussian_blur.vert"},
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/gaussian_blur.frag", consts = consts},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
 
 create_light_box_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.create_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -481,23 +299,8 @@ create_light_box_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/light_box.frag"},
 	)
 
-	create_info := ve.Create_Pipeline_Info {
-		set_infos = set_infos,
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		input_assembly = {topology = .TRIANGLE_LIST},
-		rasterizer = {polygon_mode = .FILL, line_width = 1, cull_mode = {.BACK}, front_face = .COUNTER_CLOCKWISE},
-		depth = {
-			enable = true,
-			write_enable = true,
-			compare_op = .LESS,
-			bounds_test_enable = false,
-			min_bounds = 0,
-			max_bounds = 0,
-		},
-		stencil = {enable = false},
-	}
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
 
 	return ve.create_render_pipeline(create_info)
 }
