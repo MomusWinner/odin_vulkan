@@ -74,6 +74,48 @@ Stencil_Op_State :: struct {
 	reference:   u32,
 }
 
+Blend_Factor :: enum c.int {
+	Zero                     = 0,
+	One                      = 1,
+	Src_Color                = 2,
+	One_Minus_Src_Color      = 3,
+	Dst_Color                = 4,
+	One_Minus_Dst_Color      = 5,
+	Src_Alpha                = 6,
+	One_Minus_Src_Alpha      = 7,
+	Dst_Alpha                = 8,
+	One_Minus_Dst_Alpha      = 9,
+	Constant_Color           = 10,
+	One_Minus_Constant_Color = 11,
+	Constant_Alpha           = 12,
+	One_Minus_Constant_Alpha = 13,
+	Src_Alpha_Saturate       = 14,
+	Src1_Color               = 15,
+	One_Minus_Src1_Color     = 16,
+	Src1_Alpha               = 17,
+	One_Minus_Src1_Alpha     = 18,
+}
+
+BlendOp :: enum c.int {
+	Add              = 0,
+	Subtract         = 1,
+	Reverse_Subtract = 2,
+	Min              = 3,
+	Max              = 4,
+}
+
+Blending_Info :: struct {
+	src_color_blend_factor: Blend_Factor,
+	dst_color_blend_factor: Blend_Factor,
+	color_blend_op:         BlendOp,
+	src_alpha_blend_factor: Blend_Factor,
+	dst_alpha_blend_factor: Blend_Factor,
+	alpha_blend_op:         BlendOp,
+	color_write_mask:       vk.ColorComponentFlags,
+}
+
+Blending_Infos :: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Blending_Info)
+
 Create_Pipeline_Info :: struct {
 	set_infos:                 Pipeline_Set_Layout_Infos,
 	bindless:                  bool,
@@ -88,11 +130,8 @@ Create_Pipeline_Info :: struct {
 		cull_mode:    vk.CullModeFlags,
 		front_face:   vk.FrontFace,
 	},
-	attachment:                struct {
-		sample_count:             Sample_Count_Flags,
-		depth_format:             vk.Format,
-		color_attachment_formats: u32,
-		color_attachment_count:   u32,
+	blending_info:             struct {
+		attachment_infos: Blending_Infos,
 	},
 	depth:                     struct {
 		enable:             b32,
@@ -474,7 +513,6 @@ _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Cre
 	rasterization_sate: vk.PipelineRasterizationStateCreateInfo
 	multisample_state: vk.PipelineMultisampleStateCreateInfo
 	color_blend_state: vk.PipelineColorBlendStateCreateInfo
-	color_blend_attachment: Pipeline_Color_BlendAttachment_States
 
 	dynamic_state: vk.PipelineDynamicStateCreateInfo
 	dynamic_states: Pipeline_Dynamic_States
@@ -485,12 +523,7 @@ _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Cre
 	_init_viewport_info(&view_port_state, &create_info)
 	_init_rasterizer(&rasterization_sate, &create_info)
 	_init_multisampling_info(&multisample_state, &create_info, pipeline.surface_info.sample_count)
-	_init_color_blend_info(
-		&color_blend_state,
-		&color_blend_attachment,
-		&create_info,
-		cast(u32)sm.len(pipeline.surface_info.color_formats),
-	)
+	color_blend_state = _init_color_blend_info(&create_info, pipeline.surface_info)
 	_init_dynamic_info(&dynamic_state, &dynamic_states, &create_info)
 	_init_depth_stencil_info(&depth_stencil, &create_info)
 
@@ -663,7 +696,6 @@ _create_graphics_pipeline :: proc(
 	rasterization_sate: vk.PipelineRasterizationStateCreateInfo
 	multisample_state: vk.PipelineMultisampleStateCreateInfo
 	color_blend_state: vk.PipelineColorBlendStateCreateInfo
-	color_blend_attachment: Pipeline_Color_BlendAttachment_States
 	dynamic_state: vk.PipelineDynamicStateCreateInfo
 	dynamic_states: Pipeline_Dynamic_States
 	depth_stencil: vk.PipelineDepthStencilStateCreateInfo
@@ -673,12 +705,8 @@ _create_graphics_pipeline :: proc(
 	_init_viewport_info(&view_port_state, &create_info)
 	_init_rasterizer(&rasterization_sate, &create_info)
 	_init_multisampling_info(&multisample_state, &create_info, surface_info.sample_count)
-	_init_color_blend_info(
-		&color_blend_state,
-		&color_blend_attachment,
-		&create_info,
-		cast(u32)sm.len(surface_info.color_formats),
-	)
+
+	color_blend_state = _init_color_blend_info(&create_info, surface_info)
 	_init_dynamic_info(&dynamic_state, &dynamic_states, &create_info)
 	_init_depth_stencil_info(&depth_stencil, &create_info)
 
@@ -1103,29 +1131,40 @@ _init_multisampling_info :: proc(
 
 @(private = "file")
 _init_color_blend_info :: proc(
-	info: ^vk.PipelineColorBlendStateCreateInfo,
-	color_blend_attachment: ^Pipeline_Color_BlendAttachment_States,
 	create_info: ^Create_Pipeline_Info,
-	attachment_count: u32,
-) {
-	// TODO: add blending support
+	surface_info: Surface_Info,
+	allocator := context.temp_allocator,
+) -> vk.PipelineColorBlendStateCreateInfo {
+	attachment_count := sm.len(surface_info.color_formats)
+	attachment_states := make([]vk.PipelineColorBlendAttachmentState, attachment_count, allocator)
+
+	attachment_infos := create_info.blending_info.attachment_infos
 	for i in 0 ..< attachment_count {
-		attachment := vk.PipelineColorBlendAttachmentState {
-			blendEnable         = true,
-			srcColorBlendFactor = .SRC_ALPHA,
-			dstColorBlendFactor = .ONE_MINUS_SRC_ALPHA,
-			colorBlendOp        = .ADD,
-			srcAlphaBlendFactor = .ONE,
-			dstAlphaBlendFactor = .ZERO,
-			alphaBlendOp        = .ADD,
-			colorWriteMask      = {.R, .G, .B, .A},
+		if sm.len(attachment_infos) <= i {
+			attachment_states[i] = vk.PipelineColorBlendAttachmentState {
+				blendEnable    = false,
+				colorWriteMask = {.R, .G, .B, .A},
+			}
+			continue
 		}
-		sm.append(color_blend_attachment, attachment)
+
+		attachment_states[i] = vk.PipelineColorBlendAttachmentState {
+			blendEnable         = true,
+			srcColorBlendFactor = cast(vk.BlendFactor)sm.get(attachment_infos, i).src_color_blend_factor,
+			dstColorBlendFactor = cast(vk.BlendFactor)sm.get(attachment_infos, i).dst_color_blend_factor,
+			colorBlendOp        = cast(vk.BlendOp)sm.get(attachment_infos, i).color_blend_op,
+			srcAlphaBlendFactor = cast(vk.BlendFactor)sm.get(attachment_infos, i).src_alpha_blend_factor,
+			dstAlphaBlendFactor = cast(vk.BlendFactor)sm.get(attachment_infos, i).dst_alpha_blend_factor,
+			alphaBlendOp        = cast(vk.BlendOp)sm.get(attachment_infos, i).alpha_blend_op,
+			colorWriteMask      = sm.get(attachment_infos, i).color_write_mask,
+		}
 	}
 
-	info.sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO
-	info.attachmentCount = attachment_count
-	info.pAttachments = raw_data(sm.slice(color_blend_attachment))
+	return vk.PipelineColorBlendStateCreateInfo {
+		sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		attachmentCount = cast(u32)attachment_count,
+		pAttachments = raw_data(attachment_states),
+	}
 }
 
 @(private = "file")
