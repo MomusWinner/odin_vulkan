@@ -14,7 +14,7 @@ import vk "vendor:vulkan"
 // Normalized formats automatically convert integer color values to floating-point ranges in shaders.
 //
 // For example:
-//   format     |      inpute      |    shader
+//   format     |      input       |    shader
 // RGB_norm_u8: | (255,    0, 128) | (1,  0, 0.5..)
 // RGB_norm_i8: | (127, -128,   0) | (1, -1,   0)
 // ---
@@ -22,7 +22,7 @@ import vk "vendor:vulkan"
 // Scaled formats convert integer values directly to floating-point in shaders.
 //
 // For example:
-//   format       |     inpute       |        shader
+//   format       |     input        |        shader
 // RGB_scaled_u8: | (255,    0, 128) | (255.0,    0.0, 128.0)
 // RGB_scaled_i8: | (127, -128,   0) | (127.0, -128.0,   0.0)
 // ---
@@ -30,6 +30,7 @@ import vk "vendor:vulkan"
 // The R, G, and B components are unsigned normalized values that represent values using sRGB nonlinear encoding,
 // while the A component (if one exists) is a regular unsigned normalized value.
 //
+// NOTE: Blending is only defined for floating-point, _norm_, and _srgb_u formats.
 // Transfer function: https://registry.khronos.org/DataFormat/specs/1.4/dataformat.1.4.html#TRANSFER_SRGB
 // May be useful: https://learnopengl.com/Advanced-Lighting/Gamma-Correction
 Pixel_Format :: enum i32 {
