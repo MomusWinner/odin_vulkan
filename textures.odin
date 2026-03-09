@@ -254,9 +254,8 @@ create_texture :: proc(
 	sc := begin_single_cmd()
 
 	// Staging Buffer
-	staging_buffer := _create_buffer(image_size, {.TRANSFER_SRC}, .AUTO, {.HOST_ACCESS_SEQUENTIAL_WRITE})
-	fill_buffer(&staging_buffer, image_size, image.data)
-	_cmd_buffer_barrier(sc.cmd, staging_buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	staging_buffer := _create_staging_buffer(image.data, image_size)
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 	defer destroy_buffer(&staging_buffer)
 
 	format: vk.Format = _format_to_vk(_chan_encod_to_format(image.channels, encoding))
@@ -399,23 +398,27 @@ create_texture_cubemap :: proc(
 	sc := begin_single_cmd()
 
 	// Staging Buffer
-	staging_buffer := _create_buffer(image_size, {.TRANSFER_SRC}, .AUTO, {.HOST_ACCESS_SEQUENTIAL_WRITE})
+	// staging_buffer := _create_buffer(image_size, {.TRANSFER_SRC}, .AUTO, {.HOST_ACCESS_SEQUENTIAL_WRITE})
+	//
+	staging_buffer := _create_staging_buffer(image.data, image_size)
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 
 	log.info(staging_buffer.allocation_info)
 
-	mapped := buffer_map(&staging_buffer)
-	{
-		for face, i in faces {
-			offset := cast(Device_Size)i * layer_size
-			dest := rawptr(uintptr(mapped) + uintptr(offset))
-			src := rawptr(face.data)
+	assert(false)
+	// mapped := buffer_map(&staging_buffer)
+	// {
+	// 	for face, i in faces {
+	// 		offset := cast(Device_Size)i * layer_size
+	// 		dest := rawptr(uintptr(mapped) + uintptr(offset))
+	// 		src := rawptr(face.data)
+	//
+	// 		mem.copy(dest, src, int(layer_size))
+	// 	}
+	// }
+	// buffer_unmap(&staging_buffer)
 
-			mem.copy(dest, src, int(layer_size))
-		}
-	}
-	buffer_unmap(&staging_buffer)
-
-	_cmd_buffer_barrier(sc.cmd, staging_buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 	defer destroy_buffer(&staging_buffer)
 
 	format: vk.Format = _format_to_vk(_chan_encod_to_format(image.channels, encoding))
@@ -783,20 +786,6 @@ _cmd_copy_buffer_to_image :: proc(
 	image: vk.Image,
 	regions: []vk.BufferImageCopy,
 ) {
-	// region := vk.BufferImageCopy {
-	// 	bufferOffset = 0,
-	// 	bufferRowLength = 0,
-	// 	bufferImageHeight = 0,
-	// 	imageSubresource = vk.ImageSubresourceLayers {
-	// 		aspectMask = {.COLOR},
-	// 		mipLevel = 0,
-	// 		baseArrayLayer = 0,
-	// 		layerCount = 1,
-	// 	},
-	// 	imageOffset = vk.Offset3D{0, 0, 0},
-	// 	imageExtent = vk.Extent3D{width, height, 1},
-	// }
-
 	vk.CmdCopyBufferToImage(cmd, buffer, image, .TRANSFER_DST_OPTIMAL, cast(u32)len(regions), raw_data(regions))
 }
 

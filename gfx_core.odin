@@ -8,6 +8,7 @@ import sm "core:container/small_array"
 import "core:fmt"
 import "core:log"
 import "core:math/linalg/glsl"
+import "core:mem"
 import "lib/shaderc"
 import "lib/vma"
 import "math"
@@ -41,6 +42,7 @@ Vulkan_State :: struct {
 	instance:                 vk.Instance,
 	physical_device:          vk.PhysicalDevice,
 	physical_device_property: vk.PhysicalDeviceProperties,
+	memory_propertices:       vk.PhysicalDeviceMemoryProperties,
 	device:                   vk.Device,
 	dbg_messenger:            Maybe(vk.DebugUtilsMessengerEXT),
 	allocator:                vma.Allocator,
@@ -82,8 +84,7 @@ Graphics :: struct {
 	swapchain_cfg:             Swapchain_Configuration,
 	swapchain:                 ^Swapchain,
 	// managers
-	unifiorm_buffer_manager:   ^Uniform_Buffer_Manager,
-	material_manager:          ^Material_Manager,
+	buffer_manager:            ^Buffer_Manager,
 	pipeline_manager:          ^Pipeline_Manager,
 	surface_manager:           ^Surface_Manager,
 	g_res_manager:             ^Global_Resource_Manager,
@@ -100,28 +101,55 @@ Graphics :: struct {
 	buildin:                   ^Buildin_Resource,
 }
 
+Buffer_Info :: struct {
+	data:     rawptr,
+	size:     Device_Size,
+	copyable: bool,
+	static:   bool,
+	usage:    Buffer_Type_Flags,
+	access:   Buffer_Access_Flags,
+}
+
+Buffer_Type_Flags :: distinct bit_set[Buffer_Type_Flag]
+Buffer_Type_Flag :: enum {
+	Vertex_Buffer,
+	Index_Buffer,
+	Uniform_Buffer,
+	Storage_Buffer,
+}
+
+Buffer_Access_Flags :: distinct bit_set[Buffer_Access_Flag]
+Buffer_Access_Flag :: enum {
+	Readable,
+	Copyable,
+}
+
 Buffer :: struct {
 	buffer:          vk.Buffer,
 	usage:           vk.BufferUsageFlags,
-	is_mapped:       bool,
 	mapped:          rawptr,
+	size:            Device_Size,
 	allocation:      vma.Allocation,
 	allocation_info: vma.AllocationInfo,
-	flags:           struct {
-		memory_usage:    vma.MemoryUsage,
-		memory:          vma.AllocationCreateFlags,
-		required_flags:  vk.MemoryPropertyFlags,
-		preferred_flags: vk.MemoryPropertyFlags,
-	},
+	// flags:           struct { FIXME:
+	// 	memory_usage:    vma.MemoryUsage,
+	// 	memory:          vma.AllocationCreateFlags,
+	// 	required_flags:  vk.MemoryPropertyFlags,
+	// 	preferred_flags: vk.MemoryPropertyFlags,
+	// },
 }
 
-// Abstracted uniform buffer interface with auto-generated accessors
-// Enables type-safe buffer operations.
 Uniform_Buffer_Handle :: distinct hm.Handle
 Nil_Uniform_Buffer_Handle :: Uniform_Buffer_Handle{max(u32), max(u32)}
+Storage_Buffer_Handle :: distinct hm.Handle
+Nil_Storage_Buffer_Handle :: Storage_Buffer_Handle{max(u32), max(u32)}
+Material_Handle :: distinct hm.Handle
+Nil_Material_Buffer_Handle :: Material_Handle{max(u32), max(u32)}
 
-Uniform_Buffer_Manager :: struct {
-	buffers: hm.Handle_Map(Uniform_Buffer, Uniform_Buffer_Handle),
+Buffer_Manager :: struct {
+	uniform_buffers: hm.Handle_Map(Uniform_Buffer, Uniform_Buffer_Handle),
+	storage_buffers: hm.Handle_Map(Storage_Buffer, Storage_Buffer_Handle),
+	materials:       hm.Handle_Map(Material, Material_Handle),
 }
 
 Resource :: union {
@@ -145,7 +173,6 @@ Deferred_Destructor :: struct {
 Single_Command :: struct {
 	cmd: vk.CommandBuffer,
 }
-
 
 // SWAP CHAIN
 
@@ -183,21 +210,19 @@ Physical_Device_Features :: struct {
 
 // MODEL
 
-Uniform_Buffer :: struct {
+Cached_Buffer :: struct {
 	buffer_h: Buffer_Handle,
 	dirty:    bool,
-	apply:    proc(data: ^Uniform_Buffer, loc := #caller_location),
+	apply:    proc(data: ^Cached_Buffer, loc := #caller_location),
 	data:     rawptr,
 	type:     typeid,
 }
 
+Uniform_Buffer :: Cached_Buffer
+Storage_Buffer :: Cached_Buffer
 Material :: struct {
 	pipeline_h: Render_Pipeline_Handle,
-	buffer_h:   Buffer_Handle,
-	dirty:      bool,
-	apply:      proc(data: ^Material, loc := #caller_location),
-	data:       rawptr,
-	type:       typeid,
+	using base: Cached_Buffer,
 }
 
 @(material)
@@ -705,7 +730,7 @@ end_single_cmd :: proc(single_command: Single_Command) {
 @(private)
 _cmd_buffer_barrier :: proc(
 	cmd: vk.CommandBuffer,
-	buffer: Buffer,
+	vk_buffer: vk.Buffer,
 	src_access_mask: vk.AccessFlags,
 	dst_access_mask: vk.AccessFlags,
 	src_stage_mask: vk.PipelineStageFlags,
@@ -717,7 +742,7 @@ _cmd_buffer_barrier :: proc(
 		dstAccessMask       = dst_access_mask,
 		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
 		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-		buffer              = buffer.buffer,
+		buffer              = vk_buffer,
 		offset              = 0,
 		size                = cast(vk.DeviceSize)vk.WHOLE_SIZE,
 	}
@@ -731,29 +756,8 @@ _cmd_buffer_barrier :: proc(
 // ██║ ╚═╝ ██║██║  ██║   ██║   ███████╗██║  ██║██║██║  ██║███████╗
 // ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚══════╝
 
-Material_Handle :: distinct hm.Handle
-Nil_Material_Buffer_Handle :: Material_Handle{max(u32), max(u32)}
-
-Material_Manager :: struct {
-	materials: hm.Handle_Map(Material, Material_Handle),
-}
-
 Empty_Material :: Material
 
-
-@(private)
-_init_material_manager :: proc() {
-	ctx.gfx.material_manager = new(Material_Manager)
-}
-
-@(private)
-_destroy_material_manager :: proc() {
-	for &material in ctx.gfx.material_manager.materials.values {
-		free(material.data)
-	}
-	hm.destroy(&ctx.gfx.material_manager.materials)
-	free(ctx.gfx.material_manager)
-}
 
 create_mtrl_empty :: proc(pipeline_h: Render_Pipeline_Handle) -> Material_Handle {
 	m := Material {
@@ -776,22 +780,22 @@ mtrl_copy :: proc(m: Material) -> Material {
 }
 
 store_material :: proc(m: Material) -> Material_Handle {
-	return hm.insert(&ctx.gfx.material_manager.materials, m)
+	return hm.insert(&ctx.gfx.buffer_manager.materials, m)
 }
 
 get_material :: proc(handle: Material_Handle) -> (^Material, bool) {
-	return hm.get(&ctx.gfx.material_manager.materials, handle)
+	return hm.get(&ctx.gfx.buffer_manager.materials, handle)
 }
 
 detstroy_material :: proc(handle: Material_Handle) -> bool {
-	material, ok := hm.remove(&ctx.gfx.material_manager.materials, handle)
+	material, ok := hm.remove(&ctx.gfx.buffer_manager.materials, handle)
 	_destroy_mtrl(&material)
 	return ok
 }
 
 @(private)
 _update_materials :: proc() {
-	for &m in ctx.gfx.material_manager.materials.values {
+	for &m in ctx.gfx.buffer_manager.materials.values {
 		if m.dirty {
 			m.apply(&m)
 		}
@@ -1097,12 +1101,162 @@ _choose_swapchain_extent :: proc(window: ^glfw.WindowHandle, capabilities: vk.Su
 	}
 }
 
-// ██████╗ ██╗   ██╗███████╗███████╗███████╗██████╗ 
+// ██████╗ ██╗   ██╗███████╗███████╗███████╗██████╗
 // ██╔══██╗██║   ██║██╔════╝██╔════╝██╔════╝██╔══██╗
 // ██████╔╝██║   ██║█████╗  █████╗  █████╗  ██████╔╝
 // ██╔══██╗██║   ██║██╔══╝  ██╔══╝  ██╔══╝  ██╔══██╗
 // ██████╔╝╚██████╔╝██║     ██║     ███████╗██║  ██║
 // ╚═════╝  ╚═════╝ ╚═╝     ╚═╝     ╚══════╝╚═╝  ╚═╝
+
+@(require_results)
+create_buffer :: proc(info: Buffer_Info, loc := #caller_location) -> Buffer {
+	assert(info.size > 0, loc = loc)
+
+	usage: vk.BufferUsageFlags
+	dst_access_mask: vk.AccessFlags
+	dst_stage_mask: vk.PipelineStageFlags
+
+	if .Vertex_Buffer in info.usage {
+		usage += {.VERTEX_BUFFER}
+		dst_access_mask += {.SHADER_READ}
+		dst_stage_mask += {.VERTEX_SHADER}
+	}
+	if .Index_Buffer in info.usage {
+		usage += {.INDEX_BUFFER}
+		dst_access_mask += {.INDEX_READ}
+		dst_stage_mask += {.VERTEX_INPUT}
+	}
+	if .Uniform_Buffer in info.usage {
+		usage += {.UNIFORM_BUFFER}
+		dst_access_mask += {.UNIFORM_READ}
+		dst_stage_mask += {.VERTEX_SHADER}
+	}
+	if .Storage_Buffer in info.usage {
+		usage += {.STORAGE_BUFFER}
+	}
+	if info.copyable {
+		usage += {.TRANSFER_SRC}
+		dst_access_mask += {.TRANSFER_READ}
+		dst_stage_mask += {.TRANSFER}
+	}
+
+	vk_buffer: vk.Buffer
+	alloc: vma.Allocation
+	alloc_info: vma.AllocationInfo
+	mapped: rawptr
+
+	if info.static {
+		vk_buffer, alloc, alloc_info = _vk_create_device_local_buffer(
+			info.data,
+			info.size,
+			usage,
+			dst_access_mask,
+			dst_stage_mask,
+		)
+	} else {
+		vk_buffer, alloc, alloc_info = _vk_create_buffer(
+			info.size,
+			usage,
+			.AUTO_PREFER_HOST,
+			{.HOST_ACCESS_RANDOM, .MAPPED},
+			{},
+			{},
+		)
+		_vk_map_memory(alloc, &mapped)
+		if info.data != nil {
+			_vk_buffer_fill_mapped_memory(alloc, alloc_info, info.data, info.size, mapped)
+		}
+	}
+
+	// buffer := Buffer { 
+	// 	buffer = vk_buffer,
+	// 	size = size,
+	// 	usage = usage,
+	// 	allocation = allocation,
+	// 	allocation_info = allocation_info,
+	// 	flags = {
+	// 		memory_usage = memory_usage,
+	// 		memory = memory_flags,
+	// 		required_flags = required_flags,
+	// 		preferred_flags = preferred_flags,
+	// 	},
+	// }
+
+	return Buffer {
+		buffer          = vk_buffer,
+		size            = info.size,
+		usage           = usage,
+		allocation      = alloc,
+		allocation_info = alloc_info,
+		// flags           = { 	// FIXME:
+		// 	memory_usage = mem,
+		// },
+	}
+}
+
+buffer_fill :: proc(b: ^Buffer, data: rawptr, size: Device_Size, offset: Device_Size = 0, loc := #caller_location) {
+	assert(b != nil, loc = loc)
+	assert(data != nil, loc = loc)
+	assert(size > 0, loc = loc)
+	mem_props := _get_memory_properties(b.allocation_info)
+
+	if .HOST_VISIBLE in mem_props {
+		if b.mapped == nil do _vk_map_memory(b.allocation, &b.mapped)
+		_vk_buffer_fill_mapped_memory(b.allocation, b.allocation_info, data, size, b.mapped)
+	} else if .TRANSFER_DST in b.usage {
+		log.panic("Not implemented") // FIXME:
+		// sc := begin_single_cmd()
+		// staging_buffer := _create_staging_buffer(data, size)
+		// _cmd_buffer_barrier(sc.cmd, staging_buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+		// _cmd_copy_buffer(sc.cmd, staging_buffer, b^, size)
+		// _cmd_buffer_barrier(sc.cmd, b^, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
+		// end_single_cmd(sc)
+
+	} else {
+		log.panicf("Couldn't fill buffer", loc)
+	}
+}
+
+_vk_buffer_fill_mapped_memory :: proc(
+	alloc: vma.Allocation,
+	allloc_info: vma.AllocationInfo,
+	data: rawptr,
+	size: Device_Size,
+	mapped: rawptr,
+) {
+	assert(data != nil)
+	assert(size > 0)
+	assert(mapped != nil)
+	mem_props := _get_memory_properties(allloc_info)
+	mem.copy(mapped, data, int(size))
+	if !(.HOST_COHERENT in mem_props) {
+		vma.FlushAllocation(ctx.gfx.vk_state.allocator, alloc, 0, cast(vk.DeviceSize)vk.WHOLE_SIZE)
+	}
+}
+
+_vk_buffer_fill_host_visible :: proc(
+	b: vk.Buffer,
+	data: rawptr,
+	size: Device_Size,
+	offset: Device_Size = 0,
+	loc := #caller_location,
+) {
+
+}
+
+@(private)
+_get_memory_properties :: proc(alloc_info: vma.AllocationInfo) -> vk.MemoryPropertyFlags {
+	return ctx.gfx.vk_state.memory_propertices.memoryTypes[alloc_info.memoryType].propertyFlags
+}
+
+buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: Device_Size) {
+	mem_props := _get_memory_properties(b.allocation_info)
+	assert(.HOST_VISIBLE in mem_props, loc = loc)
+	if !(.HOST_COHERENT in mem_props) {
+		vma.InvalidateAllocation(ctx.gfx.vk_state.allocator, b.allocation, 0, cast(vk.DeviceSize)vk.WHOLE_SIZE)
+	}
+	return b.mapped, b.size
+}
 
 destroy_buffer :: proc(buffer: ^Buffer, loc := #caller_location) {
 	assert_not_nil(buffer, loc)
@@ -1114,100 +1268,99 @@ destroy_buffer :: proc(buffer: ^Buffer, loc := #caller_location) {
 	vma.DestroyBuffer(ctx.gfx.vk_state.allocator, buffer.buffer, buffer.allocation)
 }
 
-create_vertex_buffer :: proc(vertices: rawptr, size: vk.DeviceSize, loc := #caller_location) -> Buffer {
+create_vertex_buffer :: proc(vertices: rawptr, size: vk.DeviceSize, loc := #caller_location) -> Buffer { 	// FIXME:
 	assert(vertices != nil, loc = loc)
 	assert(size > 0, loc = loc)
-
-	return _create_device_local_buffer(size, vertices, {.VERTEX_BUFFER}, {.SHADER_READ}, {.VERTEX_SHADER})
+	return create_buffer(
+		Buffer_Info{data = vertices, size = size, static = true, usage = {.Vertex_Buffer}, access = {}},
+	)
 }
 
 create_index_buffer :: proc(indices: rawptr, size: vk.DeviceSize, loc := #caller_location) -> Buffer {
 	assert(indices != nil, loc = loc)
 	assert(size > 0, loc = loc)
-
-	return _create_device_local_buffer(size, indices, {.INDEX_BUFFER}, {.INDEX_READ}, {.VERTEX_INPUT})
+	return create_buffer(Buffer_Info{data = indices, size = size, static = true, usage = {.Index_Buffer}, access = {}})
 }
 
 create_uniform_buffer :: proc(size: vk.DeviceSize, loc := #caller_location) -> Buffer {
 	assert(size > 0, loc = loc)
-
-	return _create_mapped_buffer(size, {.UNIFORM_BUFFER}, {.UNIFORM_READ}, {.VERTEX_SHADER})
+	return create_buffer(Buffer_Info{size = size, static = false, usage = {.Uniform_Buffer}, access = {}})
 }
+//
+// create_storage_buffer :: proc(data: rawptr, size: vk.DeviceSize) -> Buffer {
+// 	return _create_device_local_buffer(size, data, {.VERTEX_BUFFER, .STORAGE_BUFFER}, {.SHADER_READ}, {.VERTEX_SHADER}) // FIXME: create proc with VERTEX_BUFFER
+// }
 
-// TODO: only for particle
-create_ssbo :: proc(g: ^Graphics, data: rawptr, size: vk.DeviceSize) -> Buffer {
-	return _create_device_local_buffer(size, data, {.VERTEX_BUFFER, .STORAGE_BUFFER}, {.SHADER_READ}, {.VERTEX_SHADER})
-}
+// fill_buffer :: proc(
+// 	buffer: ^Buffer,
+// 	buffer_size: vk.DeviceSize,
+// 	data: rawptr,
+// 	offset: vk.DeviceSize = 0,
+// 	loc := #caller_location,
+// ) {
+// 	assert_not_nil(buffer, loc)
+// 	assert(buffer_size > 0, loc = loc)
+// 	assert(data != nil, loc = loc)
+//
+// 	must(
+// 		vma.CopyMemoryToAllocation(ctx.gfx.vk_state.allocator, data, buffer.allocation, offset, buffer_size),
+// 		loc = loc,
+// 	)
+// }
 
-fill_buffer :: proc(
-	buffer: ^Buffer,
-	buffer_size: vk.DeviceSize,
-	data: rawptr,
-	offset: vk.DeviceSize = 0,
-	loc := #caller_location,
-) {
-	assert_not_nil(buffer, loc)
-	assert(buffer_size > 0, loc = loc)
-	assert(data != nil, loc = loc)
-
-	must(
-		vma.CopyMemoryToAllocation(ctx.gfx.vk_state.allocator, data, buffer.allocation, offset, buffer_size),
-		loc = loc,
-	)
-}
-
-buffer_map :: proc(buffer: ^Buffer, loc := #caller_location) -> rawptr {
-	assert(!buffer.is_mapped, fmt.tprintf("Buffer \"%s\" is already mapped.", buffer.allocation_info.pName), loc)
-
-	buffer.is_mapped = true
-	vma.MapMemory(ctx.gfx.vk_state.allocator, buffer.allocation, &buffer.mapped)
-
-	return buffer.mapped
-}
-
-buffer_unmap :: proc(buffer: ^Buffer, loc := #caller_location) {
-	assert(buffer.is_mapped, fmt.tprintf("Buffer \"%s\" is not mapped.", buffer.allocation_info.pName), loc)
-
-	buffer.is_mapped = false
-	vma.UnmapMemory(ctx.gfx.vk_state.allocator, buffer.allocation)
-}
+// buffer_map :: proc(buffer: ^Buffer, loc := #caller_location) -> rawptr { 	//  FIXME:
+// 	assert(!buffer.is_mapped, fmt.tprintf("Buffer \"%s\" is already mapped.", buffer.allocation_info.pName), loc)
+//
+// 	buffer.is_mapped = true
+// 	vma.MapMemory(ctx.gfx.vk_state.allocator, buffer.allocation, &buffer.mapped)
+//
+// 	return buffer.mapped
+// }
+//
+// buffer_unmap :: proc(buffer: ^Buffer, loc := #caller_location) { 	//  FIXME:
+// }
 
 buffer_copy :: proc(src: Buffer) -> Buffer {
-	assert(.TRANSFER_SRC in src.usage)
-	dst := _create_buffer(
-		src.allocation_info.size,
-		src.usage + {.TRANSFER_DST},
-		src.flags.memory_usage,
-		src.flags.memory,
-		src.flags.required_flags,
-		src.flags.preferred_flags,
-	)
-	sc := begin_single_cmd()
-	_copy_buffer(sc.cmd, src, dst, src.allocation_info.size)
-	end_single_cmd(sc)
-
-	return dst
+	log.panic("Inimplemented") // FIXME:
+	// assert(.TRANSFER_SRC in src.usage)
+	// dst := _create_buffer(
+	// 	src.allocation_info.size,
+	// 	src.usage + {.TRANSFER_DST},
+	// 	src.flags.memory_usage,
+	// 	src.flags.memory,
+	// 	src.flags.required_flags,
+	// 	src.flags.preferred_flags,
+	// )
+	// sc := begin_single_cmd()
+	// _cmd_copy_buffer(sc.cmd, src, dst, src.allocation_info.size)
+	// end_single_cmd(sc)
+	//
+	// return dst
 }
 
 @(private)
-_copy_buffer :: proc(cb: vk.CommandBuffer, src_buffer: Buffer, dst_buffer: Buffer, size: vk.DeviceSize) {
+_cmd_copy_buffer :: proc(cb: vk.CommandBuffer, src_buffer: vk.Buffer, dst_buffer: vk.Buffer, size: vk.DeviceSize) {
 	copy := vk.BufferCopy {
 		srcOffset = 0,
 		dstOffset = 0,
 		size      = size,
 	}
-	vk.CmdCopyBuffer(cb, src_buffer.buffer, dst_buffer.buffer, 1, &copy)
+	vk.CmdCopyBuffer(cb, src_buffer, dst_buffer, 1, &copy)
 }
 
 @(private)
-_create_buffer :: proc(
+_vk_create_buffer :: proc(
 	size: vk.DeviceSize,
 	usage: vk.BufferUsageFlags,
 	memory_usage: vma.MemoryUsage,
 	memory_flags: vma.AllocationCreateFlags,
 	required_flags: vk.MemoryPropertyFlags = {},
 	preferred_flags: vk.MemoryPropertyFlags = {},
-) -> Buffer {
+) -> (
+	vk.Buffer,
+	vma.Allocation,
+	vma.AllocationInfo,
+) {
 	buffer_info := vk.BufferCreateInfo {
 		sType       = .BUFFER_CREATE_INFO,
 		size        = size,
@@ -1233,102 +1386,176 @@ _create_buffer :: proc(
 		&allocation,
 		&allocation_info,
 	)
-	buffer := Buffer {
-		buffer = vk_buffer,
-		usage = usage,
-		allocation = allocation,
-		allocation_info = allocation_info,
-		flags = {
-			memory_usage = memory_usage,
-			memory = memory_flags,
-			required_flags = required_flags,
-			preferred_flags = preferred_flags,
-		},
-	}
+	// buffer := Buffer { // FIXME:
+	// 	buffer = vk_buffer,
+	// 	size = size,
+	// 	usage = usage,
+	// 	allocation = allocation,
+	// 	allocation_info = allocation_info,
+	// 	flags = {
+	// 		memory_usage = memory_usage,
+	// 		memory = memory_flags,
+	// 		required_flags = required_flags,
+	// 		preferred_flags = preferred_flags,
+	// 	},
+	// }
 
-	return buffer
+	return vk_buffer, allocation, allocation_info
 }
 
 @(private = "file")
-_create_device_local_buffer :: proc(
-	size: vk.DeviceSize,
+_vk_create_device_local_buffer :: proc(
 	data: rawptr,
+	size: vk.DeviceSize,
 	usage: vk.BufferUsageFlags,
 	dst_access_mask: vk.AccessFlags,
 	dst_stage_mask: vk.PipelineStageFlags,
-) -> Buffer {
+	loc := #caller_location,
+) -> (
+	vk_buffer: vk.Buffer,
+	allocation: vma.Allocation,
+	allocation_info: vma.AllocationInfo,
+) {
 	sc := begin_single_cmd()
 
+	// TODO: Don't create a staging buffer if the device has enough DEVICE_LOCAL and HOST_VISIBLE memeory
 	// Staging buffer
-	staging_buffer := _create_buffer(size, {.TRANSFER_SRC}, .AUTO, {.HOST_ACCESS_SEQUENTIAL_WRITE})
-	fill_buffer(&staging_buffer, size, data)
-	_cmd_buffer_barrier(sc.cmd, staging_buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	staging_buffer := _create_staging_buffer(data, size, loc)
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 	defer destroy_buffer(&staging_buffer)
 
 	// Result buffer
-	buffer := _create_buffer(size, {.TRANSFER_DST} + usage, .AUTO_PREFER_DEVICE, {})
-	_copy_buffer(sc.cmd, staging_buffer, buffer, size)
-	_cmd_buffer_barrier(sc.cmd, buffer, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
+	vk_buffer, allocation, allocation_info = _vk_create_buffer(size, {.TRANSFER_DST} + usage, .AUTO_PREFER_HOST, {})
+	_cmd_copy_buffer(sc.cmd, staging_buffer.buffer, vk_buffer, size)
+	_cmd_buffer_barrier(sc.cmd, vk_buffer, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
 
 	end_single_cmd(sc)
-
-	return buffer
+	return
 }
 
-@(private = "file")
-_create_mapped_buffer :: proc(
-	size: vk.DeviceSize,
-	usage: vk.BufferUsageFlags,
-	dst_access_mask: vk.AccessFlags,
-	dst_stage_mask: vk.PipelineStageFlags,
-) -> Buffer {
-	buffer := _create_buffer(size, usage, .AUTO_PREFER_HOST, {.HOST_ACCESS_SEQUENTIAL_WRITE, .MAPPED}, {}, {})
+_create_staging_buffer :: proc(data: rawptr, size: Device_Size, loc := #caller_location) -> (buffer: Buffer) {
+	assert(data != nil, loc = loc)
+	assert(size > 0, loc = loc)
+	vk_buffer, alloc, alloc_info := _vk_create_buffer(
+		size,
+		{.TRANSFER_SRC},
+		.AUTO_PREFER_HOST,
+		{.HOST_ACCESS_RANDOM, .MAPPED},
+		{},
+		{},
+	)
+	_vk_map_memory(alloc, &buffer.mapped)
+	_vk_buffer_fill_mapped_memory(alloc, alloc_info, data, size, buffer.mapped)
 
-	sc := begin_single_cmd()
-
-	must(vma.MapMemory(ctx.gfx.vk_state.allocator, buffer.allocation, &buffer.mapped))
-	_cmd_buffer_barrier(sc.cmd, buffer, {.HOST_WRITE}, dst_access_mask, {.HOST}, dst_stage_mask)
-
-	end_single_cmd(sc)
-
-	return buffer
+	return Buffer {
+		buffer = vk_buffer,
+		size = size,
+		usage = {.TRANSFER_SRC},
+		allocation = alloc,
+		allocation_info = alloc_info,
+	}
 }
+
+// @(private = "file")
+// _vk_create_mapped_buffer :: proc(
+// 	size: vk.DeviceSize,
+// 	usage: vk.BufferUsageFlags,
+// ) -> (
+// 	buffer: vk.Buffer,
+// 	alloc: vma.Allocation,
+// 	alloc_info: vma.AllocationInfo,
+// ) {
+// 	buffer, alloc, alloc_info = _vk_create_buffer(
+// 		size,
+// 		usage,
+// 		.AUTO_PREFER_HOST,
+// 		{.HOST_ACCESS_RANDOM, .MAPPED},
+// 		{},
+// 		{},
+// 	)
+//
+// 	sc := begin_single_cmd()
+//
+// 	must(vma.MapMemory(ctx.gfx.vk_state.allocator, buffer.allocation, &buffer.mapped))
+//
+// 	end_single_cmd(sc)
+//
+// 	return buffer
+// }
+
+@(private)
+_vk_map_memory :: proc(alloc: vma.Allocation, out_mapped: ^rawptr) {
+	must(vma.MapMemory(ctx.gfx.vk_state.allocator, alloc, out_mapped))
+}
+
+@(private)
+_init_buffer_manager :: proc() {
+	ctx.gfx.buffer_manager = new(Buffer_Manager)
+}
+
+@(private)
+_destroy_buffer_manager :: proc() {
+	for ubo in ctx.gfx.buffer_manager.uniform_buffers.values {
+		free(ubo.data)
+	}
+	hm.destroy(&ctx.gfx.buffer_manager.uniform_buffers)
+
+	for sbo in ctx.gfx.buffer_manager.storage_buffers.values {
+		free(sbo.data)
+	}
+	hm.destroy(&ctx.gfx.buffer_manager.storage_buffers)
+
+	for mtrl in ctx.gfx.buffer_manager.materials.values {
+		free(mtrl.data)
+	}
+	hm.destroy(&ctx.gfx.buffer_manager.materials)
+
+	free(ctx.gfx.buffer_manager)}
 
 // ▄▄ ▄▄ ▄▄  ▄▄ ▄▄ ▄▄▄▄▄  ▄▄▄  ▄▄▄▄  ▄▄   ▄▄   ▄▄▄▄  ▄▄ ▄▄ ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄
 // ██ ██ ███▄██ ██ ██▄▄  ██▀██ ██▄█▄ ██▀▄▀██   ██▄██ ██ ██ ██▄▄  ██▄▄  ██▄▄  ██▄█
 // ▀███▀ ██ ▀██ ██ ██    ▀███▀ ██ ██ ██   ██   ██▄█▀ ▀███▀ ██    ██    ██▄▄▄ ██ ██
 
-@(private)
-_init_uniform_buffer_manager :: proc() {
-	ctx.gfx.unifiorm_buffer_manager = new(Uniform_Buffer_Manager)
-}
-
-@(private)
-_destroy_uniform_buffer_manager :: proc() {
-	for ubo in ctx.gfx.unifiorm_buffer_manager.buffers.values {
-		free(ubo.data)
-	}
-	hm.destroy(&ctx.gfx.unifiorm_buffer_manager.buffers)
-	free(ctx.gfx.unifiorm_buffer_manager)
-}
-
 store_uniform_buffer :: proc(ubo: Uniform_Buffer) -> Uniform_Buffer_Handle {
-	return hm.insert(&ctx.gfx.unifiorm_buffer_manager.buffers, ubo)
+	return hm.insert(&ctx.gfx.buffer_manager.uniform_buffers, ubo)
 }
 
 get_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> (^Uniform_Buffer, bool) {
-	return hm.get(&ctx.gfx.unifiorm_buffer_manager.buffers, handle)
+	return hm.get(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 }
 
 detstroy_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
-	uniform_buffer, ok := hm.remove(&ctx.gfx.unifiorm_buffer_manager.buffers, handle)
+	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	destroy_buffer_h(uniform_buffer.buffer_h)
 	return ok
 }
 
 @(private)
 _update_uniform_buffers :: proc() {
-	for &ubo in ctx.gfx.unifiorm_buffer_manager.buffers.values {
+	for &ubo in ctx.gfx.buffer_manager.uniform_buffers.values {
+		if ubo.dirty {
+			ubo.apply(&ubo)
+		}
+	}
+}
+
+store_storage_buffer :: proc(sbo: Storage_Buffer) -> Storage_Buffer_Handle {
+	return hm.insert(&ctx.gfx.buffer_manager.storage_buffers, sbo)
+}
+
+get_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> (^Storage_Buffer, bool) {
+	return hm.get(&ctx.gfx.buffer_manager.storage_buffers, handle)
+}
+
+detstroy_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> bool {
+	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
+	destroy_buffer_h(storage_buffer.buffer_h)
+	return ok
+}
+
+@(private)
+_update_storage_buffers :: proc() {
+	for &ubo in ctx.gfx.buffer_manager.uniform_buffers.values {
 		if ubo.dirty {
 			ubo.apply(&ubo)
 		}

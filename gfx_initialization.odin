@@ -18,7 +18,7 @@ when ODIN_OS == .Darwin {
 }
 
 @(private)
-g_context: runtime.Context // used for system callback procedures
+g_context: runtime.Context // FIXME: used for system callback procedures
 
 @(private)
 _init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
@@ -39,8 +39,7 @@ _init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
 	_init_sync_obj()
 	_init_swapchain(init_info.swapchain_sample_count)
 	_init_deffered_destructor()
-	_init_material_manager()
-	_init_uniform_buffer_manager()
+	_init_buffer_manager()
 	_init_bindless()
 	_init_temp_pools()
 	_init_buildin_resources()
@@ -51,8 +50,7 @@ _destroy_gfx :: proc() {
 	_destroy_buildin()
 	_destroy_temp_pools()
 	_destroy_bindless()
-	_destroy_material_manager()
-	_destroy_uniform_buffer_manager()
+	_destroy_buffer_manager()
 	_destroy_deffered_destructor()
 	_destroy_descriptor_layout_manager()
 	_destroy_sync_obj()
@@ -329,6 +327,7 @@ _pick_physical_device :: proc() {
 	}
 
 	vk.GetPhysicalDeviceProperties(ctx.gfx.vk_state.physical_device, &ctx.gfx.vk_state.physical_device_property)
+	vk.GetPhysicalDeviceMemoryProperties(ctx.gfx.vk_state.physical_device, &ctx.gfx.vk_state.memory_propertices)
 }
 
 @(private = "file")
@@ -689,7 +688,7 @@ _has_stencil_component :: proc(format: vk.Format) -> bool {
 
 @(private)
 _find_memory_type :: proc(
-	physical_device: vk.PhysicalDevice,
+	physical_device: vk.PhysicalDevice, // FIXME: not used
 	type_filter: u32,
 	properties: vk.MemoryPropertyFlags,
 ) -> (
