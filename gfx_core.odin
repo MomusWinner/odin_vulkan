@@ -432,14 +432,12 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 }
 
 begin_draw :: proc(frame: Frame_Data, clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) -> Frame_Data {
-	_transition_image_layout(
+	_cmd_image_transition_layout(
 		frame.cmd,
 		ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index],
-		{.COLOR},
-		ctx.gfx.swapchain.color_format.format,
 		.UNDEFINED,
 		.COLOR_ATTACHMENT_OPTIMAL,
-		1,
+		vk.ImageSubresourceRange{aspectMask = {.COLOR}, layerCount = 1, levelCount = 1},
 	)
 
 	color_attachment_info := _swapchaint_get_color_attachment_info(clear_color)
@@ -489,14 +487,11 @@ begin_draw :: proc(frame: Frame_Data, clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) 
 end_draw :: proc(frame: Frame_Data) {
 	vk.CmdEndRendering(frame.cmd)
 
-	_transition_image_layout(
+	_cmd_image_transition_layout(
 		frame.cmd,
 		ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index],
-		{.COLOR},
-		ctx.gfx.swapchain.color_format.format,
 		.COLOR_ATTACHMENT_OPTIMAL,
 		.PRESENT_SRC_KHR,
-		1,
 	)
 }
 
@@ -715,22 +710,35 @@ end_single_cmd :: proc(single_command: Single_Command) {
 _cmd_buffer_barrier :: proc(
 	cmd: vk.CommandBuffer,
 	vk_buffer: vk.Buffer,
-	src_access_mask: vk.AccessFlags,
-	dst_access_mask: vk.AccessFlags,
-	src_stage_mask: vk.PipelineStageFlags,
-	dst_stage_mask: vk.PipelineStageFlags,
+	src_access_mask: vk.AccessFlags2,
+	dst_access_mask: vk.AccessFlags2,
+	src_stage_mask: vk.PipelineStageFlags2,
+	dst_stage_mask: vk.PipelineStageFlags2,
 ) {
-	buffer_barrier := vk.BufferMemoryBarrier {
-		sType               = .BUFFER_MEMORY_BARRIER,
+	buffer_barrier := vk.BufferMemoryBarrier2 {
+		sType               = .BUFFER_MEMORY_BARRIER_2,
 		srcAccessMask       = src_access_mask,
 		dstAccessMask       = dst_access_mask,
+		srcStageMask        = src_stage_mask,
+		dstStageMask        = dst_stage_mask,
 		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
 		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
 		buffer              = vk_buffer,
 		offset              = 0,
 		size                = cast(vk.DeviceSize)vk.WHOLE_SIZE,
 	}
-	vk.CmdPipelineBarrier(cmd, src_stage_mask, dst_stage_mask, {}, 0, nil, 1, &buffer_barrier, 0, nil)
+
+	dep_info := vk.DependencyInfo {
+		sType                    = .DEPENDENCY_INFO,
+		dependencyFlags          = {},
+		memoryBarrierCount       = 0,
+		pMemoryBarriers          = nil,
+		bufferMemoryBarrierCount = 1,
+		pBufferMemoryBarriers    = &buffer_barrier,
+		imageMemoryBarrierCount  = 0,
+	}
+
+	vk.CmdPipelineBarrier2(cmd, &dep_info)
 }
 
 // ███╗   ███╗ █████╗ ████████╗███████╗██████╗ ██╗ █████╗ ██╗     
@@ -976,15 +984,7 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 	swapchain.msaa_color_texture = texture
 
 	s := begin_single_cmd()
-	_transition_image_layout(
-		s.cmd,
-		texture.image,
-		{.COLOR},
-		ctx.gfx.swapchain.color_format.format,
-		.UNDEFINED,
-		.COLOR_ATTACHMENT_OPTIMAL,
-		1,
-	)
+	_cmd_image_transition_layout(s.cmd, texture.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
 	end_single_cmd(s)
 }
 
@@ -1012,7 +1012,13 @@ _swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: v
 	)
 
 	aspect: vk.ImageAspectFlags = {.DEPTH, .STENCIL} if stencil else {.DEPTH}
-	_transition_image_layout(command_buffer, image, aspect, format, .UNDEFINED, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
+	_cmd_image_transition_layout(
+		command_buffer,
+		image,
+		.UNDEFINED,
+		.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		vk.ImageSubresourceRange{aspectMask = aspect, levelCount = 1, layerCount = 1},
+	)
 
 	view := _create_image_view(image, format, aspect, 1)
 	swapchain.depth_image = Texture {
@@ -1164,8 +1170,8 @@ _buffer_get_usage_and_dst_access_stage_mask :: proc(
 	usage: Buffer_Usage_Flags,
 ) -> (
 	vk_usage: vk.BufferUsageFlags,
-	dst_access_mask: vk.AccessFlags,
-	dst_stage_mask: vk.PipelineStageFlags,
+	dst_access_mask: vk.AccessFlags2,
+	dst_stage_mask: vk.PipelineStageFlags2,
 ) {
 	if .Vertex in usage {
 		vk_usage += {.VERTEX_BUFFER}
@@ -1321,8 +1327,8 @@ _vk_create_device_local_buffer :: proc(
 	data: rawptr,
 	size: vk.DeviceSize,
 	usage: vk.BufferUsageFlags,
-	dst_access_mask: vk.AccessFlags,
-	dst_stage_mask: vk.PipelineStageFlags,
+	dst_access_mask: vk.AccessFlags2,
+	dst_stage_mask: vk.PipelineStageFlags2,
 	loc := #caller_location,
 ) -> (
 	vk_buffer: vk.Buffer,

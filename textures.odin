@@ -272,7 +272,13 @@ create_texture :: proc(
 		vma.AllocationCreateFlags{},
 	)
 
-	_transition_image_layout(sc.cmd, vk_image, {.COLOR}, format, .UNDEFINED, .TRANSFER_DST_OPTIMAL, mip_levels)
+	_cmd_image_transition_layout(
+		sc.cmd,
+		vk_image,
+		.UNDEFINED,
+		.TRANSFER_DST_OPTIMAL,
+		vk.ImageSubresourceRange{aspectMask = {.COLOR}, layerCount = 1, levelCount = mip_levels},
+	)
 	_cmd_copy_buffer_to_image(
 		sc.cmd,
 		staging_buffer.buffer,
@@ -431,15 +437,12 @@ create_texture_cubemap :: proc(
 	)
 	_vk_set_debug_object_name(cast(u64)vk_image, .IMAGE, name)
 
-	_transition_image_layout(
+	_cmd_image_transition_layout(
 		sc.cmd,
 		vk_image,
-		{.COLOR},
-		format,
 		.UNDEFINED,
 		.TRANSFER_DST_OPTIMAL,
-		mip_levels,
-		CUBEMAP_LAYERS_COUNT,
+		vk.ImageSubresourceRange{aspectMask = {.COLOR}, levelCount = mip_levels, layerCount = CUBEMAP_LAYERS_COUNT},
 	)
 
 	regions: [CUBEMAP_LAYERS_COUNT]vk.BufferImageCopy
@@ -576,111 +579,6 @@ _sampler_border_color_to_vk :: proc(b: Sampler_Border_Color) -> vk.BorderColor {
 }
 
 @(private)
-_transition_image_layout :: proc(
-	command_buffer: vk.CommandBuffer,
-	image: vk.Image,
-	aspect: vk.ImageAspectFlags,
-	format: vk.Format,
-	old_layout: vk.ImageLayout,
-	new_layout: vk.ImageLayout,
-	mip_levels: u32,
-	layer_count: u32 = 1,
-) {
-	source_stage: vk.PipelineStageFlags2
-	destination_stage: vk.PipelineStageFlags2
-
-	barrier_src_access_mask: vk.AccessFlags2
-	barrier_dst_access_mask: vk.AccessFlags2
-
-	if old_layout == .UNDEFINED && new_layout == .TRANSFER_DST_OPTIMAL {
-		barrier_src_access_mask = {}
-		barrier_dst_access_mask = {.TRANSFER_WRITE}
-
-		source_stage = {}
-		destination_stage = {.TRANSFER}
-	} else if old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
-		barrier_src_access_mask = {.TRANSFER_WRITE}
-		barrier_dst_access_mask = {.SHADER_READ}
-
-		source_stage = {.TRANSFER}
-		destination_stage = {.FRAGMENT_SHADER}
-	} else if old_layout == .UNDEFINED && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
-		barrier_src_access_mask = {}
-		barrier_dst_access_mask = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE}
-
-		source_stage = {}
-		destination_stage = {.EARLY_FRAGMENT_TESTS}
-	} else if old_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
-		barrier_src_access_mask = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
-		barrier_dst_access_mask = {.SHADER_READ}
-
-		source_stage = {.LATE_FRAGMENT_TESTS}
-		destination_stage = {.FRAGMENT_SHADER}
-	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
-		barrier_src_access_mask = {.SHADER_READ}
-		barrier_dst_access_mask = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
-
-		source_stage = {.FRAGMENT_SHADER}
-		destination_stage = {.LATE_FRAGMENT_TESTS}
-	} else if old_layout == .UNDEFINED && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
-		barrier_src_access_mask = {}
-		barrier_dst_access_mask = {.COLOR_ATTACHMENT_WRITE}
-
-		source_stage = {.TOP_OF_PIPE}
-		destination_stage = {.COLOR_ATTACHMENT_OUTPUT}
-	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .PRESENT_SRC_KHR {
-		barrier_src_access_mask = {.COLOR_ATTACHMENT_WRITE}
-		barrier_dst_access_mask = {}
-
-		source_stage = {.COLOR_ATTACHMENT_OUTPUT}
-		destination_stage = {.BOTTOM_OF_PIPE}
-	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
-		barrier_src_access_mask = {.COLOR_ATTACHMENT_WRITE}
-		barrier_dst_access_mask = {.MEMORY_READ}
-
-		source_stage = {.COLOR_ATTACHMENT_OUTPUT}
-		destination_stage = {.FRAGMENT_SHADER}
-	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
-		barrier_src_access_mask = {.MEMORY_READ}
-		barrier_dst_access_mask = {.COLOR_ATTACHMENT_WRITE}
-
-		source_stage = {.FRAGMENT_SHADER}
-		destination_stage = {.COLOR_ATTACHMENT_OUTPUT}
-	} else {
-		log.panicf("unsuported layout transition!\nold_layout %v \nnew_layout: %v", old_layout, new_layout)
-	}
-
-	barrier := vk.ImageMemoryBarrier2 {
-		sType = .IMAGE_MEMORY_BARRIER_2,
-		oldLayout = old_layout,
-		newLayout = new_layout,
-		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-		image = image,
-		subresourceRange = vk.ImageSubresourceRange {
-			aspectMask = aspect,
-			baseMipLevel = 0,
-			levelCount = mip_levels,
-			baseArrayLayer = 0,
-			layerCount = layer_count,
-		},
-		srcStageMask = source_stage,
-		srcAccessMask = barrier_src_access_mask,
-		dstAccessMask = barrier_dst_access_mask,
-		dstStageMask = destination_stage,
-	}
-
-	dependency_info := vk.DependencyInfo {
-		sType                   = .DEPENDENCY_INFO,
-		imageMemoryBarrierCount = 1,
-		pImageMemoryBarriers    = &barrier,
-		dependencyFlags         = {},
-	}
-
-	vk.CmdPipelineBarrier2(command_buffer, &dependency_info)
-}
-
-@(private)
 _create_image :: proc(
 	width, height, mip_levels: u32,
 	sample_count: Sample_Count_Flag,
@@ -800,25 +698,19 @@ _generate_mipmaps :: proc(
 		return
 	}
 
-	barrier := vk.ImageMemoryBarrier {
-		sType = .IMAGE_MEMORY_BARRIER,
-		image = image,
-		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
-		subresourceRange = {aspectMask = {.COLOR}, baseArrayLayer = 0, layerCount = 1, levelCount = 1},
+	subresource := vk.ImageSubresourceRange {
+		aspectMask     = {.COLOR},
+		baseArrayLayer = 0,
+		layerCount     = 1,
+		levelCount     = 1,
 	}
 
 	mip_width := tex_width
 	mip_height := tex_height
 
 	for i in 1 ..< mip_levels {
-		barrier.subresourceRange.baseMipLevel = i - 1
-		barrier.oldLayout = .TRANSFER_DST_OPTIMAL
-		barrier.newLayout = .TRANSFER_SRC_OPTIMAL
-		barrier.srcAccessMask = {.TRANSFER_WRITE}
-		barrier.dstAccessMask = {.TRANSFER_READ}
-
-		vk.CmdPipelineBarrier(cmd, {.TRANSFER}, {.TRANSFER}, {}, 0, nil, 0, nil, 1, &barrier)
+		subresource.baseMipLevel = i - 1
+		_cmd_image_transition_layout(cmd, image, .TRANSFER_DST_OPTIMAL, .TRANSFER_SRC_OPTIMAL, subresource)
 
 		blit := vk.ImageBlit {
 			srcOffsets = {{0, 0, 0}, {mip_width, mip_height, 1}},
@@ -831,13 +723,7 @@ _generate_mipmaps :: proc(
 		}
 
 		vk.CmdBlitImage(cmd, image, .TRANSFER_SRC_OPTIMAL, image, .TRANSFER_DST_OPTIMAL, 1, &blit, .LINEAR)
-
-		barrier.oldLayout = .TRANSFER_SRC_OPTIMAL
-		barrier.newLayout = .SHADER_READ_ONLY_OPTIMAL
-		barrier.srcAccessMask = {.TRANSFER_READ}
-		barrier.dstAccessMask = {.SHADER_READ}
-
-		vk.CmdPipelineBarrier(cmd, {.TRANSFER}, {.FRAGMENT_SHADER}, {}, 0, nil, 0, nil, 1, &barrier)
+		_cmd_image_transition_layout(cmd, image, .TRANSFER_SRC_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL, subresource)
 
 		if mip_width > 1 {
 			mip_width /= 2
@@ -847,13 +733,8 @@ _generate_mipmaps :: proc(
 		}
 	}
 
-	barrier.subresourceRange.baseMipLevel = mip_levels - 1
-	barrier.oldLayout = .TRANSFER_DST_OPTIMAL
-	barrier.newLayout = .SHADER_READ_ONLY_OPTIMAL
-	barrier.srcAccessMask = {.TRANSFER_READ}
-	barrier.dstAccessMask = {.SHADER_READ}
-
-	vk.CmdPipelineBarrier(cmd, {.TRANSFER}, {.FRAGMENT_SHADER}, {}, 0, nil, 0, nil, 1, &barrier)
+	subresource.baseMipLevel = mip_levels - 1
+	_cmd_image_transition_layout(cmd, image, .TRANSFER_DST_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL, subresource)
 }
 
 @(private = "file")
@@ -875,4 +756,109 @@ _chan_encod_to_format :: proc(channels: u32, encoding: Texture_Encoding) -> Pixe
 
 _format_to_vk :: #force_inline proc(format: Pixel_Format) -> vk.Format {
 	return transmute(vk.Format)format
+}
+
+@(private)
+_cmd_image_transition_layout :: proc(
+	cmd: vk.CommandBuffer,
+	image: vk.Image,
+	old_layout: vk.ImageLayout,
+	new_layout: vk.ImageLayout,
+	subresource_range: vk.ImageSubresourceRange = {aspectMask = {.COLOR}, levelCount = 1, layerCount = 1},
+) {
+	src_stage, dst_stage: vk.PipelineStageFlags2
+	src_access, dst_access: vk.AccessFlags2
+
+	if old_layout == .UNDEFINED && new_layout == .TRANSFER_DST_OPTIMAL {
+		src_access = {}
+		dst_access = {.TRANSFER_WRITE}
+
+		src_stage = {}
+		dst_stage = {.TRANSFER}
+	} else if old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.TRANSFER_WRITE}
+		dst_access = {.SHADER_READ}
+
+		src_stage = {.TRANSFER}
+		dst_stage = {.FRAGMENT_SHADER}
+	} else if old_layout == .UNDEFINED && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+		src_access = {}
+		dst_access = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE}
+
+		src_stage = {}
+		dst_stage = {.EARLY_FRAGMENT_TESTS}
+	} else if old_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
+		dst_access = {.SHADER_READ}
+
+		src_stage = {.LATE_FRAGMENT_TESTS}
+		dst_stage = {.FRAGMENT_SHADER}
+	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+		src_access = {.SHADER_READ}
+		dst_access = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
+
+		src_stage = {.FRAGMENT_SHADER}
+		dst_stage = {.LATE_FRAGMENT_TESTS}
+	} else if old_layout == .UNDEFINED && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
+		src_access = {}
+		dst_access = {.COLOR_ATTACHMENT_WRITE}
+
+		src_stage = {.TOP_OF_PIPE}
+		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
+	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .PRESENT_SRC_KHR {
+		src_access = {.COLOR_ATTACHMENT_WRITE}
+		dst_access = {}
+
+		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
+		dst_stage = {.BOTTOM_OF_PIPE}
+	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.COLOR_ATTACHMENT_WRITE}
+		dst_access = {.MEMORY_READ}
+
+		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
+		dst_stage = {.FRAGMENT_SHADER}
+	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
+		src_access = {.MEMORY_READ}
+		dst_access = {.COLOR_ATTACHMENT_WRITE}
+
+		src_stage = {.FRAGMENT_SHADER}
+		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
+	} else if old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .TRANSFER_SRC_OPTIMAL {
+		src_access = {.TRANSFER_WRITE}
+		dst_access = {.TRANSFER_READ}
+
+		src_stage = {.TRANSFER}
+		dst_stage = {.TRANSFER}
+	} else if old_layout == .TRANSFER_SRC_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.TRANSFER_READ}
+		dst_access = {.SHADER_READ}
+
+		src_stage = {.TRANSFER}
+		dst_stage = {.FRAGMENT_SHADER}
+	} else {
+		log.panicf("unsuported layout transition!\nold_layout %v \nnew_layout: %v", old_layout, new_layout)
+	}
+
+	barrier := vk.ImageMemoryBarrier2 {
+		sType               = .IMAGE_MEMORY_BARRIER_2,
+		oldLayout           = old_layout,
+		newLayout           = new_layout,
+		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
+		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
+		image               = image,
+		subresourceRange    = subresource_range,
+		srcStageMask        = src_stage,
+		srcAccessMask       = src_access,
+		dstAccessMask       = dst_access,
+		dstStageMask        = dst_stage,
+	}
+
+	dependency_info := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &barrier,
+		dependencyFlags         = {},
+	}
+
+	vk.CmdPipelineBarrier2(cmd, &dependency_info)
 }

@@ -299,7 +299,7 @@ begin_surface :: proc(
 		assert(ok)
 
 		target := &msaa if has_msaa else texture
-		_transition_image_layout(cmd, target.image, {.COLOR}, target.format, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL, 1)
+		_cmd_image_transition_layout(cmd, target.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
 
 		sm.append(&p_color_attachments, ca.info)
 	}
@@ -319,14 +319,12 @@ begin_surface :: proc(
 			depth_format = texture.format
 			target: ^Texture = &msaa if has_msaa else texture
 
-			_transition_image_layout(
+			_cmd_image_transition_layout(
 				frame_data.cmd,
 				target.image,
-				{.DEPTH},
-				target.format,
 				.SHADER_READ_ONLY_OPTIMAL,
 				.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-				1,
+				vk.ImageSubresourceRange{aspectMask = {.DEPTH}, layerCount = 1, levelCount = 1},
 			)
 		}
 	}
@@ -382,15 +380,7 @@ end_surface :: proc(surface: ^Surface, frame_data: Frame_Data, loc := #caller_lo
 		assert(ok)
 
 		target := &msaa if has_msaa else texture
-		_transition_image_layout(
-			frame_data.cmd,
-			target.image,
-			{.COLOR},
-			target.format,
-			.COLOR_ATTACHMENT_OPTIMAL,
-			.SHADER_READ_ONLY_OPTIMAL,
-			1,
-		)
+		_cmd_image_transition_layout(frame_data.cmd, target.image, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
 	}
 
 	if has_depth_attachment {
@@ -404,14 +394,12 @@ end_surface :: proc(surface: ^Surface, frame_data: Frame_Data, loc := #caller_lo
 			sc := begin_single_cmd()
 			target := &msaa if has_msaa else texture
 
-			_transition_image_layout(
+			_cmd_image_transition_layout(
 				sc.cmd,
 				target.image,
-				{.DEPTH},
-				target.format,
 				.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 				.SHADER_READ_ONLY_OPTIMAL,
-				1,
+				vk.ImageSubresourceRange{aspectMask = {.DEPTH}, layerCount = 1, levelCount = 1},
 			)
 			end_single_cmd(sc)
 		}
@@ -703,7 +691,13 @@ _create_surface_depth_resource :: proc(
 		{},
 	)
 
-	_transition_image_layout(cmd, image, aspect, format, .UNDEFINED, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
+	_cmd_image_transition_layout(
+		cmd,
+		image,
+		.UNDEFINED,
+		.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		vk.ImageSubresourceRange{aspectMask = aspect, levelCount = 1, layerCount = 1},
+	)
 	view := _create_image_view(image, format, aspect, 1)
 
 	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth image")
@@ -741,7 +735,13 @@ _create_surface_depth_resource_sampled :: proc(
 		{},
 	)
 
-	_transition_image_layout(cmd, image, {.DEPTH}, format, .UNDEFINED, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
+	_cmd_image_transition_layout(
+		cmd,
+		image,
+		.UNDEFINED,
+		.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		vk.ImageSubresourceRange{aspectMask = {.DEPTH}, levelCount = 1, layerCount = 1},
+	)
 
 	view := _create_image_view(image, format, {.DEPTH}, 1)
 	sampler: Sampler = create_sampler(sampler_info)
