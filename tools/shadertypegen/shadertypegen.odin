@@ -9,7 +9,9 @@ import "core:path/filepath"
 import "core:strings"
 
 MATERIAL_ATTRIBUTE :: "material"
-UNIFORM_BUFFER_ATTRIBUTE :: "uniform_buffer"
+BUFFER_ATTRIBUTE :: "buffer"
+BUFFER_ATTRIBUTE_STORAGE_VALUE :: "storage"
+BUFFER_ATTRIBUTE_UNIFORM_VALUE :: "uniform"
 
 STRUCT_RULES :: `
 /// RULES /////////////////////////////////////////////////////////////////////

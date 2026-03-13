@@ -214,11 +214,20 @@ envVersion :: enum i32 {
 	Vulkan1_1 = (1 << 22) | (1 << 12),
 	Vulkan1_2 = (1 << 22) | (2 << 12),
 	Vulkan1_3 = (1 << 22) | (3 << 12),
+	Vulkan1_4 = ((1 << 22) | (4 << 12)),
 	Opengl4_5 = 450,
 	Webgpu,
 }
 
-spirvVersion :: enum i32 {}
+spirvVersion :: enum i32 {
+	_1_0 = 0x010000,
+	_1_1 = 0x010100,
+	_1_2 = 0x010200,
+	_1_3 = 0x010300,
+	_1_4 = 0x010400,
+	_1_5 = 0x010500,
+	_1_6 = 0x010600,
+}
 
 compilationStatus :: enum i32 {
 	Success             = 0,

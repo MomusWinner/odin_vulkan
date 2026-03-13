@@ -1,5 +1,6 @@
 package ve
 
+import "base:runtime"
 import "core:fmt"
 import "core:log"
 import "core:os"
@@ -48,12 +49,18 @@ assert_frame_data :: #force_inline proc(frame_data: Frame_Data, loc := #caller_l
 }
 
 @(private)
-_set_debug_object_name :: #force_inline proc(handle: u64, type: vk.ObjectType, name: string) {
+_location_to_string :: proc(loc: runtime.Source_Code_Location, allocator := context.temp_allocator) -> string {
+	return fmt.aprintf("%s(%d:%d)", loc.file_path, loc.line, loc.column, allocator = allocator)
+}
+
+@(private)
+_vk_set_debug_object_name :: #force_inline proc(handle: $T, type: vk.ObjectType, name: string) {
 	when ENABLE_VALIDATION_LAYERS {
 		name_info := vk.DebugUtilsObjectNameInfoEXT {
 			sType        = .DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			objectType   = type,
-			objectHandle = handle,
+			// TODO: add intrinsics
+			objectHandle = cast(u64)handle,
 			pObjectName  = strings.clone_to_cstring(name, context.temp_allocator),
 		}
 		vk.SetDebugUtilsObjectNameEXT(ctx.gfx.vk_state.device, &name_info)

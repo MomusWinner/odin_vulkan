@@ -83,7 +83,8 @@ camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective
 	camera.type = type
 	camera.dirty = true
 
-	buffer := create_uniform_buffer(size_of(Camera_UBO))
+	buffer := create_buffer({.Uniform, .Host_Write}, size_of(Camera_UBO))
+
 	camera.buffer_h = store_buffer(buffer, loc)
 }
 
@@ -228,7 +229,7 @@ _camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location
 		projection = projection,
 		position   = camera.position,
 	}
-	fill_buffer(buffer, size_of(Camera_UBO), &camera_ubo)
+	buffer_fill(buffer, &camera_ubo, size_of(Camera_UBO))
 	camera.dirty = false
 
 	return camera.buffer_h
@@ -237,7 +238,7 @@ _camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location
 camera_update_simple_controller :: proc(
 	camera: ^Camera,
 	speed: f32 = 2.0,
-	mouse_sens: f32 = 0.1,
+	mouse_sens: f32 = 0.05,
 	zoom_speed: f32 = 2.5,
 ) {
 	speed := speed

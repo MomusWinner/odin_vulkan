@@ -12,6 +12,8 @@ STORAGE_BINDING :: 1
 @(private = "file")
 TEXTURE_BINDING :: 2
 
+BINDLESS_STAGE_FLAGS :: vk.ShaderStageFlags_ALL_GRAPHICS + {.COMPUTE}
+
 @(require_results)
 store_texture :: proc(texture: Texture, loc := #caller_location) -> Texture_Handle {
 	assert_gfx_ctx(loc)
@@ -73,21 +75,21 @@ get_bindless_pipeline_set_info :: proc() -> Pipeline_Set_Layout_Info {
 			binding = UNIFORM_BINDING,
 			descriptor_type = .UNIFORM_BUFFER,
 			descriptor_count = MAX_DESCRIPTOR_BINDLESS_COUNT,
-			stage_flags = vk.ShaderStageFlags_ALL_GRAPHICS,
+			stage_flags = BINDLESS_STAGE_FLAGS,
 			flags = vk.DescriptorBindingFlags{.UPDATE_AFTER_BIND, .PARTIALLY_BOUND},
 		},
 		Pipeline_Set_Binding_Info {
 			binding = STORAGE_BINDING,
 			descriptor_type = .STORAGE_BUFFER,
 			descriptor_count = MAX_DESCRIPTOR_BINDLESS_COUNT,
-			stage_flags = vk.ShaderStageFlags_ALL_GRAPHICS,
+			stage_flags = BINDLESS_STAGE_FLAGS,
 			flags = vk.DescriptorBindingFlags{.UPDATE_AFTER_BIND, .PARTIALLY_BOUND},
 		},
 		Pipeline_Set_Binding_Info {
 			binding = TEXTURE_BINDING,
 			descriptor_type = .COMBINED_IMAGE_SAMPLER,
 			descriptor_count = MAX_DESCRIPTOR_BINDLESS_COUNT,
-			stage_flags = vk.ShaderStageFlags_ALL_GRAPHICS,
+			stage_flags = BINDLESS_STAGE_FLAGS,
 			flags = vk.DescriptorBindingFlags{.UPDATE_AFTER_BIND, .PARTIALLY_BOUND},
 		},
 	)
@@ -149,7 +151,7 @@ _bindless_init :: proc(bindless: ^Bindless, loc := #caller_location) {
 		descriptor_bindings[i].binding = cast(u32)i
 		descriptor_bindings[i].descriptorType = descriptor_types[i]
 		descriptor_bindings[i].descriptorCount = MAX_DESCRIPTOR_BINDLESS_COUNT
-		descriptor_bindings[i].stageFlags = vk.ShaderStageFlags_ALL_GRAPHICS
+		descriptor_bindings[i].stageFlags = BINDLESS_STAGE_FLAGS
 		descriptor_binding_flags[i] = {.PARTIALLY_BOUND, .UPDATE_AFTER_BIND}
 	}
 
@@ -305,14 +307,15 @@ _bindless_store_buffer :: proc(bindless: ^Bindless, buffer: Buffer, loc := #call
 	}
 
 	i: u32 = 0
-	if vk.BufferUsageFlag.UNIFORM_BUFFER in buffer.usage {
+	if vk.BufferUsageFlag.UNIFORM_BUFFER in buffer.vk_usage {
 		writes[i].dstBinding = UNIFORM_BINDING
 		writes[i].descriptorType = .UNIFORM_BUFFER
 		i += 1
 	}
 
-	if vk.BufferUsageFlag.STORAGE_BUFFER in buffer.usage {writes[i].dstBinding = STORAGE_BINDING
+	if vk.BufferUsageFlag.STORAGE_BUFFER in buffer.vk_usage {writes[i].dstBinding = STORAGE_BINDING
 		writes[i].descriptorType = .STORAGE_BUFFER
+		i += 1
 	}
 
 	vk.UpdateDescriptorSets(ctx.gfx.vk_state.device, i, raw_data(&writes), 0, nil)

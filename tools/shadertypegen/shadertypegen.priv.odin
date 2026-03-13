@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:log"
 import "core:odin/ast"
 import "core:odin/parser"
+import "core:odin/tokenizer"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
@@ -28,10 +29,22 @@ Field_Type :: enum {
 	Custom,
 }
 
+Memory_Layout :: enum {
+	Std140,
+	Std430,
+}
+
+Access_Specifier :: enum {
+	Read_Write,
+	Readonly,
+	Writeonly,
+}
+
 Struct_Type :: enum {
 	None,
 	Material,
 	Uniform_Buffer,
+	Storage_Buffer,
 }
 
 Array_Field :: struct {
@@ -48,11 +61,13 @@ Field :: struct {
 }
 
 Struct :: struct {
-	name:   string,
-	type:   Struct_Type,
-	fields: []Field,
-	path:   string,
-	err:    string,
+	name:             string,
+	type:             Struct_Type,
+	fields:           []Field,
+	path:             string,
+	err:              string,
+	memory_layout:    Memory_Layout,
+	access_specifier: Access_Specifier,
 }
 
 Ve_Package_Info :: struct {
@@ -65,11 +80,59 @@ Parse_Data :: struct {
 	ordered:    [dynamic]string,
 }
 
-get_conv_proc_name :: proc(name: string) -> string {return fmt.aprintf("conv_%s_to_data", strings.to_lower(name))}
-get_conv_array_proc_name :: proc(name: string) -> string {
-	return fmt.aprintf("conv_%s_array_to_data", strings.to_lower(name))
+memroy_layout_to_string :: proc(layout: Memory_Layout) -> string {return "std140" if layout == .Std140 else "std430"}
+get_odin_conv_proc_name :: proc(name: string, memory_layout: Memory_Layout) -> string {
+	return fmt.aprintf("conv_%s_to_data_%s", strings.to_lower(name), memroy_layout_to_string(memory_layout))
 }
-get_data_struct_name :: proc(name: string) -> string {return fmt.aprintf("__%s_Data", name)}
+get_odin_conv_array_proc_name :: proc(name: string, memory_layout: Memory_Layout) -> string {
+	return fmt.aprintf("conv_%s_array_to_data_%s", strings.to_lower(name), memroy_layout_to_string(memory_layout))
+}
+get_odin_data_struct_name :: proc(name: string, memory_layout: Memory_Layout) -> string {
+	return fmt.aprintf("__%s_Data_%s", name, memroy_layout_to_string(memory_layout))
+}
+get_odin_proc_struct_name :: proc(s: Struct) -> string {
+	name: string
+	switch s.type {
+	case .None:
+		name = s.name
+	case .Material:
+		name = remove_struct_suffix(s.name, "material")
+	case .Uniform_Buffer:
+		name = remove_struct_suffix(s.name, "ubo")
+	case .Storage_Buffer:
+		name = remove_struct_suffix(s.name, "sbo")
+	}
+	name = strings.trim(name, "_")
+	name = strings.trim_space(name)
+	return name
+}
+get_odin_buffer_type_name :: proc(s: Struct) -> string {
+	switch s.type {
+	case .None:
+		return "None"
+	case .Material:
+		return "Material"
+	case .Uniform_Buffer:
+		return "Uniform_Buffer"
+	case .Storage_Buffer:
+		return "Storage_Buffer"
+	}
+	return "None"
+}
+get_odin_proc_struct_prefix :: proc(s: Struct) -> string {
+	switch s.type {
+	case .None:
+		return ""
+	case .Material:
+		return "mtrl"
+	case .Uniform_Buffer:
+		return "ubo"
+	case .Storage_Buffer:
+		return "sbo"
+	}
+	return ""
+}
+
 get_glsl_struct_name :: proc(name: string) -> string {
 	glsl_struct_name, _ := strings.replace_all(name, "_", "")
 	return glsl_struct_name
@@ -131,6 +194,37 @@ generate_glsl :: proc(store: Parse_Data, path: string, package_name: string, loc
 
 			fmt.fprintfln(f, "#define getUbo{1:s}(handle) GetResource({0:s}, handle)", glsl_struct_name, func_name)
 			fmt.fprintfln(f, "\n")
+		case .Storage_Buffer:
+			fmt.fprintfln(f, "// {0:s}", s.name)
+
+			glsl_struct_name := get_glsl_struct_name(s.name)
+			access: string
+			switch s.access_specifier {
+			case .Read_Write:
+				access = ""
+			case .Readonly:
+				access = "readonly"
+			case .Writeonly:
+				access = "writeonly"
+			}
+
+			fmt.fprintfln(
+				f,
+				"RegisterBuffer({0:s}, {1:s}, {2:s}, {{",
+				"std140" if s.memory_layout == .Std140 else "std430",
+				access,
+				glsl_struct_name,
+			)
+
+			for field in s.fields {
+				assert(field.type != .None)
+				fmt.fprintfln(f, "	%s %s;", field_to_glsl_type(field), field.name)
+			}
+
+			fmt.fprintfln(f, "}});\n")
+
+			fmt.fprintfln(f, "#define get{1:s}(handle) GetResource({0:s}, handle)", glsl_struct_name, glsl_struct_name)
+			fmt.fprintfln(f, "\n")
 		case .None:
 			fmt.fprintfln(f, "// {0:s}", s.name)
 
@@ -189,6 +283,8 @@ generate_odin :: proc(
 			generate_odin_material_struct(d, f, s, gfx_pref)
 		case .Uniform_Buffer:
 			generate_odin_uniform_buffer_struct(d, f, s, gfx_pref)
+		case .Storage_Buffer:
+			generate_odin_storage_buffer_struct(d, f, s, gfx_pref)
 		case .None:
 			generate_odin_common_struct(d, f, s, gfx_pref)
 		}
@@ -205,45 +301,47 @@ generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_
 /////////////dependence////
 
 	`, s.name)
-	fmt.fprintfln(f, "%s :: struct {{", get_data_struct_name(s.name))
 
-	for field in calculate_std140_layout(d, s.fields) {
-		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref))
-	}
-	fmt.fprintln(f, "}")
+	memory_layouts := [2]Memory_Layout{.Std140, .Std430}
+	for layout in memory_layouts {
+		fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, layout))
 
-	fmt.fprintf(
-		f,
-		`
-{0:s} :: proc(src: {1:s}, loc := #caller_location) -> {2:s} {{
-	data := {2:s} {{
-	`,
-		get_conv_proc_name(s.name),
-		s.name,
-		get_data_struct_name(s.name),
-	)
+		for field in calculate_padding_by_memeory_layout(layout, d, s.fields) {
+			fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
+		}
+		fmt.fprintln(f, "}")
 
-	for field in s.fields {
-		print_field_to_data_field(f, "src", field, gfx_pref)
-	}
+		fmt.fprintfln(
+			f,
+			"	{0:s} :: proc(dst: ^{2:s}, src: {1:s}, loc := #caller_location) {{",
+			get_odin_conv_proc_name(s.name, layout),
+			s.name,
+			get_odin_data_struct_name(s.name, layout),
+		)
 
-	fmt.fprintln(f, "	}\n	return data\n}")
+		for field in s.fields {
+			print_field_to_data_field(f, "src", "dst", field, gfx_pref, s.memory_layout)
+		}
 
-	fmt.fprintf(
-		f,
-		`
-{0:s} :: proc(src: [$N]{1:s}, loc := #caller_location) -> (data: [N]{2:s}) {{
-	for i in 0 ..< N {{
-		data[i] = {3:s}(src[i])
+		fmt.fprintln(f, "\n}")
+
+		fmt.fprintf(
+			f,
+			`
+{0:s} :: proc(dst: []{2:s}, src: []{1:s}, loc := #caller_location) {{
+	assert(len(src) == len(dst), loc = loc)
+	for _, i in src {{
+		{3:s}(&dst[i], src[i])
 	}}
 	return
 }}
 `,
-		get_conv_array_proc_name(s.name),
-		s.name,
-		get_data_struct_name(s.name),
-		get_conv_proc_name(s.name),
-	)
+			get_odin_conv_array_proc_name(s.name, layout),
+			s.name,
+			get_odin_data_struct_name(s.name, layout),
+			get_odin_conv_proc_name(s.name, layout),
+		)
+	}
 }
 
 generate_odin_material_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
@@ -254,19 +352,22 @@ generate_odin_material_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gf
 //////////////material/////
 
 	`, s.name)
-	fmt.fprintfln(f, "%s :: struct {{", get_data_struct_name(s.name))
+	fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
-	for field in calculate_std140_layout(d, s.fields) {
-		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref))
+	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
+		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
 	}
 	fmt.fprintln(f, "} \n")
-
-	proc_postfix := struct_name_to_postfix(s.name, "_material")
 
 	fmt.fprintfln(
 		f,
 		`
-create_mtrl_{0:s} :: proc(pipeline_h: {2:s}Render_Pipeline_Handle, loc := #caller_location) -> {2:s}Material_Handle {{
+create_mtrl_{0:s} :: proc(
+	pipeline_h: {2:s}Render_Pipeline_Handle,
+	buffer_usage: {2:s}Buffer_Usage_Flags = {{.Uniform, .Host_Write}},
+	loc := #caller_location
+) -> {2:s}Material_Handle {{
+	assert(.Uniform in buffer_usage, loc = loc)
 	m := {2:s}Material{{}}
 	m.pipeline_h = pipeline_h
 	material_data := new({1:s})
@@ -275,13 +376,13 @@ create_mtrl_{0:s} :: proc(pipeline_h: {2:s}Render_Pipeline_Handle, loc := #calle
 	m.dirty = true
 	m.apply = mtrl_{0:s}_apply
 
-	buffer := {2:s}create_uniform_buffer(size_of({3:s}), loc)
+	buffer := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 	m.buffer_h = {2:s}store_buffer(buffer, loc)
 `,
-		proc_postfix,
+		get_odin_proc_struct_name(s),
 		s.name,
 		gfx_pref,
-		get_data_struct_name(s.name),
+		get_odin_data_struct_name(s.name, s.memory_layout),
 	)
 
 	for field in s.fields {
@@ -295,62 +396,157 @@ create_mtrl_{0:s} :: proc(pipeline_h: {2:s}Render_Pipeline_Handle, loc := #calle
 	return {0:s}store_material(m) 
 }}`, gfx_pref)
 
+	generate_odin_get_set_proc(f, s, gfx_pref)
+	generate_odin_applay_proc(f, s, gfx_pref)
+}
+
+generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	for field in s.fields {
+		field := field
+		field.array.length = -1
 		fmt.fprintf(
 			f,
 			`
-mtrl_{0:s}_set_{2:s} :: proc(m: ^{4:s}Material, {2:s}: {3:s}, loc := #caller_location) {{
-	assert(m != nil, loc = loc)
-	assert(m.type == typeid_of(^{1:s}), loc = loc)
-	mat := cast(^{1:s})m.data
-	mat.{2:s} = {2:s}
-	m.dirty = true
-}}
-mtrl_{0:s}_get_{2:s} :: proc(m: {4:s}Material, loc := #caller_location) -> {3:s}{{
-	assert(m.type == typeid_of(^{1:s}), loc = loc)
-	mat := cast(^{1:s})m.data
-	return mat.{2:s}
-}}`,
-			proc_postfix,
+{0:s}_{1:s}_set_{3:s} :: proc(b: ^{6:s}{5:s}, {3:s}_: {4:s}, loc := #caller_location) {{
+	assert(b != nil, loc = loc)
+	assert(b.type == typeid_of(^{2:s}), loc = loc)
+	data := cast(^{2:s})b.data
+	`,
+			get_odin_proc_struct_prefix(s),
+			get_odin_proc_struct_name(s),
 			s.name,
 			field.name,
-			field_to_odin_type(field, gfx_pref),
-			gfx_pref,
+			field_to_odin_type(field, ve_pkg),
+			get_odin_buffer_type_name(s),
+			ve_pkg,
 		)
-	}
 
+		if field.type == .Array {
+			fmt.fprintfln(f, "	copy_slice(data.{0:s}[:], {0:s}_)", field.name)
+		} else {
+			fmt.fprintfln(f, "	data.{0:s} = {0:s}_", field.name)
+		}
+
+		fmt.fprintf(
+			f,
+			`
+	b.dirty = true
+}}
+{0:s}_{1:s}_get_{3:s} :: proc(b: {6:s}{5:s}, loc := #caller_location) -> {4:s}{{
+	assert(b.type == typeid_of(^{2:s}), loc = loc)
+	data := cast(^{2:s})b.data
+`,
+			get_odin_proc_struct_prefix(s),
+			get_odin_proc_struct_name(s),
+			s.name,
+			field.name,
+			field_to_odin_type(field, ve_pkg),
+			get_odin_buffer_type_name(s),
+			ve_pkg,
+		)
+
+		if field.type == .Array {
+			fmt.fprintfln(f, "	return data.{0:s}[:]", field.name)
+		} else {
+			fmt.fprintfln(f, "	return data.{0:s}", field.name)
+		}
+		fmt.fprintln(f, "}")
+	}
+}
+
+generate_odin_applay_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	fmt.fprintf(
 		f,
 		`
-mtrl_{0:s}_apply :: proc(m: ^{2:s}Material, loc := #caller_location) {{
-	assert(m != nil, loc = loc)
-	assert(m.type == typeid_of(^{1:s}), loc = loc)
-	if !m.dirty do return
-	mat := cast(^{1:s})m.data
-	mtrl_data := {3:s} {{
+{0:s}_{1:s}_apply :: proc(b: ^{3:s}Cached_Buffer, loc := #caller_location) {{
+	assert(b != nil, loc = loc)
+	assert(b.type == typeid_of(^{2:s}), loc = loc)
+	if !b.dirty do return
+	src_data := cast(^{2:s})b.data
+
+	gpu_data_ptr : ^{4:s}
+	when size_of({4:s}) < 254 * 1024 {{
+		gpu_data := {4:s}{{}}
+		gpu_data_ptr = &gpu_data
+	}} else {{
+		gpu_data_ptr = new({4:s}, context.temp_allocator)
+	}}
 	`,
-		proc_postfix,
+		get_odin_proc_struct_prefix(s),
+		get_odin_proc_struct_name(s),
 		s.name,
-		gfx_pref,
-		get_data_struct_name(s.name),
+		ve_pkg,
+		get_odin_data_struct_name(s.name, s.memory_layout),
 	)
 
 	for field in s.fields {
-		print_field_to_data_field(f, "mat", field, gfx_pref)
+		print_field_to_data_field(f, "src_data", "gpu_data_ptr", field, ve_pkg, s.memory_layout)
 	}
 
 	fmt.fprintf(
 		f,
 		`
-	}}
-
-	buffer := {1:s}get_buffer_h(m.buffer_h, loc)
-	{1:s}fill_buffer(buffer, size_of({0:s}), &mtrl_data, 0, loc)
-	m.dirty = false
+	buffer := {1:s}get_buffer_h(b.buffer_h, loc)
+	{1:s}buffer_fill(buffer, gpu_data_ptr, size_of({0:s}), loc = loc)
+	b.dirty = false
 }}`,
-		get_data_struct_name(s.name),
-		gfx_pref,
+		get_odin_data_struct_name(s.name, s.memory_layout),
+		ve_pkg,
 	)
+}
+
+generate_odin_storage_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
+	fmt.fprintfln(f, `
+
+///////////////////////////
+// %s
+/////////storage_buffer////
+
+	`, s.name)
+
+	fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, s.memory_layout))
+
+	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
+		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
+	}
+	fmt.fprintln(f, "} \n")
+
+	fmt.fprintfln(
+		f,
+		`
+create_sbo_{0:s} :: proc(
+	buffer_usage: {2:s}Buffer_Usage_Flags = {{.Storage}},
+	loc := #caller_location
+) -> {2:s}Storage_Buffer_Handle {{
+	assert(.Storage in buffer_usage, loc = loc)
+	s: {2:s}Storage_Buffer
+	data := new({1:s})
+	s.data = data
+	s.type = typeid_of(^{1:s})
+	s.dirty = true
+	s.apply = sbo_{0:s}_apply
+
+	buffer := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
+	s.buffer_h = {2:s}store_buffer(buffer, loc)
+`,
+		get_odin_proc_struct_name(s),
+		s.name,
+		gfx_pref,
+		get_odin_data_struct_name(s.name, s.memory_layout),
+	)
+
+	for field in s.fields {
+		default_value, has_default_value := get_field_type_default_value(field.type, gfx_pref).?
+		if !has_default_value do continue
+		fmt.fprintfln(f, "	data.{0:s} = {1:s}", field.name, default_value)
+	}
+
+	fmt.fprintfln(f, `
+	return {0:s}store_storage_buffer(s)
+}}
+	`, gfx_pref)
+	generate_odin_get_set_proc(f, s, gfx_pref)
+	generate_odin_applay_proc(f, s, gfx_pref)
 }
 
 generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
@@ -361,19 +557,21 @@ generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Stru
 //////////unform_buffer////
 
 	`, s.name)
-	fmt.fprintfln(f, "%s :: struct {{", get_data_struct_name(s.name))
+	fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
-	for field in calculate_std140_layout(d, s.fields) {
-		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref))
+	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
+		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
 	}
 	fmt.fprintln(f, "} \n")
-
-	proc_postfix := struct_name_to_postfix(s.name, "_ubo")
 
 	fmt.fprintfln(
 		f,
 		`
-create_ubo_{0:s} :: proc(loc := #caller_location) -> {2:s}Uniform_Buffer_Handle {{
+create_ubo_{0:s} :: proc(
+	buffer_usage: {2:s}Buffer_Usage_Flags = {{.Uniform, .Host_Write}},
+	loc := #caller_location
+) -> {2:s}Uniform_Buffer_Handle {{
+	assert(.Uniform in buffer_usage, loc = loc)
 	u: {2:s}Uniform_Buffer
 	uniform_data := new({1:s})
 	u.data = uniform_data
@@ -381,13 +579,13 @@ create_ubo_{0:s} :: proc(loc := #caller_location) -> {2:s}Uniform_Buffer_Handle 
 	u.dirty = true
 	u.apply = ubo_{0:s}_apply
 
-	buffer := {2:s}create_uniform_buffer(size_of({3:s}), loc)
+	buffer := {2:s}create_buffer({{.Uniform, .Host_Write}}, size_of({3:s}), loc = loc)
 	u.buffer_h = {2:s}store_buffer(buffer, loc)
 `,
-		proc_postfix,
+		get_odin_proc_struct_name(s),
 		s.name,
 		gfx_pref,
-		get_data_struct_name(s.name),
+		get_odin_data_struct_name(s.name, s.memory_layout),
 	)
 
 	for field in s.fields {
@@ -402,93 +600,57 @@ create_ubo_{0:s} :: proc(loc := #caller_location) -> {2:s}Uniform_Buffer_Handle 
 }}
 	`, gfx_pref)
 
-	for field in s.fields {
-		fmt.fprintf(
-			f,
-			`
-ubo_{0:s}_set_{2:s} :: proc(u: ^{4:s}Uniform_Buffer, {2:s}: {3:s}, loc := #caller_location) {{
-	assert(u != nil, loc = loc)
-	assert(u.type == typeid_of(^{1:s}), loc = loc)
-	ubo := cast(^{1:s})u.data
-	ubo.{2:s} = {2:s}
-	u.dirty = true
-}}
-ubo_{0:s}_get_{2:s} :: proc(u: {4:s}Uniform_Buffer, loc := #caller_location) -> {3:s}{{
-	assert(u.type == typeid_of(^{1:s}), loc = loc)
-	ubo := cast(^{1:s})u.data
-	return ubo.{2:s}
-}}`,
-			proc_postfix,
-			s.name,
-			field.name,
-			field_to_odin_type(field, gfx_pref),
-			gfx_pref,
-		)
-	}
-
-	fmt.fprintf(
-		f,
-		`
-ubo_{0:s}_apply :: proc(u: ^{2:s}Uniform_Buffer, loc := #caller_location) {{
-	assert(u != nil, loc = loc)
-	assert(u.type == typeid_of(^{1:s}), loc = loc)
-	if !u.dirty do return
-	ubo := cast(^{1:s})u.data
-	ubo_data := {3:s} {{
-	`,
-		proc_postfix,
-		s.name,
-		gfx_pref,
-		get_data_struct_name(s.name),
-	)
-
-	for field in s.fields {
-		print_field_to_data_field(f, "ubo", field, gfx_pref)
-	}
-
-	fmt.fprintf(
-		f,
-		`
-	}}
-
-	buffer := {1:s}get_buffer_h(u.buffer_h, loc)
-	{1:s}fill_buffer(buffer, size_of({0:s}), &ubo_data, 0, loc)
-	u.dirty = false
-}}`,
-		get_data_struct_name(s.name),
-		gfx_pref,
-	)
+	generate_odin_get_set_proc(f, s, gfx_pref)
+	generate_odin_applay_proc(f, s, gfx_pref)
 }
 
-print_field_to_data_field :: proc(f: os.Handle, source_name: string, field: Field, gfx_pref: string) {
+print_field_to_data_field :: proc(
+	f: os.Handle,
+	src_name: string,
+	dst_name: string,
+	field: Field,
+	gfx_pref: string,
+	layout: Memory_Layout,
+) {
 	if (field.type == .Texture_Handle) {
 		fmt.fprintfln(
 			f,
-			"	{0:s} = {2:s}.{0:s}.index if {1:s}has_texture_h({2:s}.{0:s}) else max(u32),",
+			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}has_texture_h({2:s}.{0:s}) else max(u32)",
 			field.name,
 			gfx_pref,
-			source_name,
+			src_name,
+			dst_name,
 		)
 	} else if (field.type == .Buffer_Handle) {
 		fmt.fprintfln(
 			f,
-			"	{0:s} = {2:s}.{0:s}.index if {1:s}has_buffer_h({2:s}.{0:s}) else max(u32),",
+			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}has_buffer_h({2:s}.{0:s}) else max(u32)",
 			field.name,
 			gfx_pref,
-			source_name,
+			src_name,
+			dst_name,
 		)
 	} else if (field.type == .Custom) {
-		fmt.fprintfln(f, "	{0:s} = {1:s}({2:s}.{0:s}),", field.name, get_conv_proc_name(field.type_string), source_name)
-	} else if (field.type == .Array && field.array.element_type == .Custom) {
 		fmt.fprintfln(
 			f,
-			"	{0:s} = {1:s}({2:s}.{0:s}),",
+			"	{0:s}(&{3:s}.{1:s}, {2:s}.{1:s})",
+			get_odin_conv_proc_name(field.type_string, layout),
 			field.name,
-			get_conv_array_proc_name(field.array.element_type_string),
-			source_name,
+			src_name,
+			dst_name,
+		)
+	} else if (field.type == .Array && field.array.element_type == .Custom) {
+		assert(field.array.length != -1)
+		fmt.fprintfln(
+			f,
+			"	{0:s}({3:s}.{1:s}[:], {2:s}.{1:s}[:])",
+			get_odin_conv_array_proc_name(field.array.element_type_string, layout),
+			field.name,
+			src_name,
+			dst_name,
 		)
 	} else {
-		fmt.fprintfln(f, "	{0:s} = {1:s}.{0:s},", field.name, source_name)
+		fmt.fprintfln(f, "	{2:s}.{0:s} = {1:s}.{0:s}", field.name, src_name, dst_name)
 	}
 }
 
@@ -504,34 +666,98 @@ get_field_type_default_value :: proc(field_type: Field_Type, gfx_pref: string) -
 	return nil
 }
 
-get_data_field_for_odin :: proc(field: Field, gfx_pref: string) -> string {
+get_data_field_for_odin :: proc(field: Field, gfx_pref: string, layout: Memory_Layout) -> string {
 	assert(field.type != .None)
 	if field.type == .Texture_Handle || field.type == .Buffer_Handle {
 		return fmt.aprintf("	%s: u32,", field.name)
 	} else if field.type == .Custom {
-		return fmt.aprintf("	%s: %s,", field.name, get_data_struct_name(field.type_string))
+		return fmt.aprintf("	%s: %s,", field.name, get_odin_data_struct_name(field.type_string, layout))
 	} else if field.type == .Array && field.array.element_type == .Custom {
 		return fmt.aprintf(
-			"	%s: [%d]%s,",
+			"	%s: %s,",
 			field.name,
-			field.array.length,
-			get_data_struct_name(field.array.element_type_string),
+			field_to_odin_type(
+				Field {
+					type = .Array,
+					array = Array_Field {
+						length = field.array.length,
+						element_type = .Custom,
+						element_type_string = get_odin_data_struct_name(field.array.element_type_string, layout),
+					},
+				},
+				"",
+			),
 		)
 	} else {
 		return fmt.aprintf("	%s: %s,", field.name, field_to_odin_type(field, gfx_pref))
 	}
 }
 
-struct_name_to_postfix :: proc(name: string, postfix: string) -> string {
+remove_struct_suffix :: proc(name: string, suffix: string) -> string {
 	lower_name := strings.to_lower(name)
-	if len(lower_name) >= len(postfix) && lower_name[len(lower_name) - len(postfix):] == postfix {
-		return lower_name[:len(lower_name) - len(postfix)]
+	if len(lower_name) >= len(suffix) && lower_name[len(lower_name) - len(suffix):] == suffix {
+		return lower_name[:len(lower_name) - len(suffix)]
 	}
 	return lower_name
 }
 
+parse_constns :: proc(pkg: ^ast.Package, loc := #caller_location) -> map[string]int {
+	ok: bool
+	Const_Value :: union {
+		string,
+		int,
+	}
+
+	name_to_value: map[string]Const_Value
+
+	for path, file in pkg.files {
+		for decl in file.decls {
+			value_decl: ^ast.Value_Decl
+			if value_decl, ok = decl.derived.(^ast.Value_Decl); !ok || len(value_decl.values) < 1 {
+				continue
+			}
+
+			value := value_decl.values[0]
+			ident, i_ok := value_decl.names[0].derived.(^ast.Ident)
+			assert(i_ok)
+
+			#partial switch v in value.derived_expr {
+			case ^ast.Basic_Lit:
+				if v.tok.kind == .Integer {
+					name_to_value[ident.name], _ = strconv.parse_int(v.tok.text)
+				}
+			case ^ast.Ident:
+				name_to_value[ident.name] = v.name
+			}
+		}
+	}
+
+	constants: map[string]int
+
+	get_const_value :: proc(name: string, name_to_value: map[string]Const_Value) -> (int, bool) {
+		current: string = name
+		for i in 0 ..< 100 {
+			v, ok := name_to_value[current]
+			if !ok do break
+			if v_int, vok := v.(int); vok do return v_int, true
+			if v_str, sok := v.(string); sok do current = v_str
+		}
+		return 0, false
+	}
+
+	for name, _ in name_to_value {
+		if v, ok := get_const_value(name, name_to_value); ok {
+			constants[name] = v
+		}
+	}
+
+	return constants
+}
+
 parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) -> (Parse_Data, bool) {
 	ok: bool
+
+	consts := parse_constns(pkg, loc)
 
 	Temp_Data :: struct {
 		structures: map[string]Struct,
@@ -549,7 +775,7 @@ parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) -> (Parse_D
 		name:            string,
 		path:            string,
 	}
-	second_pass := make([dynamic]First_Pass_Strcut)
+	first_pass := make([dynamic]First_Pass_Strcut)
 	available_names := make([dynamic]string)
 
 	get_all_dep :: proc(s: string, t: ^Temp_Data) -> [dynamic]string {
@@ -618,8 +844,6 @@ parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) -> (Parse_D
 
 	for path, file in pkg.files {
 		for decl in file.decls {
-			name: string
-
 			value_decl: ^ast.Value_Decl
 			if value_decl, ok = decl.derived.(^ast.Value_Decl); !ok || len(value_decl.values) < 1 {
 				continue
@@ -633,7 +857,7 @@ parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) -> (Parse_D
 			}
 			if ident, ok := value_decl.names[0].derived.(^ast.Ident); ok {
 				append(
-					&second_pass,
+					&first_pass,
 					First_Pass_Strcut {
 						name = ident.name,
 						path = path,
@@ -646,26 +870,26 @@ parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) -> (Parse_D
 		}
 	}
 
-	for sp in second_pass {
+	for sp in first_pass {
 		s := Struct{}
 		fields := make([dynamic]Field)
 		s.name = sp.name
 		s.path = sp.path
 
-		struct_type := get_struct_type(sp.ast_attributes)
-
 		for field_prs in sp.ast_struct_type.fields.list {
-			field, err := parse_field(field_prs, available_names[:])
+			field, err := parse_field(field_prs, available_names[:], consts)
 			if err != "" {
 				s.err = err
 				break
 			}
-
 			append(&fields, field)
 		}
 
 		s.fields = fields[:]
-		s.type = struct_type
+		a_name, a_value, a_pos := get_attribute_data(sp.ast_attributes)
+		s.type = get_struct_type(a_name, a_value, a_pos)
+		s.memory_layout = get_struct_memory_layout(s.type, a_value)
+		s.access_specifier = get_struct_access_specifier(s.type, a_value)
 		s.path = sp.path
 
 		add_refs :: proc(p: ^Temp_Data, owner: string, dep: string) {
@@ -699,11 +923,33 @@ parse_structures :: proc(pkg: ^ast.Package, loc := #caller_location) -> (Parse_D
 
 	for h in t.heads do resolve(t.structures[h].name, &t)
 
-	failed: bool
+
+	ordered: [dynamic]string
+
 	for name, s in t.structures {
-		if s.type != .Material && s.type != .Uniform_Buffer {
-			continue
+		if s.type == .None do continue
+		deps := get_all_dep(name, &t)
+		slice.reverse(deps[:])
+		for d in deps {
+			if slice.contains(ordered[:], d) do continue
+			dep_s := &t.structures[d]
+
+			if s.memory_layout == .Std140 {
+				for field in s.fields {
+					if field.type == .Array && field.array.length == -1 {
+						dep_s.err = "Only fixed arrays are supported."
+					}
+				}
+			}
+			append(&ordered, d)
 		}
+		append(&ordered, name)
+	}
+
+	failed: bool
+	for name in ordered {
+		s := t.structures[name]
+		if s.type == .None do continue
 
 		SEP :: "----------------------------"
 
@@ -735,40 +981,90 @@ ERROR: %s`, s.name, s.type, s.path, s.err)
 		return {}, false
 	}
 
-	ordered: [dynamic]string
-
-	for name, s in t.structures {
-		if s.type == .None do continue
-		deps := get_all_dep(name, &t)
-		slice.reverse(deps[:])
-		for d in deps {
-			if slice.contains(ordered[:], d) do continue
-			append(&ordered, d)
-		}
-		append(&ordered, name)
-	}
-
 	return Parse_Data{ordered = ordered, structures = t.structures}, true
 }
 
-get_struct_type :: proc(attributes: []^ast.Attribute) -> Struct_Type {
+get_attribute_data :: proc(attributes: []^ast.Attribute) -> (name: string, value: string, pos: tokenizer.Pos) {
 	for attribute in attributes {
 		for elem in attribute.elems {
-			ident, ok := elem.derived.(^ast.Ident)
-			if ok {
-				if ident.name == MATERIAL_ATTRIBUTE {
-					return .Material
-				} else if ident.name == UNIFORM_BUFFER_ATTRIBUTE {
-					return .Uniform_Buffer
-				}
+			pos = elem.pos
+			ident, ok_ident := elem.derived.(^ast.Ident)
+			if ok_ident do name = ident.name
+
+			field_value, ok_field_value := elem.derived.(^ast.Field_Value)
+			if ok_field_value {
+				field_ident := field_value.field.derived.(^ast.Ident)
+				name = field_ident.name
+
+				basic_lit, ok_basic_lit := field_value.value.derived.(^ast.Basic_Lit)
+				if ok_basic_lit do value = basic_lit.tok.text
 			}
 		}
 	}
 
+	return
+}
+
+get_struct_type :: proc(attribute_name: string, attribute_value: string, pos: tokenizer.Pos) -> Struct_Type {
+	if attribute_name == MATERIAL_ATTRIBUTE {
+		return .Material
+	} else if attribute_name == BUFFER_ATTRIBUTE {
+		if attribute_value == "" || strings.contains(attribute_value, BUFFER_ATTRIBUTE_UNIFORM_VALUE) {
+			return .Uniform_Buffer
+		} else if strings.contains(attribute_value, BUFFER_ATTRIBUTE_STORAGE_VALUE) {
+			return .Storage_Buffer
+		}
+		log.warnf(
+			"Invalid attribute value: {2:s}. Expected \"\", \"{0:s}\" or \"{1:s}\"\n{3:#v}",
+			BUFFER_ATTRIBUTE_STORAGE_VALUE,
+			BUFFER_ATTRIBUTE_UNIFORM_VALUE,
+			attribute_value,
+			pos,
+		)
+	}
 	return .None
 }
 
-parse_field :: proc(f: ^ast.Field, available_struct_name: []string) -> (field: Field, err: string) {
+get_struct_memory_layout :: proc(struct_type: Struct_Type, attribute_value: string) -> Memory_Layout {
+	#partial switch struct_type {
+	case .Material:
+		return .Std140
+	case .Uniform_Buffer:
+		return .Std140
+	case .Storage_Buffer:
+		if strings.contains(attribute_value, "std140") {
+			return .Std140
+		}
+		return .Std430
+	}
+	return .Std140
+}
+
+get_struct_access_specifier :: proc(struct_type: Struct_Type, attribute_value: string) -> Access_Specifier {
+	#partial switch struct_type {
+	case .Material:
+		return .Readonly
+	case .Uniform_Buffer:
+		return .Readonly
+	case .Storage_Buffer:
+		if strings.contains(attribute_value, "readonly") {
+			return .Readonly
+		} else if strings.contains(attribute_value, "writeonly") {
+			return .Writeonly
+		}
+		return .Read_Write
+	}
+	return .Readonly
+}
+
+parse_field :: proc(
+	f: ^ast.Field,
+	available_struct_name: []string,
+	consts: map[string]int,
+) -> (
+	field: Field,
+	err: string,
+) {
 	field_type, field_type_string := parse_field_type(f.type)
 	field_name_expr := f.names[0]
 	field_name_expr_ident, ok := field_name_expr.derived.(^ast.Ident)
@@ -818,16 +1114,33 @@ parse_field :: proc(f: ^ast.Field, available_struct_name: []string) -> (field: F
 			return
 		}
 
+		length: int
 		if array_type.len == nil {
+			length = -1
+		} else {
+			#partial switch len in array_type.len.derived {
+			case ^ast.Ident:
+				length = consts[len.name]
+			case:
+				unary_expr := cast(^ast.Unary_Expr)array_type.len
+				length_text := unary_expr.op.text
+				ok_p: bool
+				if length_text == "-" {
+					length = -1
+				} else {
+					length, ok_p = strconv.parse_int(length_text)
+					assert(ok_p)
+				}
+			}
+		}
+
+		if length == -1 {
 			err = field_error(field, "Only fixed arrays are supported.")
 			return
 		}
-		unary_expr := cast(^ast.Unary_Expr)array_type.len
-		array_length, ok_p := strconv.parse_int(unary_expr.op.text)
-		assert(ok_p)
 
 		field.array = Array_Field {
-			length              = array_length,
+			length              = length,
 			element_type        = element_t,
 			element_type_string = element_t_str,
 		}
@@ -851,15 +1164,25 @@ parse_field_type :: proc(node: ^ast.Expr) -> (Field_Type, string) {
 	return .None, ""
 }
 
-calculate_std140_layout :: proc(d: Parse_Data, fields: []Field) -> []Field {
+calculate_padding_by_memeory_layout :: proc(layout: Memory_Layout, d: Parse_Data, fields: []Field) -> []Field {
+	switch layout {
+	case .Std140:
+		return _calculate_std140_layout(d, fields)
+	case .Std430:
+		return _calculate_std430_layout(d, fields)
+	}
+	return fields
+}
+
+_calculate_std140_layout :: proc(d: Parse_Data, fields: []Field) -> []Field {
 	std140_fields := make([dynamic]Field)
 	current_offset := 0
 
 	pad_index := 0
 
 	for field in fields {
-		align := get_field_type_base_aligment(d, field)
-		size := get_field_type_size(d, field)
+		align := get_field_base_alignment_std140(d, field)
+		size := get_field_type_size(d, field, .Std140)
 
 		padding := (align - (current_offset % align)) % align
 
@@ -883,6 +1206,34 @@ calculate_std140_layout :: proc(d: Parse_Data, fields: []Field) -> []Field {
 	}
 
 	return std140_fields[:]
+}
+
+_calculate_std430_layout :: proc(d: Parse_Data, fields: []Field) -> []Field {
+	std430_fields := make([dynamic]Field)
+	current_offset := 0
+
+	pad_index := 0
+
+	for field in fields {
+		align := get_field_base_alignment_std430(d, field)
+		size := get_field_type_size(d, field, .Std430)
+
+		padding := (align - (current_offset % align)) % align
+
+		if padding > 0 {
+			assert(padding % 4 == 0, "Padding must be multiple of 4")
+			for i in 0 ..< padding / 4 {
+				append(&std430_fields, Field{name = fmt.aprintf("pad%d", pad_index), type = .Float})
+				pad_index += 1
+			}
+			current_offset += padding
+		}
+
+		append(&std430_fields, field)
+		current_offset += size
+	}
+
+	return std430_fields[:]
 }
 
 odin_type_to_field_type :: proc(str: string) -> Field_Type {
@@ -933,11 +1284,13 @@ field_to_glsl_type :: proc(field: Field) -> string {
 	case .Buffer_Handle:
 		return "uint"
 	case .Array:
-		return fmt.aprintf(
-			"%s[%d]",
-			field_to_glsl_type(Field{type = field.array.element_type, type_string = field.array.element_type_string}),
-			field.array.length,
+		type_string := field_to_glsl_type(
+			Field{type = field.array.element_type, type_string = field.array.element_type_string},
 		)
+		if field.array.length != -1 {
+			return fmt.aprintf("%s[%d]", type_string, field.array.length)
+		}
+		return fmt.aprintf("%s[]", type_string)
 	case .Custom:
 		return get_glsl_struct_name(field.type_string)
 	}
@@ -968,14 +1321,14 @@ field_to_odin_type :: proc(field: Field, gfx_pref: string) -> string {
 	case .Buffer_Handle:
 		return fmt.aprintf("%sBuffer_Handle", gfx_pref)
 	case .Array:
-		return fmt.aprintf(
-			"[%d]%s",
-			field.array.length,
-			field_to_odin_type(
-				Field{type = field.array.element_type, type_string = field.array.element_type_string},
-				gfx_pref,
-			),
+		type_string := field_to_odin_type(
+			Field{type = field.array.element_type, type_string = field.array.element_type_string},
+			gfx_pref,
 		)
+		if field.array.length == -1 {
+			return fmt.aprintf("[]%s", type_string)
+		}
+		return fmt.aprintf("[%d]%s", field.array.length, type_string)
 	case .Custom:
 		return field.type_string
 	}
@@ -983,7 +1336,23 @@ field_to_odin_type :: proc(field: Field, gfx_pref: string) -> string {
 	return ""
 }
 
-get_field_type_base_aligment :: proc(d: Parse_Data, field: Field) -> int {
+get_field_base_alignment_std140 :: proc(d: Parse_Data, field: Field) -> int {
+	switch field.type {
+	case .None:
+		return 0
+	case .Float, .Int, .Bool, .Texture_Handle, .Buffer_Handle:
+		return 4
+	case .Vector2:
+		return 8
+	case .Vector3, .Vector4, .Mat4:
+		return 16
+	case .Array, .Custom:
+		return 16
+	}
+	return 16
+}
+
+get_field_base_alignment_std430 :: proc(d: Parse_Data, field: Field) -> int {
 	switch field.type {
 	case .None:
 		return 0
@@ -994,24 +1363,25 @@ get_field_type_base_aligment :: proc(d: Parse_Data, field: Field) -> int {
 	case .Vector3, .Vector4, .Mat4:
 		return 16
 	case .Array:
-		return 16
+		return get_field_base_alignment_std430(
+			d,
+			Field{type = field.array.element_type, type_string = field.array.element_type_string},
+		)
 	case .Custom:
 		s, ok := d.structures[field.type_string]
 		assert(ok)
 		max := 0
 		for field in s.fields {
-			if max < get_field_type_base_aligment(d, field) {
-				max = get_field_type_base_aligment(d, field)
+			if max < get_field_base_alignment_std430(d, field) {
+				max = get_field_base_alignment_std430(d, field)
 			}
 		}
-		assert(max > 0)
-
 		return max
 	}
 	return 16
 }
 
-get_field_type_size :: proc(d: Parse_Data, field: Field, loc := #caller_location) -> int {
+get_field_type_size :: proc(d: Parse_Data, field: Field, memory_layout: Memory_Layout, loc := #caller_location) -> int {
 	switch field.type {
 	case .None:
 		return 0
@@ -1031,14 +1401,15 @@ get_field_type_size :: proc(d: Parse_Data, field: Field, loc := #caller_location
 			get_field_type_size(
 				d,
 				Field{type = field.array.element_type, type_string = field.array.element_type_string},
+				memory_layout,
 			) \
 		)
 	case .Custom:
 		s, ok := d.structures[field.type_string]
 		assert(ok, loc = loc)
 		size := 0
-		for field in calculate_std140_layout(d, s.fields) {
-			size += get_field_type_size(d, field)
+		for field in calculate_padding_by_memeory_layout(memory_layout, d, s.fields) {
+			size += get_field_type_size(d, field, memory_layout)
 		}
 		return size
 	}

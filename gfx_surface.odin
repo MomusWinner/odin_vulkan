@@ -624,8 +624,8 @@ _create_surface_color_resource :: proc(
 
 	view := _create_image_view(image, format, {.COLOR}, 1)
 
-	_set_debug_object_name(cast(u64)image, .IMAGE, "surface msaa image")
-	_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface msaa view")
+	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface msaa image")
+	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface msaa view")
 
 	return Texture {
 		name = "surface color attachment",
@@ -660,9 +660,9 @@ _create_surface_color_resolve_resource :: proc(
 	view := _create_image_view(image, format, {.COLOR}, 1)
 	sampler: Sampler = create_sampler(sampler_info)
 
-	_set_debug_object_name(cast(u64)image, .IMAGE, "surface resolve image")
-	_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface resolve sampler")
-	_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface resolve view")
+	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface resolve image")
+	_vk_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface resolve sampler")
+	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface resolve view")
 
 	return Texture {
 		name = "surface resolve color attachment",
@@ -706,8 +706,8 @@ _create_surface_depth_resource :: proc(
 	_transition_image_layout(cmd, image, aspect, format, .UNDEFINED, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
 	view := _create_image_view(image, format, aspect, 1)
 
-	_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth image")
-	_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth view")
+	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth image")
+	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth view")
 
 	return Texture {
 		name = "surface depth attachment",
@@ -746,9 +746,9 @@ _create_surface_depth_resource_sampled :: proc(
 	view := _create_image_view(image, format, {.DEPTH}, 1)
 	sampler: Sampler = create_sampler(sampler_info)
 
-	_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth msaa image")
-	_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth msaa view")
-	_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface depth msaa sampler")
+	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth msaa image")
+	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth msaa view")
+	_vk_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface depth msaa sampler")
 
 	return Texture {
 		name = "surface depth msaa attachment",

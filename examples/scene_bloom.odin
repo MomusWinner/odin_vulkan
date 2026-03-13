@@ -32,8 +32,7 @@ HDR_Material :: struct {
 
 @(material)
 Gaussian_Blur_Material :: struct {
-	blur:       ve.Texture_Handle,
-	horizontal: b32,
+	blur: ve.Texture_Handle,
 }
 
 @(material)
@@ -101,7 +100,6 @@ hdr_scene_init :: proc(s: ^Scene) {
 
 	data.blur_material_h = create_mtrl_gaussian_blur(data.blur_hor_pipeline_h)
 	blur_hor_mtrl, _ := ve.get_material(data.blur_material_h)
-	mtrl_gaussian_blur_set_horizontal(blur_hor_mtrl, true)
 	mtrl_gaussian_blur_set_blur(blur_hor_mtrl, bright_color_attachmetn)
 
 	data.material_h = create_mtrl_multilight(create_mulilight_pipeline())
@@ -125,7 +123,7 @@ hdr_scene_init :: proc(s: ^Scene) {
 		position = {0, 0, -12},
 		color    = ({1, 1, 0} * 5),
 	}
-	mtrl_multilight_set_lights(material, lights)
+	mtrl_multilight_set_lights(material, lights[:])
 
 	// Setup Transform
 	ve.init_trf(&data.transform)

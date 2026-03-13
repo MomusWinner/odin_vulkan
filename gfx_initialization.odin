@@ -1,13 +1,16 @@
 package ve
 
 import "base:runtime"
+import "core:fmt"
 import "core:log"
 import "core:os"
+import "core:reflect"
 import "core:slice"
 import "core:strings"
 import "lib/vma"
 import "vendor:glfw"
 import vk "vendor:vulkan"
+
 
 when ODIN_OS == .Darwin {
 	// NOTE: just a bogus import of the system library,
@@ -65,6 +68,7 @@ _destroy_gfx :: proc() {
 
 @(private = "file")
 _init_vulkan_state :: proc() {
+	ctx.gfx.vk_state.enabled_layer_names = make([dynamic]cstring)
 	_create_instance()
 	_create_surface()
 	_pick_physical_device()
@@ -136,10 +140,16 @@ _create_instance :: proc() {
 	}
 
 	when ENABLE_VALIDATION_LAYERS {
-		ctx.gfx.vk_state.enabled_layer_names = make([]cstring, 1)
-		ctx.gfx.vk_state.enabled_layer_names[0] = "VK_LAYER_KHRONOS_validation"
+		append(&ctx.gfx.vk_state.enabled_layer_names, "VK_LAYER_KHRONOS_validation")
 		instance_info.ppEnabledLayerNames = raw_data(ctx.gfx.vk_state.enabled_layer_names)
 		instance_info.enabledLayerCount = 1
+
+		enable_features := [?]vk.ValidationFeatureEnableEXT{.DEBUG_PRINTF}
+		validation_feature := vk.ValidationFeaturesEXT {
+			sType                         = .VALIDATION_FEATURES_EXT,
+			enabledValidationFeatureCount = len(enable_features),
+			pEnabledValidationFeatures    = raw_data(&enable_features),
+		}
 
 		append(&extensions, vk.EXT_DEBUG_UTILS_EXTENSION_NAME)
 
@@ -158,13 +168,13 @@ _create_instance :: proc() {
 			severity |= {.VERBOSE}
 		}
 
-		dbg_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
+		dbg_messenger_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
 			sType           = .DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 			messageSeverity = severity,
 			messageType     = {.GENERAL, .VALIDATION, .PERFORMANCE}, // all of them.
 			pfnUserCallback = _vk_messenger_callback,
 		}
-		instance_info.pNext = &dbg_create_info
+		instance_info.pNext = &validation_feature
 	}
 
 	instance_info.enabledExtensionCount = u32(len(extensions))
@@ -176,7 +186,9 @@ _create_instance :: proc() {
 
 	when ENABLE_VALIDATION_LAYERS {
 		dbg_messenger: vk.DebugUtilsMessengerEXT
-		must(vk.CreateDebugUtilsMessengerEXT(ctx.gfx.vk_state.instance, &dbg_create_info, nil, &dbg_messenger))
+		must(
+			vk.CreateDebugUtilsMessengerEXT(ctx.gfx.vk_state.instance, &dbg_messenger_create_info, nil, &dbg_messenger),
+		)
 		ctx.gfx.vk_state.dbg_messenger = dbg_messenger
 	}
 }
@@ -354,7 +366,7 @@ _create_logical_device :: proc() {
 
 	features: Physical_Device_Features
 
-	get_required_physical_device_features(&features)
+	_get_required_physical_device_features(&features)
 
 	device_create_info := vk.DeviceCreateInfo {
 		sType                   = .DEVICE_CREATE_INFO,
@@ -482,112 +494,99 @@ byte_arr_str :: proc(arr: ^[$N]byte) -> string {
 
 @(private = "file")
 _get_physical_device_features :: proc(device: vk.PhysicalDevice, features: ^Physical_Device_Features) {
-	features.dynamic_rendering_local_read.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES
-	features.dynamic_rendering_local_read.dynamicRenderingLocalRead = true
-
-	features.dynamic_rendering.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
-	features.dynamic_rendering.dynamicRendering = true
-	features.dynamic_rendering.pNext = &features.dynamic_rendering_local_read
-
-	features.descriptor_indexing.sType = .PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
-	features.descriptor_indexing.pNext = &features.dynamic_rendering
-
-	features.synchronization.sType = .PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
-	features.synchronization.pNext = &features.descriptor_indexing
-
-	features.features.sType = .PHYSICAL_DEVICE_FEATURES_2
-	features.features.pNext = &features.synchronization
-
+	_get_required_physical_device_features(features)
 	vk.GetPhysicalDeviceFeatures2(device, &features.features)
 }
 
 @(private = "file")
-_validate_physical_device_features :: proc(features: Physical_Device_Features) -> (bool, string) {
-	// DYNAMIC RENDERING LOCAL READ 
-	if !features.dynamic_rendering_local_read.dynamicRenderingLocalRead {
-		return false, "device does not support dynamic rendering local read"
+_validate_physical_device_features :: proc(
+	features: Physical_Device_Features,
+	allocator := context.allocator,
+) -> (
+	bool,
+	string,
+) {
+	target: Physical_Device_Features
+	_get_required_physical_device_features(&target)
+
+	compare :: proc(dst, src: $T) -> (field: string, success: bool) {
+		fields := reflect.struct_fields_zipped(T)
+		for f in fields {
+			_, ok := f.type.variant.(reflect.Type_Info_Boolean)
+			if !ok do continue
+
+			src_enabled := reflect.struct_field_value(src, f).(b32)
+			dst_enabled := reflect.struct_field_value(dst, f).(b32)
+			if src_enabled && !dst_enabled {
+				return f.name, false
+			}
+		}
+		return "", true
 	}
 
-	// DYNAMIC RENDERING 
-	if !features.dynamic_rendering.dynamicRendering {
-		return false, "device does not support dynamic rendering"
+	if field, ok := compare(features.features.features, target.features.features); !ok {
+		return false, fmt.aprintf("device does not support %s", field, allocator = allocator)
 	}
-
-	// DESCRIPTOR INDEXING
-	if !features.descriptor_indexing.shaderSampledImageArrayNonUniformIndexing {
-		return false, "device does not support descriptor indexing shaderSampledImageArrayNonUniformIndexing"
+	if field, ok := compare(features.features12, target.features12); !ok {
+		return false, fmt.aprintf("device does not support %s (Vulkan 1.2)", field, allocator = allocator)
 	}
-	if !features.descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind {
-		return false, "device does not support descriptor indexing descriptorBindingSampledImageUpdateAfterBind"
+	if field, ok := compare(features.features13, target.features13); !ok {
+		return false, fmt.aprintf("device does not support %s (Vulkan 1.3)", field, allocator = allocator)
 	}
-	if !features.descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing {
-		return false, "device does not support descriptor indexing shaderUniformBufferArrayNonUniformIndexing"
-	}
-	if !features.descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind {
-		return false, "device does not support descriptor indexing descriptorBindingUniformBufferUpdateAfterBind"
-	}
-	if !features.descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing {
-		return false, "device does not support descriptor indexing  shaderStorageBufferArrayNonUniformIndexing"
-	}
-	if !features.descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind {
-		return false, "device does not support descriptor indexing descriptorBindingStorageBufferUpdateAfterBind"
-	}
-	if !features.descriptor_indexing.runtimeDescriptorArray {
-		return false, "device does not support descriptor indexing runtimeDescriptorArray"
-	}
-	if !features.descriptor_indexing.descriptorBindingPartiallyBound {
-		return false, "device does not support descriptor indexing descriptorBindingPartiallyBound"
-	}
-
-	// SYNCHRONIZATION 2
-	if !features.synchronization.synchronization2 {
-		return false, "device does not support synchronization2"
-	}
-
-	// FEATURES
-	if !features.features.features.samplerAnisotropy {
-		return false, "device does not support anisotropy"
-	}
-	if !features.features.features.geometryShader {
-		return false, "device does not support geometry shaders"
+	if field, ok := compare(features.dynamic_rendering_local_read, target.dynamic_rendering_local_read); !ok {
+		return false, fmt.aprintf(
+			"device does not support %s (Dynamic Rendering Local Read)",
+			field,
+			allocator = allocator,
+		)
 	}
 
 	return true, ""
 }
 
-get_required_physical_device_features :: proc(features: ^Physical_Device_Features) {
-	// DYNAMIC RENDERING 
+@(private)
+_get_required_physical_device_features :: proc(features: ^Physical_Device_Features) {
+	// DYNAMIC RENDERING LOCAL READ
 	features.dynamic_rendering_local_read.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES
 	features.dynamic_rendering_local_read.pNext = nil
 	features.dynamic_rendering_local_read.dynamicRenderingLocalRead = true
 
-	// DYNAMIC RENDERING 
-	features.dynamic_rendering.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
-	features.dynamic_rendering.pNext = &features.dynamic_rendering_local_read
-	features.dynamic_rendering.dynamicRendering = true
+	// FEATURES 1.3
+	features.features13.sType = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+	features.features13.pNext = &features.dynamic_rendering_local_read
+	features.features13.subgroupSizeControl = true
+	features.features13.dynamicRendering = true
+	features.features13.synchronization2 = true
+	features.features13.maintenance4 = true
 
-	// DESCRIPTOR INDEXING
-	features.descriptor_indexing.sType = .PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
-	features.descriptor_indexing.pNext = &features.dynamic_rendering
-	features.descriptor_indexing.shaderSampledImageArrayNonUniformIndexing = true
-	features.descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind = true
-	features.descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing = true
-	features.descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind = true
-	features.descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing = true
-	features.descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind = true
-	features.descriptor_indexing.runtimeDescriptorArray = true
-	features.descriptor_indexing.descriptorBindingPartiallyBound = true
-
-	// SYNCHRONIZATION2
-	features.synchronization.sType = .PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
-	features.synchronization.pNext = &features.descriptor_indexing
-	features.synchronization.synchronization2 = true
+	// FEATURES 1.2
+	features.features12.sType = .PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
+	features.features12.pNext = &features.features13
+	features.features12.vulkanMemoryModel = true
+	features.features12.vulkanMemoryModelDeviceScope = true
+	features.features12.bufferDeviceAddress = true
+	features.features12.timelineSemaphore = true
+	features.features12.scalarBlockLayout = true
+	features.features12.storageBuffer8BitAccess = true
+	// descriptor indexing
+	features.features12.descriptorIndexing = true
+	features.features12.shaderSampledImageArrayNonUniformIndexing = true
+	features.features12.descriptorBindingSampledImageUpdateAfterBind = true
+	features.features12.shaderUniformBufferArrayNonUniformIndexing = true
+	features.features12.descriptorBindingUniformBufferUpdateAfterBind = true
+	features.features12.shaderStorageBufferArrayNonUniformIndexing = true
+	features.features12.descriptorBindingStorageBufferUpdateAfterBind = true
+	features.features12.runtimeDescriptorArray = true
+	features.features12.descriptorBindingPartiallyBound = true
 
 	// FEATURES
 	features.features.sType = .PHYSICAL_DEVICE_FEATURES_2
-	features.features.pNext = &features.synchronization
+	features.features.pNext = &features.features12
 	features.features.features.geometryShader = true
 	features.features.features.samplerAnisotropy = true
+	features.features.features.fragmentStoresAndAtomics = true
+	features.features.features.vertexPipelineStoresAndAtomics = true
+	features.features.features.shaderInt64 = true
 }
 
 @(private = "file")
@@ -671,14 +670,7 @@ _find_depth_format :: proc(physical_device: vk.PhysicalDevice, support_stencil: 
 		)
 	}
 
-	return _find_supported_format(
-		physical_device,
-		// .D32_SFLOAT, 
-		{.D32_SFLOAT},
-		.OPTIMAL,
-		{.DEPTH_STENCIL_ATTACHMENT},
-	)
-
+	return _find_supported_format(physical_device, {.D32_SFLOAT}, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT})
 }
 
 @(private)

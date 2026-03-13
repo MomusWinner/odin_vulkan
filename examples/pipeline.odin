@@ -61,7 +61,6 @@ get_base_create_pipeline_info :: proc() -> ve.Create_Pipeline_Info {
 }
 
 create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,

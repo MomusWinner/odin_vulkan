@@ -214,8 +214,10 @@ Create_Pipeline_Info :: struct {
 }
 
 Create_Compute_Pipeline_Info :: struct {
-	set_infos:   Pipeline_Set_Layout_Infos,
-	shader_path: string,
+	descriptor_set_infos: Pipeline_Set_Layout_Infos,
+	bindless:             bool,
+	shader_path:          string,
+	consts:               Shader_Constants,
 }
 
 Pipeline :: struct {
@@ -235,7 +237,7 @@ Graphics_Pipeline :: struct {
 
 Compute_Pipeline :: struct {
 	using base:  Pipeline,
-	create_info: ^Create_Compute_Pipeline_Info,
+	create_info: Create_Compute_Pipeline_Info,
 }
 
 Push_Constant :: struct {
@@ -396,6 +398,8 @@ _pipeline_manager_hot_reload :: proc() {
 _pipeline_manager_setup_compiler :: proc(pm: ^Pipeline_Manager) {
 	pm.compiler = shaderc.compiler_initialize()
 	pm.compiler_options = shaderc.compile_options_initialize()
+	shaderc.compile_options_set_target_spirv(pm.compiler_options, ._1_6)
+	shaderc.compile_options_set_target_env(pm.compiler_options, .Vulkan, .Vulkan1_4)
 	shaderc.compile_options_set_include_callbacks(
 		pm.compiler_options,
 		_shader_resolve_include,
@@ -518,26 +522,91 @@ destroy_render_pipeline :: proc(pipeline: ^Render_Pipeline) {
 }
 
 @(require_results)
-create_compute_pipeline :: proc(
-	g: ^Graphics,
-	create_pipeline_info: ^Create_Compute_Pipeline_Info,
-) -> (
-	Pipeline_Handle,
-	bool,
-) {
-	pipeline, ok := _create_compute_pipeline(g, create_pipeline_info, context.allocator)
+create_compute_pipeline :: proc(create_pipeline_info: Create_Compute_Pipeline_Info) -> (Pipeline_Handle, bool) {
+	pipeline, ok := _create_compute_pipeline(create_pipeline_info, context.allocator)
 	if !ok {
 		log.errorf("couldn't load pipeline")
 		return {}, false
 	}
 
-	handle := _pipeline_manager_registe_compute_pipeline(g.pipeline_manager, pipeline)
+	handle := _pipeline_manager_registe_compute_pipeline(ctx.gfx.pipeline_manager, pipeline)
 
 	return handle, true
 }
 
 destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline) {
 	_destroy_pipline(pipeline)
+}
+
+// FIXME:
+create_semapthore :: proc() -> vk.Semaphore {
+	semaphore: vk.Semaphore
+	info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+	}
+	vk.CreateSemaphore(ctx.gfx.vk_state.device, &info, nil, &semaphore)
+	return semaphore
+}
+
+compute_pipeline_dispatch :: proc(
+	pipeline: ^Compute_Pipeline,
+	group_count_x, group_count_y, group_count_z: u32,
+	semaphore: vk.Semaphore,
+	mtrl: ^Material,
+) -> vk.SemaphoreSubmitInfo {
+	vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64))
+	vk.ResetFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence)
+	vk.ResetCommandBuffer(ctx.gfx.cmd, {})
+
+	being_info := vk.CommandBufferBeginInfo {
+		sType = .COMMAND_BUFFER_BEGIN_INFO,
+		flags = {},
+	}
+	vk.BeginCommandBuffer(ctx.gfx.cmd, &being_info)
+
+	vk.CmdBindPipeline(ctx.gfx.cmd, .COMPUTE, pipeline.pipeline)
+
+	consts := _get_push_constants(mtrl, nil, nil)
+	cmd_push_constants(ctx.gfx.cmd, pipeline, &consts, {.COMPUTE})
+
+	bindless_descriptor_set := get_descriptor_set_bindless()
+	vk.CmdBindDescriptorSets(
+		ctx.gfx.cmd,
+		.COMPUTE,
+		get_pipeline_layout(pipeline.layout),
+		0,
+		1,
+		&bindless_descriptor_set,
+		0,
+		nil,
+	)
+	vk.CmdDispatch(ctx.gfx.cmd, group_count_x, group_count_y, group_count_z)
+	vk.EndCommandBuffer(ctx.gfx.cmd)
+
+	semaphore := semaphore
+
+	comand_buffer_info := vk.CommandBufferSubmitInfo {
+		sType         = .COMMAND_BUFFER_SUBMIT_INFO,
+		commandBuffer = ctx.gfx.cmd,
+	}
+
+	semaphore_info := vk.SemaphoreSubmitInfo {
+		sType       = .SEMAPHORE_SUBMIT_INFO,
+		semaphore   = semaphore,
+		stageMask   = {.COMPUTE_SHADER},
+		deviceIndex = 0,
+	}
+
+	submit_info := vk.SubmitInfo2 {
+		sType                    = .SUBMIT_INFO_2,
+		commandBufferInfoCount   = 1,
+		pCommandBufferInfos      = &comand_buffer_info,
+		signalSemaphoreInfoCount = 1,
+		pSignalSemaphoreInfos    = &semaphore_info,
+	}
+	must(vk.QueueSubmit2(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, ctx.gfx.fence))
+
+	return semaphore_info
 }
 
 @(private)
@@ -553,7 +622,7 @@ _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Cre
 
 	vk.DestroyPipeline(ctx.gfx.vk_state.device, pipeline.pipeline, nil)
 
-	shader_stages := _create_shader_stages(create_info, true)
+	shader_stages := _create_shader_stages(create_info, GFX_DEBUG)
 	defer _destroy_shader_stages(shader_stages)
 
 	pipeline_layout := get_pipeline_layout(pipeline.layout)
@@ -811,38 +880,53 @@ _destroy_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline) {
 @(private = "file")
 @(require_results)
 _create_compute_pipeline :: proc(
-	g: ^Graphics,
-	create_info: ^Create_Compute_Pipeline_Info,
+	create_info: Create_Compute_Pipeline_Info,
 	allocator := context.allocator,
+	loc := #caller_location,
 ) -> (
 	Compute_Pipeline,
 	bool,
 ) {
 	create_info := create_info
+	path := strings.concatenate({create_info.shader_path, ".spv"}, context.temp_allocator)
 
-	module, ok := _create_shader_module(create_info.shader_path)
+	module, ok := _create_shader_module(path, GFX_DEBUG, loc)
 	if !ok {
-		log.error("couldn't find comp shader. ", create_info.shader_path)
+		log.errorf("Couldn't find compute shader \"%s\".", path, loc)
 		return {}, false
+	}
+	defer vk.DestroyShaderModule(ctx.gfx.vk_state.device, module, nil)
+
+	spec: ^vk.SpecializationInfo = nil
+	if sm.len(create_info.consts) > 0 {
+		spec = new(vk.SpecializationInfo, context.temp_allocator)
+		_shader_constants_to_specialization_info(create_info.consts, spec)
 	}
 
 	comp_stage_info := vk.PipelineShaderStageCreateInfo {
-		sType  = .PIPELINE_SHADER_STAGE_CREATE_INFO,
-		stage  = {.COMPUTE},
-		module = module,
-		pName  = "main",
+		sType               = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+		stage               = {.COMPUTE},
+		flags               = {.ALLOW_VARYING_SUBGROUP_SIZE},
+		module              = module,
+		pName               = "main",
+		pSpecializationInfo = spec,
 	}
 
-	pipelie_layout_info := Pipeline_Layout_Info {
-		layout_infos = create_info.set_infos,
-		push_constant = Push_Constant_Range {
-			offset = 0,
-			size = size_of(Push_Constant),
-			stageFlags = vk.ShaderStageFlags_ALL_GRAPHICS,
-		},
+	pipeline_layout_info := Pipeline_Layout_Info {
+		layout_infos = create_info.descriptor_set_infos,
 	}
 
-	pipeline_layout := get_pipeline_layout(pipelie_layout_info)
+	if create_info.bindless {
+		pipeline_layout_info.push_constant = Push_Constant_Range {
+			offset     = 0,
+			size       = size_of(Push_Constant),
+			stageFlags = {.COMPUTE},
+		}
+		sm.append(&create_info.descriptor_set_infos, get_bindless_pipeline_set_info())
+		pipeline_layout_info.layout_infos = create_info.descriptor_set_infos
+	}
+
+	pipeline_layout := get_pipeline_layout(pipeline_layout_info)
 
 
 	vk_create_info := vk.ComputePipelineCreateInfo {
@@ -853,12 +937,12 @@ _create_compute_pipeline :: proc(
 
 	pipeline := vk.Pipeline{}
 
-	vk.CreateComputePipelines(g.vk_state.device, vk.FALSE, 1, &vk_create_info, nil, &pipeline)
+	vk.CreateComputePipelines(ctx.gfx.vk_state.device, vk.FALSE, 1, &vk_create_info, nil, &pipeline)
 
 	compute_pipeline := Compute_Pipeline {
 		pipeline    = pipeline,
 		create_info = create_info,
-		layout      = pipelie_layout_info,
+		layout      = pipeline_layout_info,
 	}
 
 	return compute_pipeline, true
@@ -965,25 +1049,31 @@ _create_shader_module_from_file :: proc(
 	module: vk.ShaderModule,
 	ok: bool,
 ) {
-	source_path := strings.trim_right(path, ".spv")
+
+	get_source_path :: proc(path: string) -> string {
+		if len(path) > 4 && path[len(path) - 4:] == ".spv" {
+			return path[:len(path) - 4]
+		}
+		log.panic(fmt.tprintf("Invalid shader '%s': expected .spv extension", path))
+	}
 
 	if compile {
 		when GFX_DEBUG {
-			data, w_ok := _shader_compile_and_write(ctx.gfx.pipeline_manager, source_path, loc)
+			data, w_ok := _shader_compile_and_write(ctx.gfx.pipeline_manager, get_source_path(path), loc)
 			if !w_ok {
 				log.panic("Couldn't write compiled shader ", path)
 			}
 
 			return _create_shader_module_from_memory(data), w_ok
 		} else {
-			log.panic("couldn't compile shader on release mode")
+			log.panic("Couldn't compile shader on release mode")
 		}
 	}
 	data, success := read_file(path, context.temp_allocator)
 
 	if !success {
 		when GFX_DEBUG {
-			data = _shader_compile(ctx.gfx.pipeline_manager, source_path, loc)
+			data = _shader_compile(ctx.gfx.pipeline_manager, get_source_path(path), loc)
 			success := wirte_file(path, data)
 			if !success {
 				log.panic("Couldn't write compiled shader ", path)
@@ -1032,24 +1122,8 @@ _create_shader_stages :: proc(
 
 		spec: ^vk.SpecializationInfo = nil
 		if sm.len(stage_info.consts) > 0 {
-			map_entry := make([]vk.SpecializationMapEntry, sm.len(stage_info.consts), context.temp_allocator)
-			const_data := make([]Shader_Constant_Value, sm.len(stage_info.consts), context.temp_allocator)
-			offset: u32
-			for const, i in sm.slice(&stage_info.consts) {
-				map_entry[i] = vk.SpecializationMapEntry {
-					constantID = const.id,
-					offset     = offset,
-					size       = size_of(Shader_Constant_Value),
-				}
-				const_data[i] = const.value
-				offset += size_of(Shader_Constant_Value)
-			}
-
 			spec = new(vk.SpecializationInfo, context.temp_allocator)
-			spec.pData = raw_data(const_data)
-			spec.dataSize = cast(int)offset
-			spec.pMapEntries = raw_data(map_entry)
-			spec.mapEntryCount = cast(u32)len(map_entry)
+			_shader_constants_to_specialization_info(stage_info.consts, spec)
 		}
 
 		sm.push(
@@ -1247,7 +1321,13 @@ _shader_compile_and_write :: proc(pm: ^Pipeline_Manager, path: string, loc := #c
 @(private = "file")
 _shader_compile :: proc(pm: ^Pipeline_Manager, path: string, loc := #caller_location) -> []u8 {
 	kind: shaderc.shaderKind
-	file_ext := strings.split(path, ".", context.temp_allocator)[1]
+
+	res := strings.split(path, ".", context.temp_allocator)
+	assert(
+		len(res) > 1,
+		fmt.tprintf("Invalid shader file extension: '%s'. Expected format: shader.(frag|vert|comp)", path),
+	)
+	file_ext := res[1]
 
 	switch file_ext {
 	case "frag":
@@ -1294,7 +1374,6 @@ _shader_compile :: proc(pm: ^Pipeline_Manager, path: string, loc := #caller_loca
 
 	return shaderCode
 }
-
 
 @(private = "file")
 _to_vulkan_stages :: proc(flags: Shader_Stage_Flags) -> vk.ShaderStageFlags {
@@ -1355,5 +1434,30 @@ _assert_create_pipeline_info :: #force_inline proc(create_info: ^Create_Pipeline
 				append(&attribute_desc, a.location)
 			}
 		}
+	}
+}
+
+@(private = "file")
+_shader_constants_to_specialization_info :: proc(consts: Shader_Constants, out_spec: ^vk.SpecializationInfo) {
+	consts := consts
+	if sm.len(consts) > 0 {
+		map_entry := make([]vk.SpecializationMapEntry, sm.len(consts), context.temp_allocator)
+		const_data := make([]Shader_Constant_Value, sm.len(consts), context.temp_allocator)
+		offset: u32
+		for const, i in sm.slice(&consts) {
+			map_entry[i] = vk.SpecializationMapEntry {
+				constantID = const.id,
+				offset     = offset,
+				size       = size_of(Shader_Constant_Value),
+			}
+			const_data[i] = const.value
+			offset += size_of(Shader_Constant_Value)
+		}
+
+		out_spec^ = vk.SpecializationInfo{}
+		out_spec.pData = raw_data(const_data)
+		out_spec.dataSize = cast(int)offset
+		out_spec.pMapEntries = raw_data(map_entry)
+		out_spec.mapEntryCount = cast(u32)len(map_entry)
 	}
 }

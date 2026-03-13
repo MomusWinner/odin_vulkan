@@ -43,7 +43,7 @@ foreign libshaderc {
 	compile_options_set_forced_version_profile :: proc(options: compileOptionsT, version: _c.int, profile: profile) ---
 	compile_options_set_include_callbacks :: proc(options: compileOptionsT, resolver: includeResolveFn, resultReleaser: includeResultReleaseFn, userData: rawptr) ---
 	compile_options_set_suppress_warnings :: proc(options: compileOptionsT) ---
-	compile_options_set_target_env :: proc(options: compileOptionsT, target: targetEnv, version: u32) ---
+	compile_options_set_target_env :: proc(options: compileOptionsT, target: targetEnv, version: envVersion) ---
 	compile_options_set_target_spirv :: proc(options: compileOptionsT, version: spirvVersion) ---
 	compile_options_set_warnings_as_errors :: proc(options: compileOptionsT) ---
 	compile_options_set_limit :: proc(options: compileOptionsT, limit: limit, value: _c.int) ---

@@ -21,7 +21,7 @@ create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location)
 	assert(len(vertices) > 0, loc = loc)
 
 	vertices_size := cast(vk.DeviceSize)(size_of(vertices[0]) * len(vertices))
-	vertex_buffer := create_vertex_buffer(raw_data(vertices), vertices_size)
+	vertex_buffer := create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
 
 	mesh := Mesh {
 		vertices = vertices,
@@ -31,7 +31,7 @@ create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location)
 
 	if len(indices) != 0 {
 		indices_size := cast(vk.DeviceSize)(size_of(indices[0]) * len(indices))
-		index_buffer := create_index_buffer(raw_data(indices), indices_size)
+		index_buffer := create_buffer({.Index}, indices_size, raw_data(indices), loc)
 		mesh.ebo = index_buffer
 	} else {
 		mesh.ebo = nil
@@ -51,6 +51,12 @@ destroy_mesh :: proc(mesh: ^Mesh, loc := #caller_location) {
 	delete(mesh.vertices)
 	delete(mesh.indices)
 }
+
+// Shader_Constants :: struct {
+// 	material:  ^Material,
+// 	camera:    ^Camera,
+// 	transform: ^Gfx_Transform,
+// }
 
 draw_mesh :: proc(
 	frame_data: Frame_Data,
@@ -78,15 +84,8 @@ draw_mesh :: proc(
 
 	g_pipeline := cmd_bind_material(frame_data, material, loc)
 
-	aspect := cast(f32)frame_data.surface_info.width / cast(f32)frame_data.surface_info.height
-	const := Push_Constant {
-		model    = trf_get_matrix(transform) if transform != nil else 1,
-		camera   = _camera_get_buffer(camera, aspect).index if camera != nil else Nil_Buffer_Handle.index,
-		material = material.buffer_h.index,
-		slots    = _g_res_manager_get_resource_indices(),
-	}
-
-	cmd_push_constants(frame_data, g_pipeline, &const)
+	consts := _get_push_constants(material, camera, transform)
+	cmd_push_constants(frame_data.cmd, g_pipeline, &consts)
 
 	if has_ebo {
 		cmd_draw_indexed(frame_data, cast(u32)len(mesh.indices), instance_count)
@@ -162,5 +161,16 @@ model_set_material :: proc(model: ^Model, material_h: Material_Handle, loc := #c
 	model.materials[0] = material_h
 	for &mesh, i in model.meshes {
 		model.mesh_material[i] = 0
+	}
+}
+
+@(private)
+_get_push_constants :: proc(mtrl: ^Material, camera: ^Camera, trf: ^Gfx_Transform) -> Push_Constant {
+	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
+	return Push_Constant {
+		model = trf_get_matrix(trf) if trf != nil else 1,
+		camera = _camera_get_buffer(camera, aspect).index if camera != nil else Nil_Buffer_Handle.index,
+		material = mtrl.buffer_h.index,
+		slots = _g_res_manager_get_resource_indices(),
 	}
 }

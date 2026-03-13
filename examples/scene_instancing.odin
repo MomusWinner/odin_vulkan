@@ -69,7 +69,7 @@ instancing_scene_init :: proc(s: ^Scene) {
 		}
 	}
 
-	data.instance_vertex_buffer = ve.create_vertex_buffer(raw_data(rocks), size_of(Rock_Instance) * INSTANCE_COUNT)
+	data.instance_vertex_buffer = ve.create_buffer({.Vertex}, size_of(Rock_Instance) * INSTANCE_COUNT, raw_data(rocks))
 
 	ve.cursor_disable()
 

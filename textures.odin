@@ -254,8 +254,7 @@ create_texture :: proc(
 	sc := begin_single_cmd()
 
 	// Staging Buffer
-	staging_buffer := _create_staging_buffer(image.data, image_size)
-	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	staging_buffer := create_buffer({.Transfer, .Host_Write}, image_size, image.data)
 	defer destroy_buffer(&staging_buffer)
 
 	format: vk.Format = _format_to_vk(_chan_encod_to_format(image.channels, encoding))
@@ -398,28 +397,21 @@ create_texture_cubemap :: proc(
 	sc := begin_single_cmd()
 
 	// Staging Buffer
-	// staging_buffer := _create_buffer(image_size, {.TRANSFER_SRC}, .AUTO, {.HOST_ACCESS_SEQUENTIAL_WRITE})
-	//
-	staging_buffer := _create_staging_buffer(image.data, image_size)
-	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
-
-	log.info(staging_buffer.allocation_info)
-
-	assert(false)
-	// mapped := buffer_map(&staging_buffer)
-	// {
-	// 	for face, i in faces {
-	// 		offset := cast(Device_Size)i * layer_size
-	// 		dest := rawptr(uintptr(mapped) + uintptr(offset))
-	// 		src := rawptr(face.data)
-	//
-	// 		mem.copy(dest, src, int(layer_size))
-	// 	}
-	// }
-	// buffer_unmap(&staging_buffer)
-
-	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	staging_buffer := create_buffer({.Transfer, .Host_Write}, size = image_size)
 	defer destroy_buffer(&staging_buffer)
+
+	data := make([]byte, image_size, context.temp_allocator)
+	for face, i in faces {
+		offset := cast(Device_Size)i * layer_size
+		dest := rawptr(uintptr(&data[0]) + uintptr(offset))
+		src := rawptr(face.data)
+
+		mem.copy(dest, src, int(layer_size))
+	}
+
+	buffer_fill(&staging_buffer, raw_data(data), image_size)
+
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 
 	format: vk.Format = _format_to_vk(_chan_encod_to_format(image.channels, encoding))
 
@@ -437,7 +429,7 @@ create_texture_cubemap :: proc(
 		6,
 		{.CUBE_COMPATIBLE},
 	)
-	_set_debug_object_name(cast(u64)vk_image, .IMAGE, name)
+	_vk_set_debug_object_name(cast(u64)vk_image, .IMAGE, name)
 
 	_transition_image_layout(
 		sc.cmd,
@@ -638,7 +630,7 @@ _transition_image_layout :: proc(
 		destination_stage = {.COLOR_ATTACHMENT_OUTPUT}
 	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .PRESENT_SRC_KHR {
 		barrier_src_access_mask = {.COLOR_ATTACHMENT_WRITE}
-		barrier_dst_access_mask = {.MEMORY_READ}
+		barrier_dst_access_mask = {}
 
 		source_stage = {.COLOR_ATTACHMENT_OUTPUT}
 		destination_stage = {.BOTTOM_OF_PIPE}

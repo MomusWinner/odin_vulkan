@@ -264,7 +264,7 @@ draw_text :: proc(text: ^Text, frame_data: Frame_Data, camera: ^Camera, loc := #
 		material = material.buffer_h.index,
 		slots    = _g_res_manager_get_resource_indices(),
 	}
-	cmd_push_constants(frame_data, g_pipeline, &const)
+	cmd_push_constants(frame_data.cmd, g_pipeline, &const)
 
 	cmd_draw(frame_data, cast(u32)len(text.vertices))
 }
@@ -419,7 +419,7 @@ _generate_text_mesh :: proc(text: ^Text, loc := #caller_location) -> (Buffer, []
 	}
 
 	vertices_size := cast(vk.DeviceSize)(size_of(FontVertex) * len(vertices))
-	vertex_buffer := create_vertex_buffer(raw_data(vertices), vertices_size)
+	vertex_buffer := create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
 
 	return vertex_buffer, vertices
 }

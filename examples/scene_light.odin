@@ -10,7 +10,7 @@ import "core:math/noise"
 import "core:time"
 import "vendor:microui"
 
-@(uniform_buffer)
+@(buffer)
 Light_Ubo :: struct {
 	camera:    ve.Buffer_Handle,
 	direction: vec3,
