@@ -1,41 +1,30 @@
 #version 450
 
-layout (binding = 0) uniform ParameterUBO {
-    float deltaTime;
-} ubo;
+#include "gen_types.h"
 
-struct Particle {
-    vec2 position;
-    vec2 velocity;
-    vec4 color;
-};
+layout(local_size_x_id = 0) in;
 
-layout(std140, binding = 1) buffer ParticleSSBOIn {
-   Particle particlesIn[ ];
-};
+#define getSBO() getMtrlDeltaTimeInfoUBO().sbo
+#define getDTime() getMtrlDeltaTimeInfoUBO().delta_time
+#define getParticles() getParticleSBO(getSBO()).particles
+#define getParticle(index) getParticles()[index]
 
-layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+void main() {
+	uint index = gl_GlobalInvocationID.x;
 
-void main() 
-{
-    uint index = gl_GlobalInvocationID.x;  
+	Particle particle = getParticle(index);
+	particle.position = particle.position + particle.velocity.xy * getDTime();
+	particle.velocity = particle.velocity;
 
-    Particle particleIn = particlesIn[index];
+	// Flip movement at window border
+	if ((particle.position.x <= -1.0) || (particle.position.x >= 1.0)) {
+		particle.velocity.x = -particle.velocity.x;
+	}
+	if ((particle.position.y <= -1.0) || (particle.position.y >= 1.0)) {
+		particle.velocity.y = -particle.velocity.y;
+	}
 
-    particlesIn[index].position = particleIn.position + particleIn.velocity.xy * ubo.deltaTime;
-    particlesIn[index].velocity = particleIn.velocity;
+	particle.velocity -= particle.velocity * 0.1 * getDTime();
 
-    // particlesIn[index].position = vec2(0,0);
-    // particlesIn[index].velocity = particleIn.velocity;
-
-   // particlesOut[index].position = particleIn.position + particleIn.velocity.xy * ubo.deltaTime;
-   //  particlesOut[index].velocity = particleIn.velocity;
-
-    // Flip movement at window border
-    if ((particlesIn[index].position.x <= -1.0) || (particlesIn[index].position.x >= 1.0)) {
-        particlesIn[index].velocity.x = -particlesIn[index].velocity.x;
-    }
-    if ((particlesIn[index].position.y <= -1.0) || (particlesIn[index].position.y >= 1.0)) {
-        particlesIn[index].velocity.y = -particlesIn[index].velocity.y;
-    }
+	getParticle(index) = particle;
 }
