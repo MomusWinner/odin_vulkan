@@ -538,32 +538,13 @@ destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline) {
 	_destroy_pipline(pipeline)
 }
 
-// FIXME:
-create_semapthore :: proc() -> vk.Semaphore {
-	semaphore: vk.Semaphore
-	info := vk.SemaphoreCreateInfo {
-		sType = .SEMAPHORE_CREATE_INFO,
-	}
-	vk.CreateSemaphore(ctx.gfx.vk_state.device, &info, nil, &semaphore)
-	return semaphore
-}
-
-compute_pipeline_dispatch :: proc(
-	pipeline: ^Compute_Pipeline,
-	group_count_x, group_count_y, group_count_z: u32,
-	semaphore: vk.Semaphore,
+compute_dispatch :: proc(
+	cmd: Command_Buffer,
+	pipeline: Compute_Pipeline,
+	buffer: Buffer,
+	group_count: uvec3,
 	mtrl: ^Material,
-) -> vk.SemaphoreSubmitInfo {
-	vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64))
-	vk.ResetFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence)
-	vk.ResetCommandBuffer(ctx.gfx.cmd, {})
-
-	being_info := vk.CommandBufferBeginInfo {
-		sType = .COMMAND_BUFFER_BEGIN_INFO,
-		flags = {},
-	}
-	vk.BeginCommandBuffer(ctx.gfx.cmd, &being_info)
-
+) {
 	vk.CmdBindPipeline(ctx.gfx.cmd, .COMPUTE, pipeline.pipeline)
 
 	consts := _get_push_constants(mtrl, nil, nil)
@@ -580,33 +561,15 @@ compute_pipeline_dispatch :: proc(
 		0,
 		nil,
 	)
-	vk.CmdDispatch(ctx.gfx.cmd, group_count_x, group_count_y, group_count_z)
-	vk.EndCommandBuffer(ctx.gfx.cmd)
-
-	semaphore := semaphore
-
-	comand_buffer_info := vk.CommandBufferSubmitInfo {
-		sType         = .COMMAND_BUFFER_SUBMIT_INFO,
-		commandBuffer = ctx.gfx.cmd,
-	}
-
-	semaphore_info := vk.SemaphoreSubmitInfo {
-		sType       = .SEMAPHORE_SUBMIT_INFO,
-		semaphore   = semaphore,
-		stageMask   = {.COMPUTE_SHADER},
-		deviceIndex = 0,
-	}
-
-	submit_info := vk.SubmitInfo2 {
-		sType                    = .SUBMIT_INFO_2,
-		commandBufferInfoCount   = 1,
-		pCommandBufferInfos      = &comand_buffer_info,
-		signalSemaphoreInfoCount = 1,
-		pSignalSemaphoreInfos    = &semaphore_info,
-	}
-	must(vk.QueueSubmit2(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, ctx.gfx.fence))
-
-	return semaphore_info
+	vk.CmdDispatch(cmd, group_count.x, group_count.y, group_count.z)
+	_cmd_buffer_barrier(
+		cmd,
+		buffer.buffer,
+		{.SHADER_WRITE, .SHADER_READ},
+		{.VERTEX_ATTRIBUTE_READ},
+		{.COMPUTE_SHADER},
+		{.VERTEX_INPUT},
+	)
 }
 
 @(private)
