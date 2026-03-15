@@ -5,9 +5,12 @@ import "vendor:glfw"
 
 vec2 :: math.vec2
 ivec2 :: math.ivec2
+uvec2 :: math.uvec2
 vec3 :: math.vec3
 ivec3 :: math.ivec3
+uvec3 :: math.uvec3
 vec4 :: math.vec4
+uvec4 :: math.uvec4
 color :: math.vec4
 ivec4 :: math.ivec4
 mat4 :: math.mat4

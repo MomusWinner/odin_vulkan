@@ -5,14 +5,17 @@ import lin "core:math/linalg/glsl"
 vec2 :: lin.vec2
 ivec2 :: lin.ivec2
 dvec2 :: lin.dvec2
+uvec2 :: lin.uvec2
 
 vec3 :: lin.vec3
 ivec3 :: lin.ivec3
 dvec3 :: lin.dvec3
+uvec3 :: lin.uvec3
 
 vec4 :: lin.vec4
 ivec4 :: lin.ivec4
 dvec4 :: lin.dvec4
+uvec4 :: lin.uvec4
 
 color :: lin.vec4
 
