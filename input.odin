@@ -233,6 +233,7 @@ get_scroll_f32 :: proc() -> f32 {
 _init_input :: proc(window: ^glfw.WindowHandle) {
 	input.window = window
 	glfw.SetScrollCallback(window^, _scroll_callback)
+	input.mouse.previouse_position = vec2{cast(f32)get_screen_width(), cast(f32)get_screen_height()} / 2
 }
 
 @(private)
