@@ -88,7 +88,7 @@ get_odin_conv_array_proc_name :: proc(name: string, memory_layout: Memory_Layout
 	return fmt.aprintf("conv_%s_array_to_data_%s", strings.to_lower(name), memroy_layout_to_string(memory_layout))
 }
 get_odin_data_struct_name :: proc(name: string, memory_layout: Memory_Layout) -> string {
-	return fmt.aprintf("__%s_Data_%s", name, memroy_layout_to_string(memory_layout))
+	return fmt.aprintf("%s_%s", memroy_layout_to_string(memory_layout), name)
 }
 get_odin_proc_struct_name :: proc(s: Struct) -> string {
 	name: string
@@ -304,7 +304,7 @@ generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_
 
 	memory_layouts := [2]Memory_Layout{.Std140, .Std430}
 	for layout in memory_layouts {
-		fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, layout))
+		fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, layout))
 
 		for field in calculate_padding_by_memeory_layout(layout, d, s.fields) {
 			fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
@@ -352,7 +352,7 @@ generate_odin_material_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gf
 //////////////material/////
 
 	`, s.name)
-	fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, s.memory_layout))
+	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
 	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
 		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
@@ -504,7 +504,7 @@ generate_odin_storage_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Stru
 
 	`, s.name)
 
-	fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, s.memory_layout))
+	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
 	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
 		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
@@ -557,7 +557,7 @@ generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Stru
 //////////unform_buffer////
 
 	`, s.name)
-	fmt.fprintfln(f, "%s :: struct {{", get_odin_data_struct_name(s.name, s.memory_layout))
+	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
 	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
 		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
@@ -1214,6 +1214,12 @@ _calculate_std430_layout :: proc(d: Parse_Data, fields: []Field) -> []Field {
 
 	pad_index := 0
 
+	max_alig: int
+	for field in fields {
+		alig := get_field_base_alignment_std430(d, field)
+		if alig > max_alig do max_alig = alig
+	}
+
 	for field in fields {
 		align := get_field_base_alignment_std430(d, field)
 		size := get_field_type_size(d, field, .Std430)
@@ -1231,6 +1237,12 @@ _calculate_std430_layout :: proc(d: Parse_Data, fields: []Field) -> []Field {
 
 		append(&std430_fields, field)
 		current_offset += size
+	}
+
+	final_padding := (max_alig - (current_offset % max_alig)) % max_alig
+	for i in 0 ..< final_padding / 4 {
+		append(&std430_fields, Field{name = fmt.aprintf("pad%d", pad_index), type = .Float})
+		pad_index += 1
 	}
 
 	return std430_fields[:]
