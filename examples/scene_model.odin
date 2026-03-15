@@ -13,7 +13,6 @@ Model_Scene_Data :: struct {
 	material:       ve.Material_Handle,
 	transform:      ve.Gfx_Transform,
 	camera:         ve.Camera,
-	pipeline_h:     ve.Render_Pipeline_Handle,
 	model_rotation: f32,
 }
 
@@ -40,10 +39,10 @@ model_scene_init :: proc(s: ^Scene) {
 	// Load Model
 	data.texture_h = ve.load_texture("./assets/room.png")
 	data.model = ve.load_model("./assets/room.obj")
-	data.pipeline_h = create_default_pipeline()
+	pipeline_h := create_default_pipeline()
 
 	// Setup Material
-	data.material = ve.create_mtrl_base(data.pipeline_h)
+	data.material = ve.create_mtrl_base(pipeline_h)
 	material, _ := ve.get_material(data.material)
 	ve.mtrl_base_set_texture(material, data.texture_h)
 	append(&data.model.materials, data.material)
@@ -52,7 +51,7 @@ model_scene_init :: proc(s: ^Scene) {
 	// Setup Transform
 	ve.init_trf(&data.transform)
 	ve.trf_set_position(&data.transform, {0, -0.5, -1})
-	ve.trf_set_scale(&data.transform, {0.5, 0.5, 0.5})
+	ve.trf_set_scale(&data.transform, 0.8)
 
 	s.data = data
 }
@@ -65,9 +64,6 @@ model_scene_update :: proc(s: ^Scene) {
 
 model_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Model_Scene_Data)s.data
-
-	pipeline, p_ok := ve.get_render_pipeline(data.pipeline_h)
-	assert(p_ok)
 
 	frame := ve.begin_render()
 	// Begin ve.
