@@ -295,12 +295,10 @@ generate_odin :: proc(
 
 generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
-
 ///////////////////////////
 // %s
 /////////////dependence////
-
-	`, s.name)
+`, s.name)
 
 	memory_layouts := [2]Memory_Layout{.Std140, .Std430}
 	for layout in memory_layouts {
@@ -309,11 +307,11 @@ generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_
 		for field in calculate_padding_by_memeory_layout(layout, d, s.fields) {
 			fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
 		}
-		fmt.fprintln(f, "}")
+		fmt.fprintln(f, "}\n")
 
 		fmt.fprintfln(
 			f,
-			"	{0:s} :: proc(dst: ^{2:s}, src: {1:s}, loc := #caller_location) {{",
+			"{0:s} :: proc(dst: ^{2:s}, src: {1:s}, loc := #caller_location) {{",
 			get_odin_conv_proc_name(s.name, layout),
 			s.name,
 			get_odin_data_struct_name(s.name, layout),
@@ -323,13 +321,13 @@ generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_
 			print_field_to_data_field(f, "src", "dst", field, gfx_pref, s.memory_layout)
 		}
 
-		fmt.fprintln(f, "\n}")
+		fmt.fprint(f, "\n}")
 
 		fmt.fprintf(
 			f,
 			`
 {0:s} :: proc(dst: []{2:s}, src: []{1:s}, loc := #caller_location) {{
-	assert(len(src) == len(dst), loc = loc)
+	assert(len(src) == len(dst), "The array size has changed. Please regenerate the code.", loc)
 	for _, i in src {{
 		{3:s}(&dst[i], src[i])
 	}}
@@ -341,23 +339,23 @@ generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_
 			get_odin_data_struct_name(s.name, layout),
 			get_odin_conv_proc_name(s.name, layout),
 		)
+
+		fmt.fprint(f, "\n")
 	}
 }
 
 generate_odin_material_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
-
 ///////////////////////////
 // %s
 //////////////material/////
-
-	`, s.name)
+`, s.name)
 	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
 	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
 		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
 	}
-	fmt.fprintln(f, "} \n")
+	fmt.fprintln(f, "}")
 
 	fmt.fprintfln(
 		f,
@@ -397,7 +395,7 @@ create_mtrl_{0:s} :: proc(
 }}`, gfx_pref)
 
 	generate_odin_get_set_proc(f, s, gfx_pref)
-	generate_odin_applay_proc(f, s, gfx_pref)
+	generate_odin_apply_proc(f, s, gfx_pref)
 }
 
 generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
@@ -411,7 +409,7 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	assert(b != nil, loc = loc)
 	assert(b.type == typeid_of(^{2:s}), loc = loc)
 	data := cast(^{2:s})b.data
-	`,
+`,
 			get_odin_proc_struct_prefix(s),
 			get_odin_proc_struct_name(s),
 			s.name,
@@ -422,6 +420,7 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 		)
 
 		if field.type == .Array {
+			fmt.fprintfln(f, "	assert(len(data.{0:s}[:]) == len({0:s}_), loc = loc)", field.name)
 			fmt.fprintfln(f, "	copy_slice(data.{0:s}[:], {0:s}_)", field.name)
 		} else {
 			fmt.fprintfln(f, "	data.{0:s} = {0:s}_", field.name)
@@ -429,8 +428,7 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 
 		fmt.fprintf(
 			f,
-			`
-	b.dirty = true
+			`	b.dirty = true
 }}
 {0:s}_{1:s}_get_{3:s} :: proc(b: {6:s}{5:s}, loc := #caller_location) -> {4:s}{{
 	assert(b.type == typeid_of(^{2:s}), loc = loc)
@@ -454,7 +452,7 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	}
 }
 
-generate_odin_applay_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
+generate_odin_apply_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	fmt.fprintf(
 		f,
 		`
@@ -471,7 +469,7 @@ generate_odin_applay_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	}} else {{
 		gpu_data_ptr = new({4:s}, context.temp_allocator)
 	}}
-	`,
+`,
 		get_odin_proc_struct_prefix(s),
 		get_odin_proc_struct_name(s),
 		s.name,
@@ -489,7 +487,8 @@ generate_odin_applay_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	buffer := {1:s}get_buffer_h(b.buffer_h, loc)
 	{1:s}buffer_fill(buffer, gpu_data_ptr, size_of({0:s}), loc = loc)
 	b.dirty = false
-}}`,
+}}
+`,
 		get_odin_data_struct_name(s.name, s.memory_layout),
 		ve_pkg,
 	)
@@ -497,19 +496,17 @@ generate_odin_applay_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 
 generate_odin_storage_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
-
 ///////////////////////////
 // %s
 /////////storage_buffer////
-
-	`, s.name)
+`, s.name)
 
 	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
 	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
 		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
 	}
-	fmt.fprintln(f, "} \n")
+	fmt.fprintln(f, "}")
 
 	fmt.fprintfln(
 		f,
@@ -543,26 +540,23 @@ create_sbo_{0:s} :: proc(
 
 	fmt.fprintfln(f, `
 	return {0:s}store_storage_buffer(s)
-}}
-	`, gfx_pref)
+}}`, gfx_pref)
 	generate_odin_get_set_proc(f, s, gfx_pref)
-	generate_odin_applay_proc(f, s, gfx_pref)
+	generate_odin_apply_proc(f, s, gfx_pref)
 }
 
 generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
-
 ///////////////////////////
 // %s
 //////////unform_buffer////
-
-	`, s.name)
+`, s.name)
 	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
 	for field in calculate_padding_by_memeory_layout(s.memory_layout, d, s.fields) {
 		fmt.fprintln(f, get_data_field_for_odin(field, gfx_pref, s.memory_layout))
 	}
-	fmt.fprintln(f, "} \n")
+	fmt.fprintln(f, "}")
 
 	fmt.fprintfln(
 		f,
@@ -597,11 +591,10 @@ create_ubo_{0:s} :: proc(
 
 	fmt.fprintfln(f, `
 	return {0:s}store_uniform_buffer(u)
-}}
-	`, gfx_pref)
+}}`, gfx_pref)
 
 	generate_odin_get_set_proc(f, s, gfx_pref)
-	generate_odin_applay_proc(f, s, gfx_pref)
+	generate_odin_apply_proc(f, s, gfx_pref)
 }
 
 print_field_to_data_field :: proc(
