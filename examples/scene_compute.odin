@@ -118,7 +118,7 @@ compute_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.compute_dispatch(compute^, b^, {GROUP_COUNT, 1, 1}, comp_mtrl)
+	ve.compute_pipeline_dispatch(compute^, b^, {GROUP_COUNT, 1, 1}, comp_mtrl)
 
 	ve.begin_draw()
 	{

@@ -534,7 +534,7 @@ destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline) {
 	_destroy_pipline(pipeline)
 }
 
-compute_dispatch :: proc(pipeline: Compute_Pipeline, buffer: Buffer, group_count: uvec3, mtrl: ^Material) {
+compute_pipeline_dispatch :: proc(pipeline: Compute_Pipeline, buffer: Buffer, group_count: uvec3, mtrl: ^Material) {
 	cmd_bind_compute_pipeline(pipeline)
 
 	consts := _get_push_constants(mtrl, nil, nil)
