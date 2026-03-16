@@ -91,20 +91,20 @@ outline_scene_draw :: proc(s: ^Scene) {
 
 	outline_mtrl, _ := ve.get_material(data.outline_material)
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	f := ve.begin_draw(frame)
+	ve.begin_draw()
 	{
-		ve.draw_model(f, data.model, &data.camera, &data.transform)
-		ve.draw_model_solid(f, data.model, &data.camera, &data.transform, outline_mtrl)
+		ve.draw_model(data.model, &data.camera, &data.transform)
+		ve.draw_model_solid(data.model, &data.camera, &data.transform, outline_mtrl)
 	}
-	ve.end_draw(frame)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 outline_scene_destroy :: proc(s: ^Scene) {

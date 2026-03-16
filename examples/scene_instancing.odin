@@ -88,20 +88,20 @@ instancing_scene_draw :: proc(s: ^Scene) {
 
 	mtrl, _ := ve.get_material(data.material)
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	base_frame := ve.begin_draw(frame, clear_color = {.1, .1, .1, 1})
+	ve.begin_draw(clear_color = {.1, .1, .1, 1})
 	{
-		ve.cmd_bind_vertex_buffer(base_frame, data.instance_vertex_buffer, 1)
-		ve.draw_mesh(base_frame, &data.cube, mtrl, &data.camera, &data.transform, INSTANCE_COUNT)
+		ve.cmd_bind_vertex_buffer(data.instance_vertex_buffer, 1)
+		ve.draw_mesh(&data.cube, mtrl, &data.camera, &data.transform, INSTANCE_COUNT)
 	}
-	ve.end_draw(frame)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 instancing_scene_destroy :: proc(s: ^Scene) {

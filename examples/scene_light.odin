@@ -169,7 +169,7 @@ light_scene_update :: proc(s: ^Scene) {
 light_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Lighting_Scene_Data)s.data
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	surf, _ := ve.get_surface(data.shadow_map_surf)
 	surf_draw_mat, _ := ve.get_material(data.surf_draw_mat)
 	depth_only_mtrl, m_ok := ve.get_material(data.depth_only_mtrl)
@@ -178,25 +178,24 @@ light_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	surf_frame := ve.begin_surface(surf, frame)
+	ve.begin_surface(surf)
 	{
-		ve.draw_model_solid(surf_frame, data.model, &data.l_camera, &data.transform, depth_only_mtrl)
-		ve.draw_model_solid(surf_frame, data.ground, &data.l_camera, &data.ground_transform, depth_only_mtrl)
+		ve.draw_model_solid(data.model, &data.l_camera, &data.transform, depth_only_mtrl)
+		ve.draw_model_solid(data.ground, &data.l_camera, &data.ground_transform, depth_only_mtrl)
 	}
-	ve.end_surface(surf, frame)
+	ve.end_surface(surf)
 
-	base_frame := ve.begin_draw(frame, {0.933, 0.525, 0.899, 1})
+	ve.begin_draw({0.933, 0.525, 0.899, 1})
 	{
-		ve.draw_model(base_frame, data.model, &data.camera, &data.transform)
-		ve.draw_model(base_frame, data.ground, &data.camera, &data.ground_transform)
-		// ve.draw_on_unit_square(base_frame, &data.square_trf, &data.camera, surf_draw_mat)
+		ve.draw_model(data.model, &data.camera, &data.transform)
+		ve.draw_model(data.ground, &data.camera, &data.ground_transform)
+		// ve.draw_square(&data.square_trf, &data.camera, surf_draw_mat) // FIXME:
 	}
-
-	ve.end_draw(frame)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 light_scene_destroy :: proc(s: ^Scene) {

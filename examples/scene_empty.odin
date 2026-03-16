@@ -18,27 +18,20 @@ create_empty_scene :: proc() -> Scene {
 	}
 }
 
-empty_scene_init :: proc(s: ^Scene) {
-}
+empty_scene_init :: proc(s: ^Scene) {}
 
-empty_scene_update :: proc(s: ^Scene) {
-}
+empty_scene_update :: proc(s: ^Scene) {}
 
 empty_scene_draw :: proc(s: ^Scene) {
-	frame_data := ve.begin_render()
+	ve.begin_render()
 	// Begin gfx. ------------------------------
 
-	base_frame := ve.begin_draw(frame_data)
+	ve.begin_draw()
 
-	ve.end_draw(frame_data)
+	ve.end_draw()
 
-	sync_data := ve.Sync_Data {
-		wait_semaphore_infos = make([]vk.SemaphoreSubmitInfo, 0),
-	}
 	// End gfx. ------------------------------
-	ve.end_render(frame_data, sync_data)
-
+	ve.end_render()
 }
 
-empty_scene_destroy :: proc(s: ^Scene) {
-}
+empty_scene_destroy :: proc(s: ^Scene) {}

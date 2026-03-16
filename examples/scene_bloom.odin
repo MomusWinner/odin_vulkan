@@ -181,43 +181,43 @@ hdr_scene_draw :: proc(s: ^Scene) {
 	blur_mtrl, _ := ve.get_material(data.blur_material_h)
 	hdr, _ := ve.get_surface(data.hdr_surface_h)
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	hdr_f := ve.begin_surface(hdr, frame)
+	ve.begin_surface(hdr)
 	for &t in data.positions {
-		ve.draw_mesh(hdr_f, &data.cube, mtrl, &data.camera, &t)
+		ve.draw_mesh(&data.cube, mtrl, &data.camera, &t)
 	}
 	for &l in data.light_boxes {
 		mtrl, _ := ve.get_material(l.material)
-		ve.draw_mesh(hdr_f, &data.cube, mtrl, &data.camera, &l.trans)
+		ve.draw_mesh(&data.cube, mtrl, &data.camera, &l.trans)
 	}
-	ve.end_surface(hdr, hdr_f)
+	ve.end_surface(hdr)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
-		bloom_hor_f := ve.begin_surface(hdr, frame, {1})
+		ve.begin_surface(hdr, {1})
 		ve.mtrl_set_pipeline(blur_mtrl, data.blur_hor_pipeline_h)
-		ve.draw_mesh(bloom_hor_f, &data.square, blur_mtrl, &data.camera, nil)
-		ve.end_surface(hdr, bloom_hor_f)
+		ve.draw_mesh(&data.square, blur_mtrl, &data.camera, nil)
+		ve.end_surface(hdr)
 
 		// Vertical gaussian blur
-		bloom_f := ve.begin_surface(hdr, frame, {1})
+		ve.begin_surface(hdr, {1})
 		ve.mtrl_set_pipeline(blur_mtrl, data.blur_ver_pipeline_h)
-		ve.draw_mesh(bloom_f, &data.square, blur_mtrl, nil, nil)
-		ve.end_surface(hdr, bloom_f)
+		ve.draw_mesh(&data.square, blur_mtrl, nil, nil)
+		ve.end_surface(hdr)
 	}
 
-	f := ve.begin_draw(frame)
+	ve.begin_draw()
 	{
-		ve.draw_mesh(f, &data.square, hdr_mtrl, nil, nil)
+		ve.draw_mesh(&data.square, hdr_mtrl, nil, nil)
 	}
-	ve.end_draw(f)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 hdr_scene_destroy :: proc(s: ^Scene) {

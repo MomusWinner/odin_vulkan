@@ -94,7 +94,7 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 	pipeline, p_ok := ve.get_render_pipeline(data.pipeline_h)
 	assert(p_ok)
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 	postproc_mtrl, _ := ve.get_material(data.postproc_mtrl)
@@ -105,21 +105,21 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 	surface, ok := ve.get_surface(data.surface_h)
 	assert(ok)
 
-	surface_frame := ve.begin_surface(surface, frame)
+	ve.begin_surface(surface)
 	{
-		ve.draw_model(surface_frame, data.model, &data.camera, &data.transform)
+		ve.draw_model(data.model, &data.camera, &data.transform)
 	}
-	ve.end_surface(surface, surface_frame)
+	ve.end_surface(surface)
 
-	f := ve.begin_draw(frame)
+	ve.begin_draw()
 	{
-		ve.draw_mesh(f, &data.square, postproc_mtrl, &data.camera, nil)
+		ve.draw_mesh(&data.square, postproc_mtrl, &data.camera, nil)
 	}
-	ve.end_draw(f)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 postprocessing_scene_destroy :: proc(s: ^Scene) {

@@ -65,19 +65,19 @@ model_scene_update :: proc(s: ^Scene) {
 model_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Model_Scene_Data)s.data
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	base_frame := ve.begin_draw(frame)
+	ve.begin_draw()
 	{
-		ve.draw_model(base_frame, data.model, &data.camera, &data.transform)
+		ve.draw_model(data.model, &data.camera, &data.transform)
 	}
-	ve.end_draw(frame)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 model_scene_destroy :: proc(s: ^Scene) {

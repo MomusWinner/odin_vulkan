@@ -247,16 +247,16 @@ text_set_position :: proc(text: ^Text, position: vec3, loc := #caller_location) 
 	trf_set_position(&text.transform, position)
 }
 
-draw_text :: proc(text: ^Text, frame_data: Frame_Data, camera: ^Camera, loc := #caller_location) {
+draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 	assert_not_nil(text, loc)
 
 	material, mtrl_ok := get_material(text.material)
 	assert(mtrl_ok, loc = loc)
 
-	cmd_bind_vertex_buffer(frame_data, text.vbo, 0)
+	cmd_bind_vertex_buffer(text.vbo, 0)
 
-	g_pipeline := cmd_bind_material(frame_data, material)
+	g_pipeline := cmd_bind_material(material)
 
 	const := Push_Constant {
 		model    = trf_get_matrix(text.transform),
@@ -264,9 +264,9 @@ draw_text :: proc(text: ^Text, frame_data: Frame_Data, camera: ^Camera, loc := #
 		material = material.buffer_h.index,
 		slots    = _g_res_manager_get_resource_indices(),
 	}
-	cmd_push_constants(frame_data.cmd, g_pipeline, &const)
+	cmd_push_constants(g_pipeline, &const)
 
-	cmd_draw(frame_data, cast(u32)len(text.vertices))
+	cmd_draw(cast(u32)len(text.vertices))
 }
 
 destroy_text :: proc(text: ^Text, loc := #caller_location) {

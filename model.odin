@@ -59,7 +59,6 @@ destroy_mesh :: proc(mesh: ^Mesh, loc := #caller_location) {
 // }
 
 draw_mesh :: proc(
-	frame_data: Frame_Data,
 	mesh: ^Mesh,
 	material: ^Material,
 	camera: ^Camera,
@@ -70,27 +69,26 @@ draw_mesh :: proc(
 	assert_gfx_ctx(loc)
 	assert_not_nil(mesh, loc)
 	assert_not_nil(material, loc)
-	assert_frame_data(frame_data, loc)
 
 	ebo, has_ebo := mesh.ebo.?
 
-	cmd_bind_vertex_buffer(frame_data, mesh.vbo, 0, loc = loc)
+	cmd_bind_vertex_buffer(mesh.vbo, 0, loc = loc)
 	if has_ebo {
-		cmd_bind_index_buffer(frame_data, ebo, loc = loc)
+		cmd_bind_index_buffer(ebo, loc = loc)
 	}
 
 	pipeline, ok := get_render_pipeline(material.pipeline_h)
 	assert(ok, "Couldn't get pipeline")
 
-	g_pipeline := cmd_bind_material(frame_data, material, loc)
+	g_pipeline := cmd_bind_material(material, loc)
 
 	consts := _get_push_constants(material, camera, transform)
-	cmd_push_constants(frame_data.cmd, g_pipeline, &consts)
+	cmd_push_constants(g_pipeline, &consts)
 
 	if has_ebo {
-		cmd_draw_indexed(frame_data, cast(u32)len(mesh.indices), instance_count)
+		cmd_draw_indexed(cast(u32)len(mesh.indices), instance_count)
 	} else {
-		cmd_draw(frame_data, cast(u32)len(mesh.vertices), instance_count)
+		cmd_draw(cast(u32)len(mesh.vertices), instance_count)
 	}
 }
 
@@ -108,13 +106,7 @@ destroy_model :: proc(model: ^Model) {
 	delete(model.mesh_material)
 }
 
-draw_model :: proc(
-	frame_data: Frame_Data,
-	model: Model,
-	camera: ^Camera,
-	transform: ^Gfx_Transform,
-	loc := #caller_location,
-) {
+draw_model :: proc(model: Model, camera: ^Camera, transform: ^Gfx_Transform, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 	assert_not_nil(transform, loc)
 
@@ -123,12 +115,11 @@ draw_model :: proc(
 		mtrl, ok := get_material(model.materials[material_index])
 		assert(ok, loc = loc)
 
-		draw_mesh(frame_data, &mesh, mtrl, camera, transform, loc = loc)
+		draw_mesh(&mesh, mtrl, camera, transform, loc = loc)
 	}
 }
 
 draw_model_solid :: proc(
-	frame_data: Frame_Data,
 	model: Model,
 	camera: ^Camera,
 	transform: ^Gfx_Transform,
@@ -139,7 +130,7 @@ draw_model_solid :: proc(
 	assert_not_nil(transform, loc)
 
 	for &mesh, i in model.meshes {
-		draw_mesh(frame_data, &mesh, material, camera, transform, loc = loc)
+		draw_mesh(&mesh, material, camera, transform, loc = loc)
 	}
 }
 

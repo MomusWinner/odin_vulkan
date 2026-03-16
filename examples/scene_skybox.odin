@@ -82,24 +82,23 @@ skybox_scene_draw :: proc(s: ^Scene) {
 	skybox_mtrl, _ := ve.get_material(data.skybox_material)
 	reflect_mtrl, _ := ve.get_material(data.reflect_material)
 
-
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	base_frame := ve.begin_draw(frame)
+	ve.begin_draw()
 	{
 		// Skybox
-		ve.draw_mesh(base_frame, &data.cube, skybox_mtrl, &data.camera, nil)
+		ve.draw_mesh(&data.cube, skybox_mtrl, &data.camera, nil)
 
 		// Diamond
-		ve.draw_mesh(base_frame, &data.cube, reflect_mtrl, &data.camera, &data.transform)
+		ve.draw_mesh(&data.cube, reflect_mtrl, &data.camera, &data.transform)
 	}
-	ve.end_draw(frame)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 skybox_scene_destroy :: proc(s: ^Scene) {

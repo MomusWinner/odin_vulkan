@@ -56,7 +56,7 @@ text_scene_init :: proc(s: ^Scene) {
 		"По берегу мы шли. Кипел поток,\nГде выли тени злы, полубиты,\nПоверженны в кровавый кипяток.",
 		vec3{-0.5, 0, 0},
 		vec4{0, 0.5, 0, 1},
-		0.5,
+		0.65,
 	)
 
 	strings.builder_init_len(&data.builder, len(data.text.text))
@@ -71,7 +71,6 @@ text_scene_update :: proc(s: ^Scene) {
 	result := (math.sin_f32(data.color_value) + 1) / 2
 	ve.text_set_color(&data.text, ve.color{1, result, 1, 1})
 
-
 	data.elapsed_time += cast(f64)ve.get_delta_time()
 	if data.elapsed_time > data.time_delta {
 		data.elapsed_time = 0
@@ -84,17 +83,17 @@ text_scene_update :: proc(s: ^Scene) {
 text_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Text_Scene_Data)s.data
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
-	base_frame := ve.begin_draw(frame)
+	ve.begin_draw()
 
-	ve.draw_text(&data.text, base_frame, &data.camera)
+	ve.draw_text(&data.text, &data.camera)
 
-	ve.end_draw(frame)
+	ve.end_draw()
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 text_scene_destroy :: proc(s: ^Scene) {

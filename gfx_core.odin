@@ -93,9 +93,9 @@ Graphics :: struct {
 	temp_transform_pool:       ^Temp_Transform_Pool,
 	bindless:                  ^Bindless,
 	cmd:                       vk.CommandBuffer,
+	frame:                     Frame_Data,
 	image_available_semaphore: vk.Semaphore,
 	fence:                     vk.Fence,
-	swapchain_resized:         bool,
 	render_started:            bool,
 	deffered_destructor:       ^Deferred_Destructor,
 	buildin:                   ^Buildin_Resource,
@@ -241,10 +241,10 @@ Surface_Info :: struct {
 }
 
 Frame_Data :: struct {
-	cmd:          vk.CommandBuffer,
-	status:       Frame_Status,
-	surface_info: Surface_Info,
-	camera:       Camera,
+	status:            Frame_Status,
+	surface_info:      Surface_Info,
+	camera:            Camera,
+	swapchain_resized: bool,
 }
 
 Render_Frame :: struct {
@@ -307,10 +307,13 @@ get_device_height :: proc() -> u32 {
 }
 @(require_results)
 screen_resized :: proc() -> bool {
-	return ctx.gfx.swapchain_resized
+	return ctx.gfx.frame.swapchain_resized
 }
 
-begin_render :: proc(loc := #caller_location) -> Frame_Data {
+@(private)
+_get_cmd :: proc() -> Command_Buffer {return ctx.gfx.cmd}
+
+begin_render :: proc(loc := #caller_location) {
 	assert_gfx_ctx(loc)
 	assert(!ctx.gfx.render_started, "Call end_render() after begin_render()", loc)
 
@@ -319,7 +322,6 @@ begin_render :: proc(loc := #caller_location) -> Frame_Data {
 	defer ctx.gfx.render_started = true
 
 	frame_data := Frame_Data {
-		cmd    = ctx.gfx.cmd,
 		status = .Success,
 	}
 
@@ -339,34 +341,31 @@ begin_render :: proc(loc := #caller_location) -> Frame_Data {
 	#partial switch acquire_result {
 	case .ERROR_OUT_OF_DATE_KHR:
 		frame_data.status = .IncorrectSwapchainSize
-		return {}
+		return
 	case .SUCCESS, .SUBOPTIMAL_KHR:
 	case:
 		log.panicf("acquire next image failure: %v", acquire_result)
 	}
 
 	must(vk.ResetFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence))
-	must(vk.ResetCommandBuffer(frame_data.cmd, {}))
+	must(vk.ResetCommandBuffer(_get_cmd(), {}))
 
 	begin_info := vk.CommandBufferBeginInfo {
 		sType = .COMMAND_BUFFER_BEGIN_INFO,
 	}
-	must(vk.BeginCommandBuffer(frame_data.cmd, &begin_info))
-
-	return frame_data
+	must(vk.BeginCommandBuffer(_get_cmd(), &begin_info))
 }
 
-end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
+end_render :: proc(sync_data: Sync_Data = {}) {
 	if !ctx.gfx.render_started {
 		log.error("Call begin_render() before end_render()")
 	}
 	defer ctx.gfx.render_started = false
 
-	frame_data := frame_data
 	image_semaphore := ctx.gfx.swapchain.render_finished_semaphores[ctx.gfx.swapchain.image_index]
 	image := ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index] // FIXME:
 
-	must(vk.EndCommandBuffer(frame_data.cmd))
+	must(vk.EndCommandBuffer(_get_cmd()))
 
 	wait_semaphore_infos := merge(
 		sync_data.wait_semaphore_infos,
@@ -383,7 +382,7 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 
 	comand_buffer_info := vk.CommandBufferSubmitInfo {
 		sType         = .COMMAND_BUFFER_SUBMIT_INFO,
-		commandBuffer = frame_data.cmd,
+		commandBuffer = _get_cmd(),
 	}
 
 	signal_semaphore_info := vk.SemaphoreSubmitInfo {
@@ -403,8 +402,6 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 	}
 	must(vk.QueueSubmit2(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, ctx.gfx.fence))
 
-	// _cmd_image_transition_layout(frame_data.cmd, image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
-
 	present_info := vk.PresentInfoKHR {
 		sType              = .PRESENT_INFO_KHR,
 		waitSemaphoreCount = 1,
@@ -417,18 +414,18 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 
 	switch {
 	case present_result == .ERROR_OUT_OF_DATE_KHR || present_result == .SUBOPTIMAL_KHR:
-		frame_data.status = .IncorrectSwapchainSize
+		ctx.gfx.frame.status = .IncorrectSwapchainSize
 	case present_result == .SUCCESS:
 	case:
 		log.panicf("vulkan: present failure: %v", present_result)
 	}
 
-	if ctx.gfx.swapchain_resized {
-		ctx.gfx.swapchain_resized = false
+	if ctx.gfx.frame.swapchain_resized {
+		ctx.gfx.frame.swapchain_resized = false
 	}
 
-	if frame_data.status == .IncorrectSwapchainSize {
-		ctx.gfx.swapchain_resized = true
+	if ctx.gfx.frame.status == .IncorrectSwapchainSize {
+		ctx.gfx.frame.swapchain_resized = true
 		_on_screen_resized()
 	}
 
@@ -436,9 +433,9 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 	_clear_deffered_destructor()
 }
 
-begin_draw :: proc(frame: Frame_Data, clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) -> Frame_Data {
+begin_draw :: proc(clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) {
 	_cmd_image_transition_layout(
-		frame.cmd,
+		_get_cmd(),
 		ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index],
 		.UNDEFINED,
 		.COLOR_ATTACHMENT_OPTIMAL,
@@ -471,29 +468,27 @@ begin_draw :: proc(frame: Frame_Data, clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) 
 		pStencilAttachment = &depth_stencil_attachment_info if _has_stencil_component(ctx.gfx.swapchain.depth_image.format) else nil,
 	}
 
-	vk.CmdBeginRendering(frame.cmd, &rendering_info)
+	vk.CmdBeginRendering(_get_cmd(), &rendering_info)
 
-	frame := frame
-
-	frame.surface_info = Surface_Info {
+	surface_info := Surface_Info {
 		type         = .Swapchain,
 		sample_count = ctx.gfx.swapchain.sample_count,
 		depth_format = ctx.gfx.swapchain.depth_image.format,
 		width        = ctx.gfx.swapchain.extent.width,
 		height       = ctx.gfx.swapchain.extent.height,
 	}
-	sm.push(&frame.surface_info.color_formats, ctx.gfx.swapchain.color_format.format)
+	sm.push(&surface_info.color_formats, ctx.gfx.swapchain.color_format.format)
 
-	cmd_set_full_viewport_scissor(frame)
+	ctx.gfx.frame.surface_info = surface_info
 
-	return frame
+	cmd_set_full_viewport_scissor()
 }
 
-end_draw :: proc(frame: Frame_Data) {
-	vk.CmdEndRendering(frame.cmd)
+end_draw :: proc() {
+	vk.CmdEndRendering(_get_cmd())
 
 	_cmd_image_transition_layout(
-		frame.cmd,
+		_get_cmd(),
 		ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index],
 		.COLOR_ATTACHMENT_OPTIMAL,
 		.PRESENT_SRC_KHR,
@@ -526,16 +521,16 @@ wait_render_completion :: proc() {
 // ╚██████╗██║ ╚═╝ ██║██████╔╝
 //  ╚═════╝╚═╝     ╚═╝╚═════╝ 
 
-cmd_set_full_viewport_scissor :: proc(frame_data: Frame_Data, loc := #caller_location) {
+cmd_set_full_viewport_scissor :: proc(loc := #caller_location) {
 	assert_gfx_ctx(loc)
 	width := get_screen_width()
 	height := get_screen_height()
 
-	cmd_set_viewport(frame_data, width, height, loc = loc)
-	cmd_set_scissor(frame_data, width, height, loc = loc)
+	cmd_set_viewport(width, height, loc = loc)
+	cmd_set_scissor(width, height, loc = loc)
 }
 
-cmd_set_viewport :: proc(frame_data: Frame_Data, width, height: u32, max_depth: f32 = 1, loc := #caller_location) {
+cmd_set_viewport :: proc(width, height: u32, max_depth: f32 = 1, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 
 	viewport := vk.Viewport {
@@ -543,36 +538,29 @@ cmd_set_viewport :: proc(frame_data: Frame_Data, width, height: u32, max_depth: 
 		height   = cast(f32)height,
 		maxDepth = 1,
 	}
-	vk.CmdSetViewport(frame_data.cmd, 0, 1, &viewport)
+	vk.CmdSetViewport(_get_cmd(), 0, 1, &viewport)
 }
 
-cmd_set_scissor :: proc(frame_data: Frame_Data, width, height: u32, offset: ivec2 = 0, loc := #caller_location) {
+cmd_set_scissor :: proc(width, height: u32, offset: ivec2 = 0, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 
 	scissor := vk.Rect2D {
 		extent = {width = width, height = height},
 		offset = {x = offset.x, y = offset.y},
 	}
-	vk.CmdSetScissor(frame_data.cmd, 0, 1, &scissor)
+	vk.CmdSetScissor(_get_cmd(), 0, 1, &scissor)
 }
 
-cmd_bind_vertex_buffer :: proc(
-	frame_data: Frame_Data,
-	buffer: Buffer,
-	binding: u32,
-	offset := vk.DeviceSize{},
-	loc := #caller_location,
-) {
+cmd_bind_vertex_buffer :: proc(buffer: Buffer, binding: u32, offset := vk.DeviceSize{}, loc := #caller_location) {
 	assert(.VERTEX_BUFFER in buffer.vk_usage, loc = loc)
 
 	offset := offset
 	buffer := buffer
 
-	vk.CmdBindVertexBuffers(frame_data.cmd, binding, 1, &buffer.buffer, &offset)
+	vk.CmdBindVertexBuffers(_get_cmd(), binding, 1, &buffer.buffer, &offset)
 }
 
 cmd_bind_index_buffer :: proc(
-	frame_data: Frame_Data,
 	buffer: Buffer,
 	offset := vk.DeviceSize{},
 	index_type := vk.IndexType.UINT16,
@@ -583,75 +571,58 @@ cmd_bind_index_buffer :: proc(
 	offset := offset
 	buffer := buffer
 
-	vk.CmdBindIndexBuffer(frame_data.cmd, buffer.buffer, offset, index_type)
+	vk.CmdBindIndexBuffer(_get_cmd(), buffer.buffer, offset, index_type)
 }
 
-cmd_push_constants :: proc(
-	cmd: Command_Buffer,
-	pipeline: Pipeline,
-	const: ^$T,
-	stages := vk.ShaderStageFlags_ALL_GRAPHICS,
-) {
+cmd_push_constants :: proc(pipeline: Pipeline, const: ^$T, stages := vk.ShaderStageFlags_ALL_GRAPHICS) {
 	layout := get_pipeline_layout(pipeline.layout)
-	vk.CmdPushConstants(cmd, layout, stages, 0, size_of(const^), const)
+	vk.CmdPushConstants(_get_cmd(), layout, stages, 0, size_of(const^), const)
 }
 
-cmd_draw :: proc(frame_data: Frame_Data, vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
-	assert_frame_data(frame_data, loc)
-	vk.CmdDraw(frame_data.cmd, vertex_count, instance_count, 0, 0)
+cmd_draw :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
+	vk.CmdDraw(_get_cmd(), vertex_count, instance_count, 0, 0)
 }
 
-cmd_draw_indexed :: proc(frame_data: Frame_Data, vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
-	assert_frame_data(frame_data, loc)
-	vk.CmdDrawIndexed(frame_data.cmd, vertex_count, instance_count, 0, 0, 0)
+cmd_draw_indexed :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
+	vk.CmdDrawIndexed(_get_cmd(), vertex_count, instance_count, 0, 0, 0)
 }
 
-cmd_bind_material :: proc(frame_data: Frame_Data, m: ^Material, loc := #caller_location) -> ^Graphics_Pipeline {
+cmd_bind_material :: proc(m: ^Material, loc := #caller_location) -> ^Graphics_Pipeline {
 	pipeline, ok := get_render_pipeline(m.pipeline_h)
-	return cmd_bind_render_pipeline(frame_data, pipeline, loc)
+	return cmd_bind_render_pipeline(pipeline, loc)
 }
 
-cmd_bind_render_pipeline :: proc(
-	frame_data: Frame_Data,
-	pipeline: ^Render_Pipeline,
-	loc := #caller_location,
-) -> ^Graphics_Pipeline {
-	assert_frame_data(frame_data, loc)
-
-	graphics_pipeline := render_pipeline_get_pipeline(pipeline, frame_data.surface_info, loc)
-	vk.CmdBindPipeline(frame_data.cmd, .GRAPHICS, graphics_pipeline.pipeline)
-	cmd_bind_descriptor_set_graphics(frame_data, graphics_pipeline, get_descriptor_set_bindless())
+cmd_bind_render_pipeline :: proc(pipeline: ^Render_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline {
+	graphics_pipeline := render_pipeline_get_pipeline(pipeline, loc)
+	vk.CmdBindPipeline(_get_cmd(), .GRAPHICS, graphics_pipeline.pipeline)
+	cmd_bind_descriptor_set_graphics(graphics_pipeline, get_descriptor_set_bindless())
 
 	return graphics_pipeline
 }
 
-cmd_bind_compute_pipeline :: proc(pipeline: Compute_Pipeline, frame_data: Frame_Data, loc := #caller_location) {
-	assert_frame_data(frame_data, loc)
-
-	vk.CmdBindPipeline(frame_data.cmd, .COMPUTE, pipeline.pipeline)
+cmd_bind_compute_pipeline :: proc(pipeline: Compute_Pipeline, loc := #caller_location) {
+	vk.CmdBindPipeline(_get_cmd(), .COMPUTE, pipeline.pipeline)
 }
 
 cmd_bind_descriptor_set_graphics :: proc(
-	frame_data: Frame_Data,
 	pipeline: ^Pipeline,
 	descriptor_sets: ..vk.DescriptorSet,
 	loc := #caller_location,
 ) {
-	_cmd_bind_descriptor_set(frame_data, .GRAPHICS, pipeline, descriptor_sets, loc)
+	_cmd_bind_descriptor_set(_get_cmd(), .GRAPHICS, pipeline, descriptor_sets, loc)
 }
 
 cmd_bind_descriptor_set_compute :: proc(
-	frame_data: Frame_Data,
 	pipeline: ^Pipeline,
 	descriptor_sets: ..vk.DescriptorSet,
 	loc := #caller_location,
 ) {
-	_cmd_bind_descriptor_set(frame_data, .COMPUTE, pipeline, descriptor_sets, loc)
+	_cmd_bind_descriptor_set(_get_cmd(), .COMPUTE, pipeline, descriptor_sets, loc)
 }
 
 @(private = "file")
 _cmd_bind_descriptor_set :: proc(
-	frame_data: Frame_Data,
+	cmd: Command_Buffer,
 	bind_point: vk.PipelineBindPoint,
 	pipeline: ^Pipeline,
 	descriptor_sets: []vk.DescriptorSet,
@@ -662,7 +633,7 @@ _cmd_bind_descriptor_set :: proc(
 	layout := get_pipeline_layout(pipeline.layout)
 
 	vk.CmdBindDescriptorSets(
-		frame_data.cmd,
+		cmd,
 		bind_point,
 		layout,
 		0,
@@ -1928,7 +1899,7 @@ create_primitive_cube :: proc(size: f32 = 1, allocator := context.allocator) -> 
 	return create_mesh(vertices, {})
 }
 
-draw_square :: proc(frame_data: Frame_Data, camera: ^Camera, position: vec3, scale: vec3, color: vec4) {
+draw_square :: proc(camera: ^Camera, position: vec3, scale: vec3, color: vec4) {
 	model := ctx.gfx.buildin.square
 
 	material_h := _temp_pool_acquire_material()
@@ -1943,16 +1914,10 @@ draw_square :: proc(frame_data: Frame_Data, camera: ^Camera, position: vec3, sca
 	trf_set_position(&transform, position)
 	trf_set_scale(&transform, scale)
 
-	draw_model(frame_data, model, camera, &transform)
+	draw_model(model, camera, &transform)
 }
 
-draw_square_texture :: proc(
-	frame_data: Frame_Data,
-	camera: ^Camera,
-	position: vec3,
-	scale: vec3,
-	texture: Texture_Handle,
-) {
+draw_square_texture :: proc(camera: ^Camera, position: vec3, scale: vec3, texture: Texture_Handle) {
 	model := ctx.gfx.buildin.square
 
 	material_h := _temp_pool_acquire_material()
@@ -1967,5 +1932,5 @@ draw_square_texture :: proc(
 	trf_set_position(&transform, position)
 	trf_set_scale(&transform, scale)
 
-	draw_model(frame_data, model, camera, &transform)
+	draw_model(model, camera, &transform)
 }

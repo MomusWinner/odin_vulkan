@@ -250,20 +250,13 @@ surface_add_readable_depth_attachment :: proc(
 	return depth_attachment.texture_h
 }
 
-@(require_results)
-begin_surface :: proc(
-	surface: ^Surface,
-	frame_data: Frame_Data,
-	active_color_attachments: []int = nil,
-	loc := #caller_location,
-) -> Frame_Data {
+begin_surface :: proc(surface: ^Surface, active_color_attachments: []int = nil, loc := #caller_location) {
 	assert_not_nil(surface, loc)
 
-	cmd_set_viewport(frame_data, surface.width, surface.height)
-	cmd_set_scissor(frame_data, surface.width, surface.height)
+	cmd_set_viewport(surface.width, surface.height)
+	cmd_set_scissor(surface.width, surface.height)
 
-	cmd := frame_data.cmd
-
+	cmd := _get_cmd()
 	depth_attachment, has_depth_attachment := surface.depth_attachment.?
 	has_color_attachments := sm.len(surface.color_attachments) > 0
 
@@ -320,7 +313,7 @@ begin_surface :: proc(
 			target: ^Texture = &msaa if has_msaa else texture
 
 			_cmd_image_transition_layout(
-				frame_data.cmd,
+				cmd,
 				target.image,
 				.SHADER_READ_ONLY_OPTIMAL,
 				.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -341,8 +334,7 @@ begin_surface :: proc(
 
 	vk.CmdBeginRendering(cmd, &rendering_info)
 
-	frame_data := frame_data
-	frame_data.surface_info = Surface_Info {
+	surface_info := Surface_Info {
 		type                     = .Surface,
 		sample_count             = surface.sample_count,
 		depth_format             = depth_format if has_depth_attachment else .UNDEFINED,
@@ -355,24 +347,23 @@ begin_surface :: proc(
 		for ca in sm.slice(&src_color_attachments) {
 			texture, ok := get_texture_h(ca.texture_h)
 			assert(ok)
-			sm.push(&frame_data.surface_info.color_formats, texture.format)
+			sm.push(&surface_info.color_formats, texture.format)
 		}
 	}
 
-	return frame_data
+	ctx.gfx.frame.surface_info = surface_info
 }
 
-end_surface :: proc(surface: ^Surface, frame_data: Frame_Data, loc := #caller_location) {
-	frame_data := frame_data
+end_surface :: proc(surface: ^Surface, loc := #caller_location) {
 	assert_not_nil(surface, loc)
 
-	vk.CmdEndRendering(frame_data.cmd)
+	vk.CmdEndRendering(_get_cmd())
 
 	has_color_attachments := sm.len(surface.color_attachments) > 0
 	depth_attachment, has_depth_attachment := surface.depth_attachment.?
 
 	for ca, i in sm.slice(&surface.color_attachments) {
-		if !slice.contains(sm.slice(&frame_data.surface_info.active_color_attachments), i) {
+		if !slice.contains(sm.slice(&ctx.gfx.frame.surface_info.active_color_attachments), i) {
 			continue
 		}
 		msaa, has_msaa := ca.msaa_texture.?
@@ -380,7 +371,7 @@ end_surface :: proc(surface: ^Surface, frame_data: Frame_Data, loc := #caller_lo
 		assert(ok)
 
 		target := &msaa if has_msaa else texture
-		_cmd_image_transition_layout(frame_data.cmd, target.image, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
+		_cmd_image_transition_layout(_get_cmd(), target.image, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
 	}
 
 	if has_depth_attachment {

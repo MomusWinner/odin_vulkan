@@ -499,16 +499,12 @@ create_render_pipeline :: proc(
 }
 
 // Looks up a pipeline in cache using surface settings. If not found, creates a new one.
-render_pipeline_get_pipeline :: proc(
-	pipeline: ^Render_Pipeline,
-	surface_info: Surface_Info,
-	loc := #caller_location,
-) -> ^Graphics_Pipeline {
-	pipeline_surface := _surface_info_to_pipeline_surface_info(surface_info)
+render_pipeline_get_pipeline :: proc(pipeline: ^Render_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline {
+	pipeline_surface := _surface_info_to_pipeline_surface_info(ctx.gfx.frame.surface_info)
 	graphics_pipeline, ok := pipeline.cache[pipeline_surface]
 	if ok do return &pipeline.cache[pipeline_surface]
 
-	new_pipeline := _create_graphics_pipeline(pipeline.create_info, surface_info, loc)
+	new_pipeline := _create_graphics_pipeline(pipeline.create_info, ctx.gfx.frame.surface_info, loc)
 	pipeline.cache[pipeline_surface] = new_pipeline
 
 	return &pipeline.cache[pipeline_surface]
@@ -538,17 +534,11 @@ destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline) {
 	_destroy_pipline(pipeline)
 }
 
-compute_dispatch :: proc(
-	cmd: Command_Buffer,
-	pipeline: Compute_Pipeline,
-	buffer: Buffer,
-	group_count: uvec3,
-	mtrl: ^Material,
-) {
-	vk.CmdBindPipeline(ctx.gfx.cmd, .COMPUTE, pipeline.pipeline)
+compute_dispatch :: proc(pipeline: Compute_Pipeline, buffer: Buffer, group_count: uvec3, mtrl: ^Material) {
+	cmd_bind_compute_pipeline(pipeline)
 
 	consts := _get_push_constants(mtrl, nil, nil)
-	cmd_push_constants(ctx.gfx.cmd, pipeline, &consts, {.COMPUTE})
+	cmd_push_constants(pipeline, &consts, {.COMPUTE})
 
 	bindless_descriptor_set := get_descriptor_set_bindless()
 	vk.CmdBindDescriptorSets(
@@ -561,9 +551,9 @@ compute_dispatch :: proc(
 		0,
 		nil,
 	)
-	vk.CmdDispatch(cmd, group_count.x, group_count.y, group_count.z)
+	vk.CmdDispatch(_get_cmd(), group_count.x, group_count.y, group_count.z)
 	_cmd_buffer_barrier(
-		cmd,
+		_get_cmd(),
 		buffer.buffer,
 		{.SHADER_WRITE, .SHADER_READ},
 		{.VERTEX_ATTRIBUTE_READ},

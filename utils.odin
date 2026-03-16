@@ -44,11 +44,6 @@ must :: proc(result: vk.Result, msg: string = "", loc := #caller_location) {
 }
 
 @(private)
-assert_frame_data :: #force_inline proc(frame_data: Frame_Data, loc := #caller_location) {
-	assert(frame_data.surface_info.type != .None, "Frame data has uninitialized surface information.", loc = loc)
-}
-
-@(private)
 _location_to_string :: proc(loc: runtime.Source_Code_Location, allocator := context.temp_allocator) -> string {
 	return fmt.aprintf("%s(%d:%d)", loc.file_path, loc.line, loc.column, allocator = allocator)
 }

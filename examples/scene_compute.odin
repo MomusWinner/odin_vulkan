@@ -10,7 +10,7 @@ import "core:math/rand"
 import "core:slice"
 import "core:time"
 
-PARTICLE_COUNT :: 100_000
+PARTICLE_COUNT :: 1_000_000
 INVOCATION_SIZE :: 256
 GROUP_COUNT :: 1 + PARTICLE_COUNT / INVOCATION_SIZE
 
@@ -81,7 +81,7 @@ compute_scene_init :: proc(s: ^Scene) {
 	sbo_particle_set_particles(sb, particles[:])
 	vbo := ve.get_buffer_h(sb.buffer_h)^
 
-	data.mesh = ve.Mesh {
+	data.mesh = ve.Mesh { 	// TODO:
 		vbo      = vbo,
 		vertices = make([]ve.Vertex, PARTICLE_COUNT),
 	}
@@ -114,21 +114,21 @@ compute_scene_draw :: proc(s: ^Scene) {
 	sb, _ := ve.get_storage_buffer(data.sb)
 	b := ve.get_buffer_h(sb.buffer_h)
 
-	frame := ve.begin_render()
+	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.compute_dispatch(frame.cmd, compute^, b^, {GROUP_COUNT, 1, 1}, comp_mtrl)
+	ve.compute_dispatch(compute^, b^, {GROUP_COUNT, 1, 1}, comp_mtrl)
 
-	base_frame := ve.begin_draw(frame)
+	ve.begin_draw()
 	{
-		ve.draw_mesh(base_frame, &data.mesh, material, &data.camera, &data.transform)
+		ve.draw_mesh(&data.mesh, material, &data.camera, &data.transform)
 	}
-	ve.end_draw(frame)
+	ve.end_draw()
 
 	// --------------------------------------------------------------------------------------------------------------------
 	// End ve.
-	ve.end_render(frame)
+	ve.end_render()
 }
 
 compute_scene_destroy :: proc(s: ^Scene) {
