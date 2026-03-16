@@ -144,7 +144,7 @@ _create_instance :: proc() {
 		instance_info.ppEnabledLayerNames = raw_data(ctx.gfx.vk_state.enabled_layer_names)
 		instance_info.enabledLayerCount = 1
 
-		enable_features := [?]vk.ValidationFeatureEnableEXT{.DEBUG_PRINTF}
+		enable_features := [?]vk.ValidationFeatureEnableEXT{.DEBUG_PRINTF, .SYNCHRONIZATION_VALIDATION}
 		validation_feature := vk.ValidationFeaturesEXT {
 			sType                         = .VALIDATION_FEATURES_EXT,
 			enabledValidationFeatureCount = len(enable_features),

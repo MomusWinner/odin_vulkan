@@ -363,6 +363,8 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 	defer ctx.gfx.render_started = false
 
 	frame_data := frame_data
+	image_semaphore := ctx.gfx.swapchain.render_finished_semaphores[ctx.gfx.swapchain.image_index]
+	image := ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index] // FIXME:
 
 	must(vk.EndCommandBuffer(frame_data.cmd))
 
@@ -370,9 +372,9 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 		sync_data.wait_semaphore_infos,
 		[]vk.SemaphoreSubmitInfo {
 			{
-				sType = .SEMAPHORE_SUBMIT_INFO,
-				semaphore = ctx.gfx.image_available_semaphore,
-				stageMask = {.COLOR_ATTACHMENT_OUTPUT},
+				sType       = .SEMAPHORE_SUBMIT_INFO,
+				semaphore   = ctx.gfx.image_available_semaphore,
+				stageMask   = {.ALL_COMMANDS}, // {.COLOR_ATTACHMENT_OUTPUT}, // FIXME:
 				deviceIndex = 0,
 			},
 		},
@@ -386,7 +388,8 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 
 	signal_semaphore_info := vk.SemaphoreSubmitInfo {
 		sType     = .SEMAPHORE_SUBMIT_INFO,
-		semaphore = ctx.gfx.swapchain.render_finished_semaphores[ctx.gfx.swapchain.image_index],
+		semaphore = image_semaphore,
+		stageMask = {.ALL_COMMANDS},
 	}
 
 	submit_info := vk.SubmitInfo2 {
@@ -400,10 +403,12 @@ end_render :: proc(frame_data: Frame_Data, sync_data: Sync_Data = {}) {
 	}
 	must(vk.QueueSubmit2(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, ctx.gfx.fence))
 
+	// _cmd_image_transition_layout(frame_data.cmd, image, .COLOR_ATTACHMENT_OPTIMAL, .PRESENT_SRC_KHR)
+
 	present_info := vk.PresentInfoKHR {
 		sType              = .PRESENT_INFO_KHR,
 		waitSemaphoreCount = 1,
-		pWaitSemaphores    = &ctx.gfx.swapchain.render_finished_semaphores[ctx.gfx.swapchain.image_index],
+		pWaitSemaphores    = &image_semaphore,
 		swapchainCount     = 1,
 		pSwapchains        = &ctx.gfx.swapchain.swapchain,
 		pImageIndices      = &ctx.gfx.swapchain.image_index,
@@ -1042,6 +1047,7 @@ _swapchain_setup_images :: proc(swapchain: ^Swapchain) {
 	must(vk.GetSwapchainImagesKHR(ctx.gfx.vk_state.device, swapchain.swapchain, &count, raw_data(swapchain.images)))
 
 	for image, i in swapchain.images {
+		_vk_set_debug_object_name(image, .IMAGE, fmt.tprintf("swapchain image: %d", i))
 		swapchain.image_views[i] = _create_image_view(image, swapchain.color_format.format, {.COLOR}, 1)
 	}
 }
@@ -1175,13 +1181,13 @@ _buffer_get_usage_and_dst_access_stage_mask :: proc(
 ) {
 	if .Vertex in usage {
 		vk_usage += {.VERTEX_BUFFER}
-		dst_access_mask += {.SHADER_READ}
-		dst_stage_mask += {.VERTEX_SHADER}
+		dst_access_mask += {.VERTEX_ATTRIBUTE_READ}
+		dst_stage_mask += {.VERTEX_ATTRIBUTE_INPUT}
 	}
 	if .Index in usage {
 		vk_usage += {.INDEX_BUFFER}
 		dst_access_mask += {.INDEX_READ}
-		dst_stage_mask += {.VERTEX_INPUT}
+		dst_stage_mask += {.INDEX_INPUT}
 	}
 	if .Uniform in usage {
 		vk_usage += {.UNIFORM_BUFFER}

@@ -780,7 +780,7 @@ _cmd_image_transition_layout :: proc(
 		dst_access = {.SHADER_READ}
 
 		src_stage = {.TRANSFER}
-		dst_stage = {.FRAGMENT_SHADER}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 	} else if old_layout == .UNDEFINED && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
 		src_access = {}
 		dst_access = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE}
@@ -791,37 +791,37 @@ _cmd_image_transition_layout :: proc(
 		src_access = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
 		dst_access = {.SHADER_READ}
 
-		src_stage = {.LATE_FRAGMENT_TESTS}
-		dst_stage = {.FRAGMENT_SHADER}
+		src_stage = {.EARLY_FRAGMENT_TESTS}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
 		src_access = {.SHADER_READ}
 		dst_access = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
 
-		src_stage = {.FRAGMENT_SHADER}
-		dst_stage = {.LATE_FRAGMENT_TESTS}
+		src_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+		dst_stage = {.EARLY_FRAGMENT_TESTS}
 	} else if old_layout == .UNDEFINED && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
 		src_access = {}
 		dst_access = {.COLOR_ATTACHMENT_WRITE}
 
-		src_stage = {.TOP_OF_PIPE}
+		src_stage = {.ALL_COMMANDS}
 		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
 	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .PRESENT_SRC_KHR {
 		src_access = {.COLOR_ATTACHMENT_WRITE}
 		dst_access = {}
 
 		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
-		dst_stage = {.BOTTOM_OF_PIPE}
+		dst_stage = {}
 	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
 		src_access = {.COLOR_ATTACHMENT_WRITE}
 		dst_access = {.MEMORY_READ}
 
 		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
-		dst_stage = {.FRAGMENT_SHADER}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
 		src_access = {.MEMORY_READ}
 		dst_access = {.COLOR_ATTACHMENT_WRITE}
 
-		src_stage = {.FRAGMENT_SHADER}
+		src_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
 	} else if old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .TRANSFER_SRC_OPTIMAL {
 		src_access = {.TRANSFER_WRITE}
@@ -834,7 +834,7 @@ _cmd_image_transition_layout :: proc(
 		dst_access = {.SHADER_READ}
 
 		src_stage = {.TRANSFER}
-		dst_stage = {.FRAGMENT_SHADER}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 	} else {
 		log.panicf("unsuported layout transition!\nold_layout %v \nnew_layout: %v", old_layout, new_layout)
 	}
