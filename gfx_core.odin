@@ -86,7 +86,6 @@ Graphics :: struct {
 	// managers
 	buffer_manager:            ^Buffer_Manager,
 	pipeline_manager:          ^Pipeline_Manager,
-	surface_manager:           ^Surface_Manager,
 	descriptor_layout_manager: Descriptor_Layout_Manager,
 	bindless:                  ^Bindless,
 	cmd:                       vk.CommandBuffer,
@@ -493,7 +492,6 @@ _on_screen_resized :: proc() {
 		if glfw.WindowShouldClose(ctx.gfx.window^) {return}
 	}
 	_recreate_swapchain()
-	_surface_manager_resize_fit_screen_surfaces(ctx.gfx.surface_manager)
 }
 
 wait_render_completion :: proc() {
@@ -968,8 +966,8 @@ _swapchain_destroy :: proc(swapchain: ^Swapchain) {
 
 @(private)
 _get_swapchaint_capabilites :: proc() -> (capabilities: vk.SurfaceCapabilitiesKHR) {
-	device, vk_surface := ctx.gfx.vk_state.physical_device, ctx.gfx.vk_state.surface
-	must(vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(device, vk_surface, &capabilities))
+	device, vk_render_target := ctx.gfx.vk_state.physical_device, ctx.gfx.vk_state.surface
+	must(vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(device, vk_render_target, &capabilities))
 
 	return
 }

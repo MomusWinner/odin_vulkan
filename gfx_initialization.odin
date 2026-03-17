@@ -37,7 +37,6 @@ _init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
 	_init_swapchaint_cfg()
 
 	_init_pipeline_manager(ODIN_DEBUG)
-	_init_surface_manager()
 	_init_sync_obj()
 	_init_swapchain(init_info.swapchain_sample_count)
 	_init_deffered_destructor()
@@ -56,7 +55,6 @@ _destroy_gfx :: proc() {
 	_destroy_sync_obj()
 	_destroy_swapchain()
 	_destroy_pipeline_manager()
-	_destroy_surface_manager()
 	_destroy_vulkan_state()
 
 	ctx.gfx = Graphics{}

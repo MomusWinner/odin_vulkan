@@ -33,7 +33,7 @@ Lighting_Scene_Data :: struct {
 	ground_transform:     ve.Gfx_Transform,
 	camera:               ve.Camera,
 	l_camera:             ve.Camera,
-	shadow_map_surf:      ve.Surface_Handle,
+	shadow_map_rt:        ve.Render_Target,
 	shadow_map_view_mesh: ve.Mesh,
 	shadow_map_texture:   ve.Texture_Handle,
 	square_trf:           ve.Gfx_Transform,
@@ -78,11 +78,10 @@ light_scene_init :: proc(s: ^Scene) {
 	data.depth_only_pipeline = create_depth_only_pipeline()
 
 	// Setup Shadow Map
-	data.shadow_map_surf = ve.create_surface_with_size(DEPTH_SIZE, DEPTH_SIZE, ._1)
-	surface, _ := ve.get_surface(data.shadow_map_surf)
+	ve.init_render_target(&data.shadow_map_rt, DEPTH_SIZE, DEPTH_SIZE, ._1)
 
-	data.shadow_map_texture = ve.surface_add_readable_depth_attachment(
-		surface,
+	data.shadow_map_texture = ve.render_target_add_readable_depth_attachment(
+		&data.shadow_map_rt,
 		sampler_info = ve.Sampler_Info {
 			mag_filter = .Linear,
 			min_filter = .Linear,
@@ -159,7 +158,6 @@ light_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Lighting_Scene_Data)s.data
 
 	ve.begin_render()
-	surf, _ := ve.get_surface(data.shadow_map_surf)
 
 	depth_only_pipeline, _ := ve.get_render_pipeline(data.depth_only_pipeline)
 	light_pipeline, _ := ve.get_render_pipeline(data.light_pipeline_h)
@@ -167,12 +165,12 @@ light_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.begin_surface(surf)
+	ve.begin_render_target(&data.shadow_map_rt)
 	{
 		ve.draw_mesh(&data.model, depth_only_pipeline, {camera = &data.l_camera, trf = &data.transform})
 		ve.draw_mesh(&data.ground, depth_only_pipeline, {camera = &data.l_camera, trf = &data.ground_transform})
 	}
-	ve.end_surface(surf)
+	ve.end_render_target(&data.shadow_map_rt)
 
 	ve.begin_draw({0.933, 0.525, 0.899, 1})
 	{
@@ -196,6 +194,7 @@ light_scene_draw :: proc(s: ^Scene) {
 light_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Lighting_Scene_Data)s.data
 
+	ve.destroy_render_target(&data.shadow_map_rt)
 	ve.destroy_mesh(&data.model)
 	ve.destroy_mesh(&data.shadow_map_view_mesh)
 	ve.destroy_mesh(&data.ground)

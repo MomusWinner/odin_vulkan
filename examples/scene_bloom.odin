@@ -63,7 +63,7 @@ HDR_Scene_Data :: struct {
 	//
 	transform:             ve.Gfx_Transform,
 	camera:                ve.Camera,
-	hdr_surface_h:         ve.Surface_Handle,
+	hdr_rt:                ve.Render_Target,
 	model_rotation:        f32,
 	positions:             [16]ve.Gfx_Transform,
 	light_boxes:           [4]Light_Box,
@@ -84,11 +84,13 @@ hdr_scene_init :: proc(s: ^Scene) {
 	}
 	ve.camera_init(&data.camera)
 
-	data.hdr_surface_h = ve.create_surface_fit_screen(._4)
-	hdr, _ := ve.get_surface(data.hdr_surface_h)
-	hdr_color_attachmetn := ve.surface_add_color_attachment(hdr, format = ve.Pixel_Format.RGBA_norm_u16)
-	bright_color_attachmetn := ve.surface_add_color_attachment(hdr, format = ve.Pixel_Format.RGBA_norm_u16)
-	ve.surface_add_depth_attachment(hdr)
+	ve.init_render_target(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
+	hdr_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = ve.Pixel_Format.RGBA_norm_u16)
+	bright_color_attachmetn := ve.render_target_add_color_attachment(
+		&data.hdr_rt,
+		format = ve.Pixel_Format.RGBA_norm_u16,
+	)
+	ve.render_target_add_depth_attachment(&data.hdr_rt)
 
 	// Load Model
 	data.square = ve.create_primitive_square()
@@ -191,31 +193,33 @@ hdr_scene_draw :: proc(s: ^Scene) {
 	blur_hor_pipeline, _ := ve.get_render_pipeline(data.blur_hor_pipeline_h)
 	blur_ver_pipeline, _ := ve.get_render_pipeline(data.blur_ver_pipeline_h)
 
-	hdr_surface, _ := ve.get_surface(data.hdr_surface_h)
+	if (ve.screen_resized()) {
+		ve.render_target_resize(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height())
+	}
 
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.begin_surface(hdr_surface)
+	ve.begin_render_target(&data.hdr_rt)
 	for &t in data.positions {
 		ve.draw_mesh(&data.cube, multilight_pipeline, {camera = &data.camera, trf = &t, h0 = data.multilight_ubo_h})
 	}
 	for &l in data.light_boxes {
 		ve.draw_mesh(&data.cube, light_box_pipeline, {camera = &data.camera, trf = &l.trans, h0 = l.box_ubo})
 	}
-	ve.end_surface(hdr_surface)
+	ve.end_render_target(&data.hdr_rt)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
-		ve.begin_surface(hdr_surface, {1})
+		ve.begin_render_target(&data.hdr_rt, {1})
 		ve.draw_mesh(&data.square, blur_hor_pipeline, {camera = &data.camera, h0 = data.blur_ubo_h})
-		ve.end_surface(hdr_surface)
+		ve.end_render_target(&data.hdr_rt)
 
 		// Vertical gaussian blur
-		ve.begin_surface(hdr_surface, {1})
+		ve.begin_render_target(&data.hdr_rt, {1})
 		ve.draw_mesh(&data.square, blur_ver_pipeline, {camera = &data.camera, h0 = data.blur_ubo_h})
-		ve.end_surface(hdr_surface)
+		ve.end_render_target(&data.hdr_rt)
 	}
 
 	ve.begin_draw()
@@ -232,6 +236,7 @@ hdr_scene_draw :: proc(s: ^Scene) {
 hdr_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^HDR_Scene_Data)s.data
 
+	ve.destroy_render_target(&data.hdr_rt)
 	ve.destroy_texture_h(data.texture_h)
 	ve.destroy_mesh(&data.cube)
 	ve.destroy_mesh(&data.square)

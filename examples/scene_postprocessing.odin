@@ -23,7 +23,7 @@ Postprocessing_Scene_Data :: struct {
 	pipeline_h:          ve.Render_Pipeline_Handle,
 	transform:           ve.Gfx_Transform,
 	camera:              ve.Camera,
-	surface_h:           ve.Surface_Handle,
+	rt:                  ve.Render_Target,
 	postproc_ubo_h:      ve.Uniform_Buffer_Handle,
 	postproc_pipeline_h: ve.Render_Pipeline_Handle,
 }
@@ -65,11 +65,9 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	ve.trf_rotate(&data.transform, {0, 1, 0}, -3.14 / 2)
 	ve.trf_set_scale(&data.transform, 1)
 
-	data.surface_h = ve.create_surface_fit_screen(._4)
-	surface, ok := ve.get_surface(data.surface_h)
-	assert(ok)
-	color_attachment := ve.surface_add_color_attachment(surface, clear_value = {.01, .01, .01, 1.0})
-	ve.surface_add_depth_attachment(surface)
+	ve.init_render_target(&data.rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
+	color_attachment := ve.render_target_add_color_attachment(&data.rt, clear_value = {.01, .01, .01, 1.0})
+	ve.render_target_add_depth_attachment(&data.rt)
 
 	data.postproc_pipeline_h = create_postprocessing_pipeline()
 	data.postproc_ubo_h = create_ubo_postprocessing()
@@ -93,18 +91,19 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 	ubo_postprocessing_set_width(ubo, cast(f32)ve.get_screen_width())
 	ubo_postprocessing_set_height(ubo, cast(f32)ve.get_screen_height())
 
+	if (ve.screen_resized()) {
+		ve.render_target_resize(&data.rt, ve.get_screen_width(), ve.get_screen_height())
+	}
+
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	surface, ok := ve.get_surface(data.surface_h)
-	assert(ok)
-
-	ve.begin_surface(surface)
+	ve.begin_render_target(&data.rt)
 	{
 		ve.draw_mesh(&data.model, pipeline, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
 	}
-	ve.end_surface(surface)
+	ve.end_render_target(&data.rt)
 
 	ve.begin_draw()
 	{
@@ -122,7 +121,8 @@ postprocessing_scene_destroy :: proc(s: ^Scene) {
 
 	ve.destroy_texture_h(data.texture_h)
 	ve.destroy_mesh(&data.model)
-	ve.destroy_surface(data.surface_h)
+	ve.destroy_mesh(&data.square)
+	ve.destroy_render_target(&data.rt)
 
 	free(data)
 }

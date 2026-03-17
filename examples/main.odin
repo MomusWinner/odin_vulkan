@@ -1,11 +1,14 @@
 package main
 
 import ve ".."
+import gn "../tools/shadertypegen/"
 import "core:fmt"
 import "core:log"
 import "core:mem"
 
 current_scene: Scene
+
+t :: gn.MATERIAL_ATTRIBUTE
 
 main :: proc() {
 	when ODIN_DEBUG {
@@ -15,8 +18,10 @@ main :: proc() {
 
 		defer {
 			if len(track.allocation_map) > 0 {
-				fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
-				for _, entry in track.allocation_map {
+				fmt.eprintf(
+					"=== %v allocations not freed: ===\n",
+					len(track.allocation_map),
+				);for _, entry in track.allocation_map {
 					fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
 				}
 			}
@@ -45,13 +50,14 @@ main :: proc() {
 		},
 	)
 
-	current_scene = create_model_scene()
-	// current_scene = create_postprocessing_scene()
+	// current_scene = create_model_scene()
+	current_scene = create_postprocessing_scene()
 	// current_scene = create_light_scene()
 	// current_scene = create_skybox_scene()
 	// current_scene = create_outline_scene()
 	// current_scene = create_hdr_scene()
 	// current_scene = create_instancing_scene()
+	// current_scene = create_compute_scene()
 	// current_scene = create_text_scene()
 	// current_scene = create_empty_scene()
 
