@@ -1,10 +1,10 @@
-APP_NAME := Eldr_Examples
+APP_NAME := ve_examples
 SRC_DIR := examples
 BIN_DIR := bin
 DEBUG_BIN := $(BIN_DIR)/debug/$(APP_NAME)
 RELEASE_BIN := $(BIN_DIR)/release/$(APP_NAME)
 
-ODIN_FLAGS := -custom-attribute:material,uniform_buffer
+ODIN_FLAGS := -custom-attribute:buffer
 ODIN_DEBUG_FLAGS := -debug ${ODIN_FLAGS}
 ODIN_RELEASE_FLAGS := -o:speed -no-bounds-check -disable-assert ${ODIN_FLAGS}
 ODIN := odin
