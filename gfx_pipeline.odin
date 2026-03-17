@@ -221,8 +221,8 @@ Create_Compute_Pipeline_Info :: struct {
 }
 
 Pipeline :: struct {
-	pipeline: vk.Pipeline,
-	layout:   Pipeline_Layout_Info,
+	id:     vk.Pipeline,
+	layout: Pipeline_Layout_Info,
 }
 
 Render_Pipeline :: struct {
@@ -574,7 +574,7 @@ compute_pipeline_dispatch :: proc(
 	vk.CmdDispatch(_get_cmd(), group_count.x, group_count.y, group_count.z)
 	_cmd_buffer_barrier(
 		_get_cmd(),
-		buffer.buffer,
+		buffer.id,
 		{.SHADER_WRITE, .SHADER_READ},
 		{.VERTEX_ATTRIBUTE_READ},
 		{.COMPUTE_SHADER},
@@ -593,7 +593,7 @@ _reload_render_pipelines :: proc(pipeline: ^Render_Pipeline) {
 _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Create_Pipeline_Info) {
 	create_info := create_info
 
-	vk.DestroyPipeline(ctx.gfx.vk_state.device, pipeline.pipeline, nil)
+	vk.DestroyPipeline(ctx.gfx.vk_state.device, pipeline.id, nil)
 
 	shader_stages := _create_shader_stages(create_info, GFX_DEBUG)
 	defer _destroy_shader_stages(shader_stages)
@@ -646,7 +646,7 @@ _reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline, create_info: Cre
 		basePipelineIndex   = -1,
 	}
 
-	must(vk.CreateGraphicsPipelines(ctx.gfx.vk_state.device, 0, 1, &pipeline_info, nil, &pipeline.pipeline))
+	must(vk.CreateGraphicsPipelines(ctx.gfx.vk_state.device, 0, 1, &pipeline_info, nil, &pipeline.id))
 }
 
 @(private)
@@ -837,7 +837,7 @@ _create_graphics_pipeline :: proc(
 	must(vk.CreateGraphicsPipelines(ctx.gfx.vk_state.device, 0, 1, &pipeline_info, nil, &vk_pipeline))
 
 	pipeline := Graphics_Pipeline {
-		pipeline     = vk_pipeline,
+		id           = vk_pipeline,
 		layout       = pipeline_layout_info,
 		surface_info = surface_info,
 	}
@@ -913,7 +913,7 @@ _create_compute_pipeline :: proc(
 	vk.CreateComputePipelines(ctx.gfx.vk_state.device, vk.FALSE, 1, &vk_create_info, nil, &pipeline)
 
 	compute_pipeline := Compute_Pipeline {
-		pipeline    = pipeline,
+		id          = pipeline,
 		create_info = create_info,
 		layout      = pipeline_layout_info,
 	}
@@ -923,7 +923,7 @@ _create_compute_pipeline :: proc(
 
 @(private = "file")
 _destroy_pipline :: proc(pipeline: ^Pipeline) {
-	vk.DestroyPipeline(ctx.gfx.vk_state.device, pipeline.pipeline, nil)
+	vk.DestroyPipeline(ctx.gfx.vk_state.device, pipeline.id, nil)
 }
 
 // @(private = "file")

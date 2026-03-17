@@ -112,7 +112,7 @@ Buffer_Usage_Flag :: enum {
 }
 
 Buffer :: struct {
-	buffer:     vk.Buffer,
+	id:         vk.Buffer,
 	vk_usage:   vk.BufferUsageFlags,
 	usage:      Buffer_Usage_Flags,
 	mapped:     rawptr,
@@ -265,8 +265,9 @@ Bindless :: struct {
 }
 
 @(require_results)
-get_screen_size :: proc() -> (width: u32, height: u32) {return ctx.gfx.swapchain.extent.width,
-		ctx.gfx.swapchain.extent.height}
+get_screen_size :: proc() -> (width: u32, height: u32) {
+	return ctx.gfx.swapchain.extent.width, ctx.gfx.swapchain.extent.height
+}
 @(require_results)
 get_screen_width :: proc() -> u32 {return ctx.gfx.swapchain.extent.width}
 @(require_results)
@@ -534,7 +535,7 @@ cmd_bind_vertex_buffer :: proc(buffer: Buffer, binding: u32, offset := vk.Device
 	offset := offset
 	buffer := buffer
 
-	vk.CmdBindVertexBuffers(_get_cmd(), binding, 1, &buffer.buffer, &offset)
+	vk.CmdBindVertexBuffers(_get_cmd(), binding, 1, &buffer.id, &offset)
 }
 
 cmd_bind_index_buffer :: proc(
@@ -548,7 +549,7 @@ cmd_bind_index_buffer :: proc(
 	offset := offset
 	buffer := buffer
 
-	vk.CmdBindIndexBuffer(_get_cmd(), buffer.buffer, offset, index_type)
+	vk.CmdBindIndexBuffer(_get_cmd(), buffer.id, offset, index_type)
 }
 
 cmd_push_constants :: proc(pipeline: Pipeline, const: ^$T, stages := vk.ShaderStageFlags_ALL_GRAPHICS) {
@@ -564,21 +565,16 @@ cmd_draw_indexed :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #cal
 	vk.CmdDrawIndexed(_get_cmd(), vertex_count, instance_count, 0, 0, 0)
 }
 
-// cmd_bind_material :: proc(m: ^Material, loc := #caller_location) -> ^Graphics_Pipeline {
-// 	pipeline, ok := get_render_pipeline(m.pipeline_h)
-// 	return cmd_bind_render_pipeline(pipeline, loc)
-// }
-
 cmd_bind_render_pipeline :: proc(pipeline: ^Render_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline {
 	graphics_pipeline := render_pipeline_get_pipeline(pipeline, loc)
-	vk.CmdBindPipeline(_get_cmd(), .GRAPHICS, graphics_pipeline.pipeline)
+	vk.CmdBindPipeline(_get_cmd(), .GRAPHICS, graphics_pipeline.id)
 	cmd_bind_descriptor_set_graphics(graphics_pipeline, get_descriptor_set_bindless())
 
 	return graphics_pipeline
 }
 
 cmd_bind_compute_pipeline :: proc(pipeline: Compute_Pipeline, loc := #caller_location) {
-	vk.CmdBindPipeline(_get_cmd(), .COMPUTE, pipeline.pipeline)
+	vk.CmdBindPipeline(_get_cmd(), .COMPUTE, pipeline.id)
 }
 
 cmd_bind_descriptor_set_graphics :: proc(
@@ -926,8 +922,8 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 	view := _create_image_view(image, color_format, {.COLOR}, 1)
 
 	texture := Texture {
+		id              = image,
 		name            = "swapchain_msaa_color_texture",
-		image           = image,
 		format          = color_format,
 		view            = view,
 		allocation      = allocation,
@@ -937,7 +933,7 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 	swapchain.msaa_color_texture = texture
 
 	s := begin_single_cmd()
-	_cmd_image_transition_layout(s.cmd, texture.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
+	_cmd_image_transition_layout(s.cmd, texture.id, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
 	end_single_cmd(s)
 }
 
@@ -975,7 +971,7 @@ _swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: v
 
 	view := _create_image_view(image, format, aspect, 1)
 	swapchain.depth_image = Texture {
-		image           = image,
+		id              = image,
 		format          = format,
 		view            = view,
 		allocation      = allocation,
@@ -1110,7 +1106,7 @@ create_buffer :: proc(
 	)
 
 	return Buffer {
-		buffer = vk_buffer,
+		id = vk_buffer,
 		size = size,
 		usage = usage,
 		vk_usage = vk_usage,
@@ -1170,9 +1166,9 @@ buffer_fill :: proc(b: ^Buffer, data: rawptr, size: Device_Size, offset: Device_
 		defer destroy_buffer(&staging_buffer, loc)
 		_, dst_access_mask, dst_stage_mask := _buffer_get_usage_and_dst_access_stage_mask(b.usage)
 
-		_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
-		_cmd_copy_buffer(sc.cmd, staging_buffer.buffer, b.buffer, size)
-		_cmd_buffer_barrier(sc.cmd, b.buffer, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
+		_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+		_cmd_copy_buffer(sc.cmd, staging_buffer.id, b.id, size)
+		_cmd_buffer_barrier(sc.cmd, b.id, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
 		end_single_cmd(sc)
 	} else {
 		log.info(b.vk_usage)
@@ -1221,7 +1217,7 @@ destroy_buffer :: proc(buffer: ^Buffer, loc := #caller_location) {
 		vma.UnmapMemory(ctx.gfx.vk_state.allocator, buffer.alloc)
 		buffer.mapped = nil
 	}
-	vma.DestroyBuffer(ctx.gfx.vk_state.allocator, buffer.buffer, buffer.alloc)
+	vma.DestroyBuffer(ctx.gfx.vk_state.allocator, buffer.id, buffer.alloc)
 }
 
 @(private)
@@ -1294,12 +1290,12 @@ _vk_create_device_local_buffer :: proc(
 	// TODO: Don't create a staging buffer if the device has enough DEVICE_LOCAL and HOST_VISIBLE memeory
 	// Staging buffer
 	staging_buffer := _create_staging_buffer(data, size, loc)
-	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 	defer destroy_buffer(&staging_buffer)
 
 	// Result buffer
 	vk_buffer, allocation, allocation_info = _vk_create_buffer(size, {.TRANSFER_DST} + usage, .AUTO_PREFER_DEVICE, {})
-	_cmd_copy_buffer(sc.cmd, staging_buffer.buffer, vk_buffer, size)
+	_cmd_copy_buffer(sc.cmd, staging_buffer.id, vk_buffer, size)
 	_cmd_buffer_barrier(sc.cmd, vk_buffer, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
 
 	end_single_cmd(sc)
@@ -1320,7 +1316,7 @@ _create_staging_buffer :: proc(data: rawptr, size: Device_Size, loc := #caller_l
 	_vk_map_memory(alloc, &buffer.mapped)
 	_vk_buffer_fill_mapped_memory(alloc, alloc_info, data, size, buffer.mapped)
 
-	return Buffer{buffer = vk_buffer, size = size, vk_usage = {.TRANSFER_SRC}, alloc = alloc, alloc_info = alloc_info}
+	return Buffer{id = vk_buffer, size = size, vk_usage = {.TRANSFER_SRC}, alloc = alloc, alloc_info = alloc_info}
 }
 
 @(private)

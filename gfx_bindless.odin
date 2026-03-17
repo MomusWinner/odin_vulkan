@@ -294,7 +294,7 @@ _bindless_store_buffer :: proc(bindless: ^Bindless, buffer: Buffer, loc := #call
 
 	for &write in writes {
 		buffer_info := vk.DescriptorBufferInfo {
-			buffer = buffer.buffer,
+			buffer = buffer.id,
 			offset = 0,
 			range  = cast(vk.DeviceSize)vk.WHOLE_SIZE,
 		}

@@ -185,8 +185,8 @@ Texture_Encoding :: enum {
 }
 
 Texture :: struct {
+	id:              vk.Image,
 	name:            string,
-	image:           vk.Image,
 	view:            vk.ImageView,
 	sampler:         vk.Sampler,
 	format:          vk.Format,
@@ -281,7 +281,7 @@ create_texture :: proc(
 	)
 	_cmd_copy_buffer_to_image(
 		sc.cmd,
-		staging_buffer.buffer,
+		staging_buffer.id,
 		vk_image,
 		[]vk.BufferImageCopy {
 			vk.BufferImageCopy {
@@ -311,7 +311,7 @@ create_texture :: proc(
 
 	return Texture {
 		name = name,
-		image = vk_image,
+		id = vk_image,
 		view = image_view,
 		format = format,
 		sampler = sampler,
@@ -325,11 +325,11 @@ destroy_texture :: proc(texture: ^Texture, loc := #caller_location) {
 
 	destroy_sampler(texture.sampler)
 	vk.DestroyImageView(ctx.gfx.vk_state.device, texture.view, nil)
-	vma.DestroyImage(ctx.gfx.vk_state.allocator, texture.image, texture.allocation)
+	vma.DestroyImage(ctx.gfx.vk_state.allocator, texture.id, texture.allocation)
 
 	texture.sampler = 0
 	texture.view = 0
-	texture.image = 0
+	texture.id = 0
 	texture.allocation_info = {}
 }
 
@@ -417,7 +417,7 @@ create_texture_cubemap :: proc(
 
 	buffer_fill(&staging_buffer, raw_data(data), image_size)
 
-	_cmd_buffer_barrier(sc.cmd, staging_buffer.buffer, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
+	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 
 	format: vk.Format = _format_to_vk(_chan_encod_to_format(image.channels, encoding))
 
@@ -463,7 +463,7 @@ create_texture_cubemap :: proc(
 		}
 	}
 
-	_cmd_copy_buffer_to_image(sc.cmd, staging_buffer.buffer, vk_image, regions[:])
+	_cmd_copy_buffer_to_image(sc.cmd, staging_buffer.id, vk_image, regions[:])
 
 	if mip_levels > 1 {
 		_generate_mipmaps(sc.cmd, vk_image, format, cast(i32)image.width, cast(i32)image.height, mip_levels)
@@ -476,7 +476,7 @@ create_texture_cubemap :: proc(
 
 	return Texture_Cubemap {
 		name = name,
-		image = vk_image,
+		id = vk_image,
 		view = image_view,
 		format = format,
 		sampler = sampler,

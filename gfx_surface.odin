@@ -116,8 +116,6 @@ surface_add_color_attachment :: proc(
 ) -> Texture_Handle {
 	assert_gfx_ctx(loc)
 	assert_not_nil(surface, loc)
-	// _, has_color_attachment := 
-	// assert(has_color_attachment == false, "Surface already has a color attachment.", loc)
 
 	w, h := surface.width, surface.height
 
@@ -292,7 +290,7 @@ begin_surface :: proc(surface: ^Surface, active_color_attachments: []int = nil, 
 		assert(ok)
 
 		target := &msaa if has_msaa else texture
-		_cmd_image_transition_layout(cmd, target.image, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
+		_cmd_image_transition_layout(cmd, target.id, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
 
 		sm.append(&p_color_attachments, ca.info)
 	}
@@ -314,7 +312,7 @@ begin_surface :: proc(surface: ^Surface, active_color_attachments: []int = nil, 
 
 			_cmd_image_transition_layout(
 				cmd,
-				target.image,
+				target.id,
 				.SHADER_READ_ONLY_OPTIMAL,
 				.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 				vk.ImageSubresourceRange{aspectMask = {.DEPTH}, layerCount = 1, levelCount = 1},
@@ -371,7 +369,7 @@ end_surface :: proc(surface: ^Surface, loc := #caller_location) {
 		assert(ok)
 
 		target := &msaa if has_msaa else texture
-		_cmd_image_transition_layout(_get_cmd(), target.image, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
+		_cmd_image_transition_layout(_get_cmd(), target.id, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
 	}
 
 	if has_depth_attachment {
@@ -387,7 +385,7 @@ end_surface :: proc(surface: ^Surface, loc := #caller_location) {
 
 			_cmd_image_transition_layout(
 				sc.cmd,
-				target.image,
+				target.id,
 				.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 				.SHADER_READ_ONLY_OPTIMAL,
 				vk.ImageSubresourceRange{aspectMask = {.DEPTH}, layerCount = 1, levelCount = 1},
@@ -607,8 +605,8 @@ _create_surface_color_resource :: proc(
 	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface msaa view")
 
 	return Texture {
+		id = image,
 		name = "surface color attachment",
-		image = image,
 		view = view,
 		format = format,
 		allocation = allocation,
@@ -644,8 +642,8 @@ _create_surface_color_resolve_resource :: proc(
 	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface resolve view")
 
 	return Texture {
+		id = image,
 		name = "surface resolve color attachment",
-		image = image,
 		sampler = sampler,
 		view = view,
 		format = format,
@@ -695,8 +693,8 @@ _create_surface_depth_resource :: proc(
 	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth view")
 
 	return Texture {
+		id = image,
 		name = "surface depth attachment",
-		image = image,
 		view = view,
 		format = format,
 		allocation = allocation,
@@ -742,8 +740,8 @@ _create_surface_depth_resource_sampled :: proc(
 	_vk_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface depth msaa sampler")
 
 	return Texture {
+		id = image,
 		name = "surface depth msaa attachment",
-		image = image,
 		view = view,
 		sampler = sampler,
 		format = format,
