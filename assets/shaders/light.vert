@@ -21,8 +21,7 @@ const mat4 biasMat = mat4(
 	0.5, 0.5, 0.0, 1.0 );
 
 
-#define LIGHT_SLOT 0
-#define getLightUBO() getUboLight(gHandle(LIGHT_SLOT))
+#define getLightData() getLightDataUBO(H1())
 
 void main() {
 	gl_Position = getCamera().projection * getCamera().view * getModel() * vec4(inPosition, 1.0);
@@ -32,7 +31,7 @@ void main() {
 	fragNormal = mat3(transpose(inverse(getModel()))) * inNormal;
   fragPos = vec3(getModel() * vec4(inPosition, 1.0f));
 
-	mat4 projection = getCameraByHandle(getLightUBO().camera).projection;
-	mat4 view = getCameraByHandle(getLightUBO().camera).view;
+	mat4 projection = getCameraByHandle(getLightData().camera).projection;
+	mat4 view = getCameraByHandle(getLightData().camera).view;
 	fragPosLightSpace = (biasMat * projection * view * getModel()) * vec4(inPosition, 1.0f);
 }

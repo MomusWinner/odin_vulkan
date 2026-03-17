@@ -11,7 +11,7 @@ layout (constant_id = 0) const bool horizontal = true;
 const int weight_length = 5;
 const float weight[weight_length] = float[] (0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
 
-#define getImage() uGlobalTextures2D[getMtrlGaussianBlur().blur]
+#define getImage() gTextures2D[getGaussianBlurUBO(H0()).blur]
 
 void main() {
 	vec2 tex_offset = 1.0 / textureSize(getImage(), 0); // gets size of single texel

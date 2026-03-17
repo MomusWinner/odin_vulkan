@@ -30,32 +30,44 @@ RegisterUniform(DummyUniform, {uint ignore; });
 RegisterBuffer(std430, readonly, DummyBuffer, { uint ignore; });
 
 layout(set = BindlessDescriptorSet, binding = BindlessSamplerBinding) \
-    uniform sampler2D uGlobalTextures2D[];
+    uniform sampler2D gTextures2D[];
 
 layout(set = BindlessDescriptorSet, binding = BindlessSamplerBinding) \
-    uniform samplerCube uGlobalTexturesCube[];
-
-
-const uint MAX_SLOT_COUNT = 10;
+    uniform samplerCube gTexturesCube[];
 
 layout( push_constant ) uniform constants {
 	mat4 model;
 	uint camera;
-	uint material;
+	uint handle0;
+	uint handle1;
+	uint handle2;
+	uint handle3;
+	uint handle4;
+	uint handle5;
+	uint handle6;
+	uint handle7;
+	uint handle8;
+	uint handle9;
+	uint handle10;
 	uint reserve0;
 	uint reserve1;
 	uint reserve2;
 	uint reserve3;
-	uint[MAX_SLOT_COUNT] slots;
 } PushConstants;
 
-#define gHandle(slot) PushConstants.slots[slot]
-
-RegisterUniform(Model, {
-	mat4 model;
-});
-
 #define getModel() PushConstants.model
+
+#define H0() PushConstants.handle0
+#define H1() PushConstants.handle1
+#define H2() PushConstants.handle2
+#define H3() PushConstants.handle3
+#define H4() PushConstants.handle4
+#define H5() PushConstants.handle5
+#define H6() PushConstants.handle6
+#define H7() PushConstants.handle7
+#define H8() PushConstants.handle8
+#define H9() PushConstants.handle9
+#define H10() PushConstants.handle10
 
 RegisterUniform(Camera, {
 	mat4 view;
@@ -74,4 +86,4 @@ const uint INVALID_RESOURCE_HANDLE = ~0u;
 #define isHandleValid(handle)\
 	(handle != INVALID_RESOURCE_HANDLE)
 
-#endif
+#endif // BUILDIN_BINDLESS_H

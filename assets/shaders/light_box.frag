@@ -11,7 +11,7 @@ layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBrightColor;
 
 void main() {
-	vec3 color = getMtrlLightBox().color;
+	vec3 color = getLightBoxUBO(H0()).color;
 	outColor = vec4(color, 1);
 
 	float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));

@@ -10,10 +10,10 @@ layout(location = 3) in vec3 fragPos;
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBrightColor;
 
-#define getLight(i) getMtrlMultilight().lights[i]
+#define getLight(i) getMultilightUBO(H0()).lights[i]
 
 void main() {
-	vec3 color = getMtrlMultilight().color;
+	vec3 color = getMultilightUBO(H0()).color;
 	vec3 normal = normalize(fragNormal);
 	// ambient
 	vec3 ambient = 0.0 * color;

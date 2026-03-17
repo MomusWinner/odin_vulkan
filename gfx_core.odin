@@ -29,11 +29,11 @@ Descriptor_Set :: vk.DescriptorSet
 
 Buildin_Resource :: struct {
 	pipeline:    struct {
+		// FIX:
 		default_h:   Render_Pipeline_Handle,
 		primitive_h: Render_Pipeline_Handle,
 		text_h:      Render_Pipeline_Handle,
 	},
-	square:      Model, // TODO: depricated
 	unit_square: Mesh,
 }
 
@@ -87,10 +87,7 @@ Graphics :: struct {
 	buffer_manager:            ^Buffer_Manager,
 	pipeline_manager:          ^Pipeline_Manager,
 	surface_manager:           ^Surface_Manager,
-	g_res_manager:             ^Global_Resource_Manager,
 	descriptor_layout_manager: Descriptor_Layout_Manager,
-	temp_material_pool:        ^Temp_Material_Pool, // TODO: move to Temps struct
-	temp_transform_pool:       ^Temp_Transform_Pool,
 	bindless:                  ^Bindless,
 	cmd:                       vk.CommandBuffer,
 	frame:                     Frame_Data,
@@ -125,16 +122,11 @@ Buffer :: struct {
 }
 
 Uniform_Buffer_Handle :: distinct hm.Handle
-Nil_Uniform_Buffer_Handle :: Uniform_Buffer_Handle{max(u32), max(u32)}
 Storage_Buffer_Handle :: distinct hm.Handle
-Nil_Storage_Buffer_Handle :: Storage_Buffer_Handle{max(u32), max(u32)}
-Material_Handle :: distinct hm.Handle
-Nil_Material_Buffer_Handle :: Material_Handle{max(u32), max(u32)}
 
 Buffer_Manager :: struct {
 	uniform_buffers: hm.Handle_Map(Uniform_Buffer, Uniform_Buffer_Handle),
 	storage_buffers: hm.Handle_Map(Storage_Buffer, Storage_Buffer_Handle),
-	materials:       hm.Handle_Map(Material, Material_Handle),
 }
 
 Resource :: union {
@@ -144,7 +136,13 @@ Resource :: union {
 	Texture_Handle,
 }
 
+NIL_HANDLE :: Buffer_Handle {
+	index = max(u32),
+}
+
 Resource_Handle :: union {
+	Uniform_Buffer_Handle,
+	Storage_Buffer_Handle,
 	Buffer_Handle,
 	Texture_Handle,
 }
@@ -202,13 +200,9 @@ Cached_Buffer :: struct {
 
 Uniform_Buffer :: Cached_Buffer
 Storage_Buffer :: Cached_Buffer
-Material :: struct {
-	pipeline_h: Render_Pipeline_Handle,
-	using base: Cached_Buffer,
-}
 
-@(material)
-Base_Material :: struct {
+@(buffer)
+Base_UBO :: struct {
 	color:   vec4,
 	texture: Texture_Handle,
 }
@@ -269,22 +263,6 @@ Bindless :: struct {
 	textures:   hm.Handle_Map(Texture, Texture_Handle),
 	buffers:    hm.Handle_Map(Buffer, Buffer_Handle),
 }
-
-// TEMP RESOURCES
-
-Temp_Material_Pool :: Temp_Pool(Material_Handle)
-Temp_Transform_Pool :: Temp_Pool(Gfx_Transform)
-
-Temp_Pool :: struct($T: typeid) {
-	resources:          []T,
-	next_free_resource: u32,
-}
-
-Global_Resource_Manager :: struct {
-	slots:      [MAX_SLOT_COUNT]Resource_Handle,
-	free_slots: [MAX_SLOT_COUNT]bool,
-}
-
 
 @(require_results)
 get_screen_size :: proc() -> (width: u32, height: u32) {return ctx.gfx.swapchain.extent.width,
@@ -429,7 +407,6 @@ end_render :: proc(sync_data: Sync_Data = {}) {
 		_on_screen_resized()
 	}
 
-	_clear_temp_pool()
 	_clear_deffered_destructor()
 }
 
@@ -587,10 +564,10 @@ cmd_draw_indexed :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #cal
 	vk.CmdDrawIndexed(_get_cmd(), vertex_count, instance_count, 0, 0, 0)
 }
 
-cmd_bind_material :: proc(m: ^Material, loc := #caller_location) -> ^Graphics_Pipeline {
-	pipeline, ok := get_render_pipeline(m.pipeline_h)
-	return cmd_bind_render_pipeline(pipeline, loc)
-}
+// cmd_bind_material :: proc(m: ^Material, loc := #caller_location) -> ^Graphics_Pipeline {
+// 	pipeline, ok := get_render_pipeline(m.pipeline_h)
+// 	return cmd_bind_render_pipeline(pipeline, loc)
+// }
 
 cmd_bind_render_pipeline :: proc(pipeline: ^Render_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline {
 	graphics_pipeline := render_pipeline_get_pipeline(pipeline, loc)
@@ -717,54 +694,54 @@ _cmd_buffer_barrier :: proc(
 	vk.CmdPipelineBarrier2(cmd, &dep_info)
 }
 
-// ███╗   ███╗ █████╗ ████████╗███████╗██████╗ ██╗ █████╗ ██╗     
-// ████╗ ████║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗██║██╔══██╗██║     
-// ██╔████╔██║███████║   ██║   █████╗  ██████╔╝██║███████║██║     
-// ██║╚██╔╝██║██╔══██║   ██║   ██╔══╝  ██╔══██╗██║██╔══██║██║     
-// ██║ ╚═╝ ██║██║  ██║   ██║   ███████╗██║  ██║██║██║  ██║███████╗
-// ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚══════╝
-
-Empty_Material :: Material
-
-
-create_mtrl_empty :: proc(pipeline_h: Render_Pipeline_Handle) -> Material_Handle {
-	m := Material {
-		pipeline_h = pipeline_h,
-	}
-	m.pipeline_h = pipeline_h
-	m.type = typeid_of(^Empty_Material)
-	m.dirty = false
-
-	return store_material(m)
-}
-
-store_material :: proc(m: Material) -> Material_Handle {
-	return hm.insert(&ctx.gfx.buffer_manager.materials, m)
-}
-
-get_material :: proc(handle: Material_Handle) -> (^Material, bool) {
-	return hm.get(&ctx.gfx.buffer_manager.materials, handle)
-}
-
-detstroy_material :: proc(handle: Material_Handle) -> bool {
-	material, ok := hm.remove(&ctx.gfx.buffer_manager.materials, handle)
-	_destroy_mtrl(&material)
-	return ok
-}
-
-mtrl_set_pipeline :: proc(material: ^Material, pipeline_h: Render_Pipeline_Handle, loc := #caller_location) {
-	assert_not_nil(material, loc)
-	material.pipeline_h = pipeline_h
-}
-
-@(private)
-_destroy_mtrl :: proc(material: ^Material, loc := #caller_location) {
-	assert_gfx_ctx(loc)
-	assert_not_nil(material, loc)
-	free(material.data)
-
-	destroy_buffer_h(material.buffer_h, loc)
-}
+// // ███╗   ███╗ █████╗ ████████╗███████╗██████╗ ██╗ █████╗ ██╗     
+// // ████╗ ████║██╔══██╗╚══██╔══╝██╔════╝██╔══██╗██║██╔══██╗██║     
+// // ██╔████╔██║███████║   ██║   █████╗  ██████╔╝██║███████║██║     
+// // ██║╚██╔╝██║██╔══██║   ██║   ██╔══╝  ██╔══██╗██║██╔══██║██║     
+// // ██║ ╚═╝ ██║██║  ██║   ██║   ███████╗██║  ██║██║██║  ██║███████╗
+// // ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚══════╝
+//
+// // Empty_Material :: Material
+//
+//
+// create_mtrl_empty :: proc(pipeline_h: Render_Pipeline_Handle) -> Material_Handle {
+// 	m := Material {
+// 		pipeline_h = pipeline_h,
+// 	}
+// 	m.pipeline_h = pipeline_h
+// 	m.type = typeid_of(^Empty_Material)
+// 	m.dirty = false
+//
+// 	return store_material(m)
+// }
+//
+// store_material :: proc(m: Material) -> Material_Handle {
+// 	return hm.insert(&ctx.gfx.buffer_manager.materials, m)
+// }
+//
+// get_material :: proc(handle: Material_Handle) -> (^Material, bool) {
+// 	return hm.get(&ctx.gfx.buffer_manager.materials, handle)
+// }
+//
+// detstroy_material :: proc(handle: Material_Handle) -> bool {
+// 	material, ok := hm.remove(&ctx.gfx.buffer_manager.materials, handle)
+// 	_destroy_mtrl(&material)
+// 	return ok
+// }
+//
+// mtrl_set_pipeline :: proc(material: ^Material, pipeline_h: Render_Pipeline_Handle, loc := #caller_location) {
+// 	assert_not_nil(material, loc)
+// 	material.pipeline_h = pipeline_h
+// }
+//
+// @(private)
+// _destroy_mtrl :: proc(material: ^Material, loc := #caller_location) {
+// 	assert_gfx_ctx(loc)
+// 	assert_not_nil(material, loc)
+// 	free(material.data)
+//
+// 	destroy_buffer_h(material.buffer_h, loc)
+// }
 
 // ███████╗██╗    ██╗ █████╗ ██████╗      ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗
 // ██╔════╝██║    ██║██╔══██╗██╔══██╗    ██╔════╝██║  ██║██╔══██╗██║████╗  ██║
@@ -1368,23 +1345,11 @@ _destroy_buffer_manager :: proc() {
 	}
 	hm.destroy(&ctx.gfx.buffer_manager.storage_buffers)
 
-	for mtrl in ctx.gfx.buffer_manager.materials.values {
-		free(mtrl.data)
-	}
-	hm.destroy(&ctx.gfx.buffer_manager.materials)
-
 	free(ctx.gfx.buffer_manager)
 }
 
 @(private)
 _update_buffers :: proc() {
-	// Materials
-	for &m in ctx.gfx.buffer_manager.materials.values {
-		if m.dirty {
-			m.apply(&m)
-		}
-	}
-
 	// Uniform buffers
 	for &ubo in ctx.gfx.buffer_manager.uniform_buffers.values {
 		if ubo.dirty {
@@ -1412,6 +1377,10 @@ get_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> (^Uniform_Buffer, b
 	return hm.get(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 }
 
+has_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
+	return hm.has_handle(&ctx.gfx.buffer_manager.uniform_buffers, handle)
+}
+
 detstroy_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	destroy_buffer_h(uniform_buffer.buffer_h)
@@ -1422,6 +1391,10 @@ store_storage_buffer :: proc(sbo: Storage_Buffer) -> Storage_Buffer_Handle {
 	return hm.insert(&ctx.gfx.buffer_manager.storage_buffers, sbo)
 }
 
+has_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> bool {
+	return hm.has_handle(&ctx.gfx.buffer_manager.storage_buffers, handle)
+}
+
 get_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> (^Storage_Buffer, bool) {
 	return hm.get(&ctx.gfx.buffer_manager.storage_buffers, handle)
 }
@@ -1430,87 +1403,6 @@ detstroy_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	destroy_buffer_h(storage_buffer.buffer_h)
 	return ok
-}
-
-//  ██████╗ ██╗      ██████╗ ██████╗  █████╗ ██╗         ██████╗ ███████╗███████╗ ██████╗ ██╗   ██╗██████╗  ██████╗███████╗
-// ██╔════╝ ██║     ██╔═══██╗██╔══██╗██╔══██╗██║         ██╔══██╗██╔════╝██╔════╝██╔═══██╗██║   ██║██╔══██╗██╔════╝██╔════╝
-// ██║  ███╗██║     ██║   ██║██████╔╝███████║██║         ██████╔╝█████╗  ███████╗██║   ██║██║   ██║██████╔╝██║     █████╗  
-// ██║   ██║██║     ██║   ██║██╔══██╗██╔══██║██║         ██╔══██╗██╔══╝  ╚════██║██║   ██║██║   ██║██╔══██╗██║     ██╔══╝  
-// ╚██████╔╝███████╗╚██████╔╝██████╔╝██║  ██║███████╗    ██║  ██║███████╗███████║╚██████╔╝╚██████╔╝██║  ██║╚██████╗███████╗
-//  ╚═════╝ ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝    ╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚══════╝
-
-@(private)
-_init_g_res_manager :: proc() {
-	ctx.gfx.g_res_manager = new(Global_Resource_Manager)
-	for i in 0 ..< MAX_SLOT_COUNT {
-		ctx.gfx.g_res_manager.free_slots[i] = true
-	}
-}
-
-@(private)
-_destroy_g_res_manager :: proc() {
-	free(ctx.gfx.g_res_manager)
-}
-
-g_resource_set_slot :: proc(slot: int, handle: Resource_Handle, loc := #caller_location) -> bool {
-	_assert_slot_value(slot, loc)
-	if !g_resource_slot_is_free(slot, loc) {
-		return false
-	}
-
-	ctx.gfx.g_res_manager.slots[slot] = handle
-	ctx.gfx.g_res_manager.free_slots[slot] = false
-
-	return true
-}
-
-g_resource_get_slot :: proc(slot: int, loc := #caller_location) -> (Resource_Handle, bool) {
-	_assert_slot_value(slot, loc)
-	if g_resource_slot_is_free(slot, loc) {
-		return {}, false
-	}
-
-	return ctx.gfx.g_res_manager.slots[slot], true
-}
-
-g_resource_slot_is_free :: proc(slot: int, loc := #caller_location) -> bool {
-	_assert_slot_value(slot, loc)
-	return ctx.gfx.g_res_manager.free_slots[slot]
-}
-
-g_resource_clear_slot :: proc(slot: int, loc := #caller_location) -> Resource_Handle {
-	_assert_slot_value(slot, loc)
-
-	ctx.gfx.g_res_manager.free_slots[slot] = true
-	return ctx.gfx.g_res_manager.slots[slot]
-}
-
-@(private)
-_g_res_manager_get_resource_indices :: proc() -> (indices: [MAX_SLOT_COUNT]u32) {
-	for slot, i in ctx.gfx.g_res_manager.slots {
-		if ctx.gfx.g_res_manager.free_slots[i] {
-			indices[i] = max(u32)
-			continue
-		}
-
-		switch &resource in slot {
-		case Buffer_Handle:
-			indices[i] = resource.index
-		case Texture_Handle:
-			indices[i] = resource.index
-		}
-	}
-
-	return
-}
-
-@(private = "file")
-_assert_slot_value :: #force_inline proc(slot: int, loc := #caller_location) {
-	assert(
-		slot >= 0 && slot < MAX_SLOT_COUNT,
-		fmt.tprintf("Invalid slot: %d. Valid range is [0, %d) exclusive.", slot, MAX_SLOT_COUNT),
-		loc,
-	)
 }
 
 // ██████╗ ███████╗███████╗███████╗███████╗██████╗ ███████╗██████╗                     
@@ -1568,83 +1460,6 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 	d.next_index = 0
 }
 
-
-// ████████╗███████╗███╗   ███╗██████╗     ██████╗  ██████╗  ██████╗  ██████╗ ██╗     
-// ╚══██╔══╝██╔════╝████╗ ████║██╔══██╗    ██╔══██╗██╔═══██╗██╔═══██╗██╔═══██╗██║     
-//    ██║   █████╗  ██╔████╔██║██████╔╝    ██████╔╝██║   ██║██║   ██║██║   ██║██║     
-//    ██║   ██╔══╝  ██║╚██╔╝██║██╔═══╝     ██╔═══╝ ██║   ██║██║   ██║██║   ██║██║     
-//    ██║   ███████╗██║ ╚═╝ ██║██║         ██║     ╚██████╔╝╚██████╔╝╚██████╔╝███████╗
-//    ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝         ╚═╝      ╚═════╝  ╚═════╝  ╚═════╝ ╚══════╝
-// A temporary pool acquires resources (materials) for one-frame usage.
-
-@(private)
-_init_temp_pools :: proc() {
-	ctx.gfx.temp_material_pool = new(Temp_Material_Pool)
-	_init_temp_material_pool(ctx.gfx.temp_material_pool, TEMP_POOL_MATERIAL_SIZE)
-}
-
-@(private)
-_destroy_temp_pools :: proc() {
-	_destroy_temp_material_pool(ctx.gfx.temp_material_pool)
-	free(ctx.gfx.temp_material_pool)
-}
-
-@(require_results)
-_temp_pool_acquire_material :: proc() -> Material_Handle {
-	return _temp_pool_acquire(ctx.gfx.temp_material_pool)
-}
-
-@(private)
-_clear_temp_pool :: proc() {
-	_temp_pool_clear(ctx.gfx.temp_material_pool)
-}
-
-@(private = "file")
-_init_temp_pool :: proc(pool: ^$P/Temp_Pool($T), size: int) {
-	pool.resources = make([]T, size)
-	pool.next_free_resource = 0
-}
-
-@(private = "file")
-_destroy_temp_pool :: proc(pool: ^$P/Temp_Pool($T)) {
-	delete(pool.resources)
-}
-
-@(private = "file")
-@(require_results)
-_temp_pool_acquire :: proc(pool: ^$P/Temp_Pool($T)) -> T {
-	when GFX_DEBUG {
-		if pool.next_free_resource >= cast(u32)len(pool.resources) {
-			log.panicf(
-				"Temp %v Pool exhausted: requested element but max %d reached.",
-				typeid_of(T),
-				len(pool.resources),
-			)
-		}
-	}
-
-	defer pool.next_free_resource += 1
-
-	return pool.resources[pool.next_free_resource]
-}
-
-@(private = "file")
-_temp_pool_clear :: proc(pool: ^$P/Temp_Pool($T)) {
-	pool.next_free_resource = 0
-}
-
-@(private = "file")
-_init_temp_material_pool :: proc(pool: ^Temp_Material_Pool, size: int, allocator := context) {
-	_init_temp_pool(pool, size)
-	for i in 0 ..< size {
-		pool.resources[i] = create_mtrl_base({}) // FIX: 
-	}
-}
-
-@(private = "file")
-_destroy_temp_material_pool :: proc(pool: ^Temp_Material_Pool) {
-	_destroy_temp_pool(pool)
-}
 
 // ██████╗ ███████╗███████╗ ██████╗██████╗ ██╗██████╗ ████████╗ ██████╗ ██████╗ 
 // ██╔══██╗██╔════╝██╔════╝██╔════╝██╔══██╗██║██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗
@@ -1833,104 +1648,105 @@ create_primitive_pipeline :: proc() -> Render_Pipeline_Handle {
 	return create_render_pipeline(create_info)
 }
 
-create_primitive_square :: proc(size: f32 = 1, allocator := context.allocator) -> Mesh {
-	vertices := make([]Vertex, 6, context.allocator)
-	vertices[0] = {{size, size, 0.0}, {1, 1}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[1] = {{size, -size, 0.0}, {1, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[2] = {{-size, -size, 0.0}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
+create_primitive_square :: proc(size: f32 = 1) -> Mesh {
+	vertices := [?]Vertex {
+		{{size, size, 0.0}, {1, 1}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, 0.0}, {1, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, 0.0}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, 0.0}, {1, 1}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, 0}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, 0.0}, {0.0, 1}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+	}
 
-	vertices[3] = {{size, size, 0.0}, {1, 1}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[4] = {{-size, -size, 0}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[5] = {{-size, size, 0.0}, {0.0, 1}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-
-	return create_mesh(vertices, {})
+	return create_mesh(vertices[:], {})
 }
 
-create_primitive_cube :: proc(size: f32 = 1, allocator := context.allocator) -> Mesh {
-	vertices := make([]Vertex, 36, context.allocator)
-	//                   position         tex_pos        normal              color
-	// -Z
-	vertices[0] = {{size, size, -size}, {1.0, 1.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[1] = {{size, -size, -size}, {1.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[2] = {{-size, -size, -size}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[3] = {{-size, -size, -size}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[4] = {{-size, size, -size}, {0.0, 1.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[5] = {{size, size, -size}, {1.0, 1.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}}
+create_primitive_cube :: proc(size: f32 = 1) -> Mesh {
+	vertices := [?]Vertex {
+		// position         tex_pos        normal              color
+		// -Z
+		{{size, size, -size}, {1.0, 1.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, -size}, {1.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, -size}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, -size}, {0.0, 0.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, -size}, {0.0, 1.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, -size}, {1.0, 1.0}, {0.0, 0.0, -1.0}, {1.0, 1.0, 1.0, 1.0}},
 
-	// +Z
-	vertices[6] = {{size, -size, size}, {1.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[7] = {{size, size, size}, {1.0, 1.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[8] = {{-size, -size, size}, {0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[9] = {{-size, -size, size}, {0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[10] = {{size, size, size}, {1.0, 1.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[11] = {{-size, size, size}, {0.0, 1.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}}
+		// +Z
+		{{size, -size, size}, {1.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, size}, {1.0, 1.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, size}, {0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, size}, {0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, size}, {1.0, 1.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, size}, {0.0, 1.0}, {0.0, 0.0, 1.0}, {1.0, 1.0, 1.0, 1.0}},
 
-	// -X
-	vertices[12] = {{-size, -size, -size}, {0.0, 0.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[13] = {{-size, -size, size}, {1.0, 0.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[14] = {{-size, size, size}, {1.0, 1.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[15] = {{-size, size, size}, {1.0, 1.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[16] = {{-size, size, -size}, {0.0, 1.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[17] = {{-size, -size, -size}, {0.0, 0.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
+		// -X
+		{{-size, -size, -size}, {0.0, 0.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, size}, {1.0, 0.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, size}, {1.0, 1.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, size}, {1.0, 1.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, -size}, {0.0, 1.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, -size}, {0.0, 0.0}, {-1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
 
-	// +X
-	vertices[18] = {{size, size, size}, {1.0, 1.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[19] = {{size, -size, size}, {1.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[20] = {{size, -size, -size}, {0.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[21] = {{size, -size, -size}, {0.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[22] = {{size, size, -size}, {0.0, 1.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[23] = {{size, size, size}, {1.0, 1.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
+		// +X
+		{{size, size, size}, {1.0, 1.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, size}, {1.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, -size}, {0.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, -size}, {0.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, -size}, {0.0, 1.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, size}, {1.0, 1.0}, {1.0, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
 
-	// -Y
-	vertices[24] = {{-size, -size, -size}, {0.0, 1.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[25] = {{size, -size, -size}, {1.0, 1.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[26] = {{size, -size, size}, {1.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[27] = {{size, -size, size}, {1.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[28] = {{-size, -size, size}, {0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[29] = {{-size, -size, -size}, {0.0, 1.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
+		// -Y
+		{{-size, -size, -size}, {0.0, 1.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, -size}, {1.0, 1.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, size}, {1.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, -size, size}, {1.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, size}, {0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, -size, -size}, {0.0, 1.0}, {0.0, -1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
 
-	// +Y
-	vertices[30] = {{size, size, size}, {1.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[31] = {{size, size, -size}, {1.0, 1.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[32] = {{-size, size, -size}, {0.0, 1.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[33] = {{-size, size, -size}, {0.0, 1.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[34] = {{-size, size, size}, {0.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	vertices[35] = {{size, size, size}, {1.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}}
-	return create_mesh(vertices, {})
+		// +Y
+		{{size, size, size}, {1.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, -size}, {1.0, 1.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, -size}, {0.0, 1.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, -size}, {0.0, 1.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{-size, size, size}, {0.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+		{{size, size, size}, {1.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+	}
+	return create_mesh(vertices[:], {})
 }
 
-draw_square :: proc(camera: ^Camera, position: vec3, scale: vec3, color: vec4) {
-	model := ctx.gfx.buildin.square
-
-	material_h := _temp_pool_acquire_material()
-	model.materials[0] = material_h
-	material, ok := get_material(material_h)
-	assert(ok)
-	mtrl_set_pipeline(material, ctx.gfx.buildin.pipeline.primitive_h)
-	mtrl_base_set_color(material, color)
-
-	transform: Gfx_Transform
-	init_trf(&transform)
-	trf_set_position(&transform, position)
-	trf_set_scale(&transform, scale)
-
-	draw_model(model, camera, &transform)
-}
-
-draw_square_texture :: proc(camera: ^Camera, position: vec3, scale: vec3, texture: Texture_Handle) {
-	model := ctx.gfx.buildin.square
-
-	material_h := _temp_pool_acquire_material()
-	model.materials[0] = material_h
-	material, ok := get_material(material_h)
-	assert(ok)
-	mtrl_set_pipeline(material, ctx.gfx.buildin.pipeline.primitive_h)
-	mtrl_base_set_texture(material, texture)
-
-	transform: Gfx_Transform
-	init_trf(&transform)
-	trf_set_position(&transform, position)
-	trf_set_scale(&transform, scale)
-
-	draw_model(model, camera, &transform)
-}
+// draw_square :: proc(camera: ^Camera, position: vec3, scale: vec3, color: vec4) {// FIXME:
+// 	model := ctx.gfx.buildin.square
+//
+// 	material_h := _temp_pool_acquire_material()
+// 	model.materials[0] = material_h
+// 	material, ok := get_material(material_h)
+// 	assert(ok)
+// 	mtrl_set_pipeline(material, ctx.gfx.buildin.pipeline.primitive_h)
+// 	mtrl_base_set_color(material, color)
+//
+// 	transform: Gfx_Transform
+// 	init_trf(&transform)
+// 	trf_set_position(&transform, position)
+// 	trf_set_scale(&transform, scale)
+//
+// 	draw_model(model, camera, &transform)
+// }
+//
+// draw_square_texture :: proc(camera: ^Camera, position: vec3, scale: vec3, texture: Texture_Handle) {
+// 	model := ctx.gfx.buildin.square
+//
+// 	material_h := _temp_pool_acquire_material()
+// 	model.materials[0] = material_h
+// 	material, ok := get_material(material_h)
+// 	assert(ok)
+// 	mtrl_set_pipeline(material, ctx.gfx.buildin.pipeline.primitive_h)
+// 	mtrl_base_set_texture(material, texture)
+//
+// 	transform: Gfx_Transform
+// 	init_trf(&transform)
+// 	trf_set_position(&transform, position)
+// 	trf_set_scale(&transform, scale)
+//
+// 	draw_model(model, camera, &transform)
+// }

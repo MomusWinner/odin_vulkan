@@ -9,8 +9,9 @@ import "core:time"
 
 Model_Scene_Data :: struct {
 	texture_h:      ve.Texture_Handle,
-	model:          ve.Model,
-	material:       ve.Material_Handle,
+	model:          ve.Mesh,
+	ubo:            ve.Uniform_Buffer_Handle,
+	pipeline_h:     ve.Render_Pipeline_Handle,
 	transform:      ve.Gfx_Transform,
 	camera:         ve.Camera,
 	model_rotation: f32,
@@ -38,15 +39,13 @@ model_scene_init :: proc(s: ^Scene) {
 
 	// Load Model
 	data.texture_h = ve.load_texture("./assets/room.png")
-	data.model = ve.load_model("./assets/room.obj")
-	pipeline_h := create_default_pipeline()
+	data.model = ve.load_meshes("./assets/room.obj")[0]
+	data.pipeline_h = create_default_pipeline()
 
 	// Setup Material
-	data.material = ve.create_mtrl_base(pipeline_h)
-	material, _ := ve.get_material(data.material)
-	ve.mtrl_base_set_texture(material, data.texture_h)
-	append(&data.model.materials, data.material)
-	append(&data.model.mesh_material, 0)
+	data.ubo = ve.create_ubo_base()
+	ubo, _ := ve.get_uniform_buffer(data.ubo)
+	ve.ubo_base_set_texture(ubo, data.texture_h)
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -65,13 +64,15 @@ model_scene_update :: proc(s: ^Scene) {
 model_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Model_Scene_Data)s.data
 
+	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
+
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
 	ve.begin_draw()
 	{
-		ve.draw_model(data.model, &data.camera, &data.transform)
+		ve.draw_mesh(&data.model, pipeline, {trf = &data.transform, camera = &data.camera, h0 = data.ubo})
 	}
 	ve.end_draw()
 
@@ -84,7 +85,7 @@ model_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Model_Scene_Data)s.data
 
 	ve.destroy_texture_h(data.texture_h)
-	ve.destroy_model(&data.model)
+	ve.destroy_mesh(&data.model)
 
 	free(data)
 }

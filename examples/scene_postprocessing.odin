@@ -2,28 +2,30 @@ package main
 
 import ve ".."
 import "base:runtime"
+import sm "core:container/small_array"
 import "core:log"
 import "core:math"
 import "core:math/rand"
 import "core:time"
 
-@(material)
-Postprocessing_Material :: struct {
+@(buffer)
+Postprocessing :: struct {
 	texture: ve.Texture_Handle,
 	width:   f32,
 	height:  f32,
 }
 
 Postprocessing_Scene_Data :: struct {
-	model:          ve.Model,
-	square:         ve.Mesh,
-	model_material: ve.Material_Handle,
-	texture_h:      ve.Texture_Handle,
-	pipeline_h:     ve.Render_Pipeline_Handle,
-	transform:      ve.Gfx_Transform,
-	camera:         ve.Camera,
-	surface_h:      ve.Surface_Handle,
-	postproc_mtrl:  ve.Material_Handle,
+	model:               ve.Mesh,
+	square:              ve.Mesh,
+	base_ubo:            ve.Uniform_Buffer_Handle,
+	texture_h:           ve.Texture_Handle,
+	pipeline_h:          ve.Render_Pipeline_Handle,
+	transform:           ve.Gfx_Transform,
+	camera:              ve.Camera,
+	surface_h:           ve.Surface_Handle,
+	postproc_ubo_h:      ve.Uniform_Buffer_Handle,
+	postproc_pipeline_h: ve.Render_Pipeline_Handle,
 }
 
 create_postprocessing_scene :: proc() -> Scene {
@@ -48,16 +50,14 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 
 	// Load Model
 	data.texture_h = ve.load_texture("./assets/room.png")
-	data.model = ve.load_model("./assets/room.obj")
+	data.model = ve.load_meshes("./assets/room.obj")[0]
 	data.square = ve.create_primitive_square()
 	data.pipeline_h = create_default_pipeline()
 
 	// Setup Material
-	data.model_material = ve.create_mtrl_base(data.pipeline_h)
-	model_material, _ := ve.get_material(data.model_material)
-	ve.mtrl_base_set_texture(model_material, data.texture_h)
-	append(&data.model.materials, data.model_material)
-	append(&data.model.mesh_material, 0)
+	data.base_ubo = ve.create_ubo_base()
+	model_material, _ := ve.get_uniform_buffer(data.base_ubo)
+	ve.ubo_base_set_texture(model_material, data.texture_h)
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -65,21 +65,16 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	ve.trf_rotate(&data.transform, {0, 1, 0}, -3.14 / 2)
 	ve.trf_set_scale(&data.transform, 1)
 
-	postprocessing_pipeline_h := create_postprocessing_pipeline()
-	pipe, ok_p_ := ve.get_render_pipeline(postprocessing_pipeline_h)
-
-	// Setup Postprocessing Surface
-	data.postproc_mtrl = create_mtrl_postprocessing(postprocessing_pipeline_h)
-	postproc_mtrl, _ := ve.get_material(data.postproc_mtrl)
-
 	data.surface_h = ve.create_surface_fit_screen(._4)
 	surface, ok := ve.get_surface(data.surface_h)
 	assert(ok)
-	mtrl_postprocessing_set_texture(
-		postproc_mtrl,
-		ve.surface_add_color_attachment(surface, clear_value = {.01, .01, .01, 1.0}),
-	)
+	color_attachment := ve.surface_add_color_attachment(surface, clear_value = {.01, .01, .01, 1.0})
 	ve.surface_add_depth_attachment(surface)
+
+	data.postproc_pipeline_h = create_postprocessing_pipeline()
+	data.postproc_ubo_h = create_ubo_postprocessing()
+	postproc_ubo, _ := ve.get_uniform_buffer(data.postproc_ubo_h)
+	ubo_postprocessing_set_texture(postproc_ubo, color_attachment)
 
 	s.data = data
 }
@@ -91,29 +86,29 @@ postprocessing_scene_update :: proc(s: ^Scene) {
 postprocessing_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Postprocessing_Scene_Data)s.data
 
-	pipeline, p_ok := ve.get_render_pipeline(data.pipeline_h)
-	assert(p_ok)
+	postproc_pipeline, _ := ve.get_render_pipeline(data.postproc_pipeline_h)
+	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
+
+	ubo, _ := ve.get_uniform_buffer(data.postproc_ubo_h)
+	ubo_postprocessing_set_width(ubo, cast(f32)ve.get_screen_width())
+	ubo_postprocessing_set_height(ubo, cast(f32)ve.get_screen_height())
 
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
-	postproc_mtrl, _ := ve.get_material(data.postproc_mtrl)
-
-	mtrl_postprocessing_set_width(postproc_mtrl, cast(f32)ve.get_screen_width())
-	mtrl_postprocessing_set_height(postproc_mtrl, cast(f32)ve.get_screen_height())
 
 	surface, ok := ve.get_surface(data.surface_h)
 	assert(ok)
 
 	ve.begin_surface(surface)
 	{
-		ve.draw_model(data.model, &data.camera, &data.transform)
+		ve.draw_mesh(&data.model, pipeline, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
 	}
 	ve.end_surface(surface)
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, postproc_mtrl, &data.camera, nil)
+		ve.draw_mesh(&data.square, postproc_pipeline, {camera = &data.camera, h0 = data.postproc_ubo_h})
 	}
 	ve.end_draw()
 
@@ -126,8 +121,22 @@ postprocessing_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Postprocessing_Scene_Data)s.data
 
 	ve.destroy_texture_h(data.texture_h)
-	ve.destroy_model(&data.model)
+	ve.destroy_mesh(&data.model)
 	ve.destroy_surface(data.surface_h)
 
 	free(data)
+}
+
+create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+	stages := ve.Stage_Infos{}
+	sm.push_back_elems(
+		&stages,
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/postprocessing.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/postprocessing.frag"},
+	)
+
+	create_info := get_base_create_pipeline_info()
+	create_info.stage_infos = stages
+
+	return ve.create_render_pipeline(create_info)
 }

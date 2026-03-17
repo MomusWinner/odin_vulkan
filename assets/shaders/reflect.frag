@@ -16,7 +16,7 @@ void main() {
 	vec3 R = refract(I, normalize(fragNormal), ratio);
 
 	R.xy *= -1;
-	vec3 color = texture(uGlobalTexturesCube[getMtrlBase().texture], R).rgb;
+	vec3 color = texture(gTexturesCube[H0()], R).rgb;
 	color.b += 0.07;
 	outColor = vec4(color, 1.0);
 }

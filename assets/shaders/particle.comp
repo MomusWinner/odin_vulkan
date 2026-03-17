@@ -4,8 +4,8 @@
 
 layout(local_size_x_id = 0) in;
 
-#define getSBO() getMtrlDeltaTimeInfoUBO().sbo
-#define getDTime() getMtrlDeltaTimeInfoUBO().delta_time
+#define getSBO() H0()
+#define getDTime() getDeltaTimeUBO(H1()).delta_time
 #define getParticles() getParticleSBO(getSBO()).particles
 #define getParticle(index) getParticles()[index]
 

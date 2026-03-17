@@ -124,9 +124,15 @@ _destroy :: proc() {
 
 
 @(require_results)
-load_model :: proc(path: string) -> Model {
+load_meshes :: proc(path: string) -> []Mesh {
 	imp_meshes, ok := import_obj(path)
-	defer delete(imp_meshes)
+	defer {
+		for m in imp_meshes {
+			delete(m.vertices)
+			delete(m.indices)
+		}
+		delete(imp_meshes)
+	}
 	if !ok {
 		log.error("Couldn't import obj", path)
 	}
@@ -136,12 +142,9 @@ load_model :: proc(path: string) -> Model {
 		meshes[i] = create_mesh(imp_mesh.vertices, imp_mesh.indices)
 	}
 
-	model := create_model(meshes, {}, {})
-
-	return model
+	return meshes
 }
 
-unload_model :: destroy_model
 
 @(private = "file")
 _glfw_error_callback :: proc "c" (code: i32, description: cstring) {

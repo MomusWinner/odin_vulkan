@@ -24,14 +24,15 @@ FontVertex :: struct {
 }
 
 Text :: struct {
-	font:      ^Font,
-	text:      string,
-	size:      f32,
-	vbo:       Buffer,
-	last_vbo:  Buffer,
-	vertices:  []FontVertex,
-	transform: Gfx_Transform,
-	material:  Material_Handle,
+	font:       ^Font,
+	text:       string,
+	size:       f32,
+	vbo:        Buffer,
+	last_vbo:   Buffer,
+	vertices:   []FontVertex,
+	transform:  Gfx_Transform,
+	ubo_h:      Uniform_Buffer_Handle,
+	pipeline_h: Render_Pipeline_Handle,
 }
 
 CharacterRegion :: struct {
@@ -48,7 +49,6 @@ Create_Font_Info :: struct {
 	regions:      []CharacterRegion,
 	default_char: rune,
 }
-
 
 @(private)
 PIXEL_SIZE :: 0.002 // TODO:
@@ -198,19 +198,20 @@ create_text :: proc(
 	trf_set_position(&trf, start_position)
 	trf_set_scale(&trf, vec3{1, 1, 1} * size)
 
-	material_h := create_mtrl_base(ctx.gfx.buildin.pipeline.text_h)
-	material, ok := get_material(material_h)
+	ubo_h := create_ubo_base()
+	ubo, ok := get_uniform_buffer(ubo_h)
 	assert(ok, loc = loc)
 
-	mtrl_base_set_texture(material, font.texture_h)
-	mtrl_base_set_color(material, color)
+	ubo_base_set_texture(ubo, font.texture_h)
+	ubo_base_set_color(ubo, color)
 
 	text := Text {
-		text      = text,
-		font      = font,
-		material  = material_h,
-		transform = trf,
-		size      = size,
+		text       = text,
+		font       = font,
+		ubo_h      = ubo_h,
+		pipeline_h = ctx.gfx.buildin.pipeline.text_h,
+		transform  = trf,
+		size       = size,
 	}
 
 	vbo, vertices := _generate_text_mesh(&text)
@@ -234,10 +235,9 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 text_set_color :: proc(text: ^Text, color: vec4, loc := #caller_location) {
 	assert_not_nil(text, loc)
 
-	material, ok := get_material(text.material)
+	ubo, ok := get_uniform_buffer(text.ubo_h)
 	assert(ok, loc = loc)
-
-	mtrl_base_set_color(material, color)
+	ubo_base_set_color(ubo, color)
 }
 
 text_set_position :: proc(text: ^Text, position: vec3, loc := #caller_location) {
@@ -251,19 +251,16 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 	assert_not_nil(text, loc)
 
-	material, mtrl_ok := get_material(text.material)
-	assert(mtrl_ok, loc = loc)
+	ubo, ok := get_uniform_buffer(text.ubo_h)
+	assert(ok, loc = loc)
 
 	cmd_bind_vertex_buffer(text.vbo, 0)
 
-	g_pipeline := cmd_bind_material(material)
+	pipeline, p_ok := get_render_pipeline(text.pipeline_h)
+	assert(p_ok, loc = loc)
+	g_pipeline := cmd_bind_render_pipeline(pipeline)
 
-	const := Push_Constant {
-		model    = trf_get_matrix(text.transform),
-		camera   = _camera_get_buffer(camera, get_screen_aspect()).index,
-		material = material.buffer_h.index,
-		slots    = _g_res_manager_get_resource_indices(),
-	}
+	const := _push_constants_to_data({camera = camera, trf = &text.transform, h0 = text.ubo_h})
 	cmd_push_constants(g_pipeline, &const)
 
 	cmd_draw(cast(u32)len(text.vertices))

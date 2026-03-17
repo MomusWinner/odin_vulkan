@@ -17,50 +17,56 @@ Light :: struct {
 	position: vec3,
 }
 
-@(material)
-Multilight_Material :: struct {
+@(buffer)
+Multilight_UBO :: struct {
 	lights: [4]Light,
 	color:  vec3,
 }
 
-@(material)
-HDR_Material :: struct {
+@(buffer)
+HDR_UBO :: struct {
 	exposure: f32,
 	scene:    ve.Texture_Handle,
 	bloom:    ve.Texture_Handle,
 }
 
-@(material)
-Gaussian_Blur_Material :: struct {
+@(buffer)
+Gaussian_Blur_UBO :: struct {
 	blur: ve.Texture_Handle,
 }
 
-@(material)
-Light_Box_Material :: struct {
+@(buffer)
+Light_Box_UBO :: struct {
 	color: vec3,
 }
 
 Light_Box :: struct {
-	trans:    ve.Gfx_Transform,
-	material: ve.Material_Handle,
+	trans:   ve.Gfx_Transform,
+	box_ubo: ve.Uniform_Buffer_Handle,
 }
 
 HDR_Scene_Data :: struct {
-	texture_h:           ve.Texture_Handle,
-	square:              ve.Mesh,
-	cube:                ve.Mesh,
-	light_box_mtrl_h:    ve.Material_Handle,
-	material_h:          ve.Material_Handle,
-	hdr_material_h:      ve.Material_Handle,
-	blur_material_h:     ve.Material_Handle,
-	blur_hor_pipeline_h: ve.Render_Pipeline_Handle,
-	blur_ver_pipeline_h: ve.Render_Pipeline_Handle,
-	transform:           ve.Gfx_Transform,
-	camera:              ve.Camera,
-	hdr_surface_h:       ve.Surface_Handle,
-	model_rotation:      f32,
-	positions:           [16]ve.Gfx_Transform,
-	light_boxes:         [4]Light_Box,
+	texture_h:             ve.Texture_Handle,
+	square:                ve.Mesh,
+	cube:                  ve.Mesh,
+	// Buffers
+	light_box_ubo_h:       ve.Uniform_Buffer_Handle,
+	multilight_ubo_h:      ve.Uniform_Buffer_Handle,
+	hdr_ubo_h:             ve.Uniform_Buffer_Handle,
+	blur_ubo_h:            ve.Uniform_Buffer_Handle,
+	// Pipelines
+	blur_hor_pipeline_h:   ve.Render_Pipeline_Handle,
+	blur_ver_pipeline_h:   ve.Render_Pipeline_Handle,
+	multilight_pipeline_h: ve.Render_Pipeline_Handle,
+	hdr_pipeline_h:        ve.Render_Pipeline_Handle,
+	light_box_pipeline_h:  ve.Render_Pipeline_Handle,
+	//
+	transform:             ve.Gfx_Transform,
+	camera:                ve.Camera,
+	hdr_surface_h:         ve.Surface_Handle,
+	model_rotation:        f32,
+	positions:             [16]ve.Gfx_Transform,
+	light_boxes:           [4]Light_Box,
 }
 
 create_hdr_scene :: proc() -> Scene {
@@ -88,24 +94,27 @@ hdr_scene_init :: proc(s: ^Scene) {
 	data.square = ve.create_primitive_square()
 	data.cube = ve.create_primitive_cube()
 
+	data.hdr_pipeline_h = create_hdr_pipeline()
+
 	// Setup Material
-	data.hdr_material_h = create_mtrl_hdr(create_hdr_pipeline())
-	hdr_mtrl, _ := ve.get_material(data.hdr_material_h)
-	mtrl_hdr_set_scene(hdr_mtrl, hdr_color_attachmetn)
-	mtrl_hdr_set_bloom(hdr_mtrl, bright_color_attachmetn)
-	mtrl_hdr_set_exposure(hdr_mtrl, 0.5)
+	data.hdr_ubo_h = create_ubo_hdr()
+	hdr_ubo, _ := ve.get_uniform_buffer(data.hdr_ubo_h)
+	ubo_hdr_set_scene(hdr_ubo, hdr_color_attachmetn)
+	ubo_hdr_set_bloom(hdr_ubo, bright_color_attachmetn)
+	ubo_hdr_set_exposure(hdr_ubo, 0.5)
 
 	data.blur_hor_pipeline_h = create_gaussian_blur_pipeline(true)
 	data.blur_ver_pipeline_h = create_gaussian_blur_pipeline(false)
 
-	data.blur_material_h = create_mtrl_gaussian_blur(data.blur_hor_pipeline_h)
-	blur_hor_mtrl, _ := ve.get_material(data.blur_material_h)
-	mtrl_gaussian_blur_set_blur(blur_hor_mtrl, bright_color_attachmetn)
+	data.blur_ubo_h = create_ubo_gaussian_blur()
+	blur_hor_mtrl, _ := ve.get_uniform_buffer(data.blur_ubo_h)
+	ubo_gaussian_blur_set_blur(blur_hor_mtrl, bright_color_attachmetn)
 
-	data.material_h = create_mtrl_multilight(create_mulilight_pipeline())
-	material, _ := ve.get_material(data.material_h)
+	data.multilight_pipeline_h = create_multilight_pipeline()
+	data.multilight_ubo_h = create_ubo_multilight()
+	multilight_ubo, _ := ve.get_uniform_buffer(data.multilight_ubo_h)
 
-	mtrl_multilight_set_color(material, {0.5, 0.5, 0.5})
+	ubo_multilight_set_color(multilight_ubo, {0.5, 0.5, 0.5})
 	lights: [4]Light = {}
 	lights[0] = Light {
 		position = {0, 0, -3},
@@ -123,7 +132,7 @@ hdr_scene_init :: proc(s: ^Scene) {
 		position = {0, 0, -12},
 		color    = ({1, 1, 0} * 5),
 	}
-	mtrl_multilight_set_lights(material, lights[:])
+	ubo_multilight_set_lights(multilight_ubo, lights[:])
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -140,15 +149,15 @@ hdr_scene_init :: proc(s: ^Scene) {
 		ve.trf_rotate(&data.positions[i], axis, rand.float32_range(-math.PI, math.PI))
 	}
 
-	light_box_pipeline_h := create_light_box_pipeline()
+	data.light_box_pipeline_h = create_light_box_pipeline()
 	for i in 0 ..< 4 {
 		light: Light_Box
 		ve.init_trf(&light.trans)
 		ve.trf_set_position(&light.trans, lights[i].position)
 		ve.trf_set_scale(&light.trans, 0.3)
-		light.material = create_mtrl_light_box(light_box_pipeline_h)
-		mtrl, _ := ve.get_material(light.material)
-		mtrl_light_box_set_color(mtrl, lights[i].color)
+		light.box_ubo = create_ubo_light_box()
+		ubo, _ := ve.get_uniform_buffer(light.box_ubo)
+		ubo_light_box_set_color(ubo, lights[i].color)
 		data.light_boxes[i] = light
 	}
 
@@ -162,56 +171,56 @@ hdr_scene_update :: proc(s: ^Scene) {
 	ve.cursor_disable()
 	ve.camera_update_simple_controller(&data.camera)
 
-	m, _ := ve.get_material(data.hdr_material_h)
-	exp := mtrl_hdr_get_exposure(m^)
+	ubo, _ := ve.get_uniform_buffer(data.hdr_ubo_h)
+	exp := ubo_hdr_get_exposure(ubo^)
 	speed: f32 = 1.0
 	if (ve.is_key_down(.Up)) {
-		mtrl_hdr_set_exposure(m, exp + speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(ubo, exp + speed * ve.get_delta_time())
 	}
 	if (ve.is_key_down(.Down)) {
-		mtrl_hdr_set_exposure(m, exp - speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(ubo, exp - speed * ve.get_delta_time())
 	}
 }
 
 hdr_scene_draw :: proc(s: ^Scene) {
 	data := cast(^HDR_Scene_Data)s.data
 
-	mtrl, _ := ve.get_material(data.material_h)
-	hdr_mtrl, _ := ve.get_material(data.hdr_material_h)
-	blur_mtrl, _ := ve.get_material(data.blur_material_h)
-	hdr, _ := ve.get_surface(data.hdr_surface_h)
+	multilight_pipeline, _ := ve.get_render_pipeline(data.multilight_pipeline_h)
+	light_box_pipeline, _ := ve.get_render_pipeline(data.light_box_pipeline_h)
+	hdr_pipeline, _ := ve.get_render_pipeline(data.hdr_pipeline_h)
+	blur_hor_pipeline, _ := ve.get_render_pipeline(data.blur_hor_pipeline_h)
+	blur_ver_pipeline, _ := ve.get_render_pipeline(data.blur_ver_pipeline_h)
+
+	hdr_surface, _ := ve.get_surface(data.hdr_surface_h)
 
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.begin_surface(hdr)
+	ve.begin_surface(hdr_surface)
 	for &t in data.positions {
-		ve.draw_mesh(&data.cube, mtrl, &data.camera, &t)
+		ve.draw_mesh(&data.cube, multilight_pipeline, {camera = &data.camera, trf = &t, h0 = data.multilight_ubo_h})
 	}
 	for &l in data.light_boxes {
-		mtrl, _ := ve.get_material(l.material)
-		ve.draw_mesh(&data.cube, mtrl, &data.camera, &l.trans)
+		ve.draw_mesh(&data.cube, light_box_pipeline, {camera = &data.camera, trf = &l.trans, h0 = l.box_ubo})
 	}
-	ve.end_surface(hdr)
+	ve.end_surface(hdr_surface)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
-		ve.begin_surface(hdr, {1})
-		ve.mtrl_set_pipeline(blur_mtrl, data.blur_hor_pipeline_h)
-		ve.draw_mesh(&data.square, blur_mtrl, &data.camera, nil)
-		ve.end_surface(hdr)
+		ve.begin_surface(hdr_surface, {1})
+		ve.draw_mesh(&data.square, blur_hor_pipeline, {camera = &data.camera, h0 = data.blur_ubo_h})
+		ve.end_surface(hdr_surface)
 
 		// Vertical gaussian blur
-		ve.begin_surface(hdr, {1})
-		ve.mtrl_set_pipeline(blur_mtrl, data.blur_ver_pipeline_h)
-		ve.draw_mesh(&data.square, blur_mtrl, nil, nil)
-		ve.end_surface(hdr)
+		ve.begin_surface(hdr_surface, {1})
+		ve.draw_mesh(&data.square, blur_ver_pipeline, {camera = &data.camera, h0 = data.blur_ubo_h})
+		ve.end_surface(hdr_surface)
 	}
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, hdr_mtrl, nil, nil)
+		ve.draw_mesh(&data.square, hdr_pipeline, {h0 = data.hdr_ubo_h})
 	}
 	ve.end_draw()
 

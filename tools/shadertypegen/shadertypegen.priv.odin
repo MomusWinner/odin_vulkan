@@ -192,7 +192,7 @@ generate_glsl :: proc(store: Parse_Data, path: string, package_name: string, loc
 			func_name, r_ok := strings.replace_all(glsl_struct_name, "Ubo", "")
 			func_name, r_ok = strings.replace_all(func_name, "UBO", "")
 
-			fmt.fprintfln(f, "#define getUbo{1:s}(handle) GetResource({0:s}, handle)", glsl_struct_name, func_name)
+			fmt.fprintfln(f, "#define get{1:s}UBO(handle) GetResource({0:s}, handle)", glsl_struct_name, func_name)
 			fmt.fprintfln(f, "\n")
 		case .Storage_Buffer:
 			fmt.fprintfln(f, "// {0:s}", s.name)
@@ -223,7 +223,10 @@ generate_glsl :: proc(store: Parse_Data, path: string, package_name: string, loc
 
 			fmt.fprintfln(f, "}});\n")
 
-			fmt.fprintfln(f, "#define get{1:s}(handle) GetResource({0:s}, handle)", glsl_struct_name, glsl_struct_name)
+			func_name, r_ok := strings.replace_all(glsl_struct_name, "Sbo", "")
+			func_name, r_ok = strings.replace_all(func_name, "SBO", "")
+
+			fmt.fprintfln(f, "#define get{1:s}SBO(handle) GetResource({0:s}, handle)", glsl_struct_name, func_name)
 			fmt.fprintfln(f, "\n")
 		case .None:
 			fmt.fprintfln(f, "// {0:s}", s.name)

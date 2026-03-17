@@ -8,6 +8,6 @@ layout(location = 2) in vec3 inNormal;
 layout(location = 3) in vec4 inColor;
 
 void main() {
-	vec3 pos = inPosition.xyz + inNormal * getMtrlOutline().outline_width;
+	vec3 pos = inPosition.xyz + inNormal * getOutlineUBO(H0()).outline_width;
 	gl_Position = getCamera().projection * getCamera().view * getModel() * vec4(pos, 1);
 }

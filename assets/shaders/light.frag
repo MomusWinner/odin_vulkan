@@ -10,9 +10,8 @@ layout(location = 4) in vec4 fragPosLightSpace;
 
 layout(location = 0) out vec4 outColor;
 
-#define LIGHT_SLOT 0
-#define getLightUBO() getUboLight(gHandle(LIGHT_SLOT))
-#define getShadowMap() uGlobalTextures2D[getLightUBO().shadow] 
+#define getLightData() getLightDataUBO(H1())
+#define getShadowMap() gTextures2D[getLightData().shadow]
 
 float textureProj(vec4 shadowCoord, vec2 off) {
 	float shadow = 0;
@@ -53,20 +52,23 @@ float filterPCF(vec4 sc) {
 void main() {
 	float shadow = filterPCF(fragPosLightSpace / fragPosLightSpace.w);
 
-	vec3 color = getMtrlLight().diffuse;
+	vec3 color = getLightUBO(H0()).diffuse;
 	vec3 normal = normalize(fragNormal);
-	vec3 lightColor = getLightUBO().color;
-	vec3 ambient = getMtrlLight().ambient * lightColor;
+	vec3 lightColor = getLightData().color;
+	vec3 ambient = getLightUBO(H0()).ambient * lightColor;
+
 	// diffuse
-	vec3 lightDir = normalize(-getLightUBO().direction);
+	vec3 lightDir = normalize(-getLightData().direction);
 	float diff = max(dot(lightDir, normal), 0.0);
 	vec3 diffuse = diff * lightColor;
+
 	// specular
 	vec3 viewDir = normalize(getCamera().position - fragPos);
 	float spec = 0.0;
 	vec3 halfwayDir = normalize(lightDir + viewDir);
 	spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
 	vec3 specular = spec * lightColor;
+
 	// calculate shadow
 	vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;
 	outColor = vec4(lighting, 1);

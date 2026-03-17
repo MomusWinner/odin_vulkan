@@ -18,7 +18,7 @@ Rock_Instance :: struct {
 
 Instancing_Scene_Data :: struct {
 	cube:                   ve.Mesh,
-	material:               ve.Material_Handle,
+	pipeline_h:             ve.Render_Pipeline_Handle,
 	transform:              ve.Gfx_Transform,
 	instance_vertex_buffer: ve.Buffer,
 	camera:                 ve.Camera,
@@ -46,8 +46,7 @@ instancing_scene_init :: proc(s: ^Scene) {
 	ve.camera_init(&data.camera)
 
 	data.cube = ve.create_primitive_cube()
-
-	data.material = ve.create_mtrl_empty(create_instancing_pipeline())
+	data.pipeline_h = create_instancing_pipeline()
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -86,7 +85,7 @@ instancing_scene_update :: proc(s: ^Scene) {
 instancing_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Instancing_Scene_Data)s.data
 
-	mtrl, _ := ve.get_material(data.material)
+	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
 
 	ve.begin_render()
 	// Begin ve.
@@ -95,7 +94,12 @@ instancing_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw(clear_color = {.1, .1, .1, 1})
 	{
 		ve.cmd_bind_vertex_buffer(data.instance_vertex_buffer, 1)
-		ve.draw_mesh(&data.cube, mtrl, &data.camera, &data.transform, INSTANCE_COUNT)
+		ve.draw_mesh(
+			&data.cube,
+			pipeline,
+			{camera = &data.camera, trf = &data.transform},
+			instance_count = INSTANCE_COUNT,
+		)
 	}
 	ve.end_draw()
 

@@ -5,5 +5,5 @@
 layout(location = 0) out vec4 outColor;
 
 void main() {
-	outColor = getMtrlOutline().color;
+	outColor = getOutlineUBO(H0()).color;
 }

@@ -10,7 +10,7 @@ import "core:math/rand"
 import "core:slice"
 import "core:time"
 
-PARTICLE_COUNT :: 1_000_000
+PARTICLE_COUNT :: 100_000
 INVOCATION_SIZE :: 256
 GROUP_COUNT :: 1 + PARTICLE_COUNT / INVOCATION_SIZE
 
@@ -24,22 +24,19 @@ Particle_SBO :: struct {
 	particles: [PARTICLE_COUNT]Particle,
 }
 
-@(material)
-Delta_Time_Info_UBO :: struct {
+@(buffer)
+Delta_Time_UBO :: struct {
 	delta_time: f32,
-	sbo:        ve.Buffer_Handle,
 }
 
 Compute_Scene_Data :: struct {
 	mesh:            ve.Mesh,
-	material:        ve.Material_Handle,
+	time_ubo_h:      ve.Uniform_Buffer_Handle,
 	transform:       ve.Gfx_Transform,
-	camera:          ve.Camera,
 	pipeline_h:      ve.Render_Pipeline_Handle,
-	sb:              ve.Storage_Buffer_Handle,
+	sbo_h:           ve.Storage_Buffer_Handle,
 	comp_pipeline_h: ve.Pipeline_Handle,
 	model_rotation:  f32,
-	comp_mtrl_h:     ve.Material_Handle,
 }
 
 create_compute_scene :: proc() -> Scene {
@@ -54,20 +51,12 @@ create_compute_scene :: proc() -> Scene {
 compute_scene_init :: proc(s: ^Scene) {
 	data := new(Compute_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera {
-		position = {0, 0, 2},
-		target   = {0, 0, 0},
-		up       = {0, 1, 0},
-	}
-	ve.camera_init(&data.camera)
-
 	// Load Model
 	data.pipeline_h = create_particle_pipeline()
 
-	// Setup Material
-	data.material = ve.create_mtrl_base(data.pipeline_h)
-	material, _ := ve.get_material(data.material)
+	b1 := ve.create_buffer({.Vertex}, 4)
+	b := ve.store_buffer(b1)
+	log.info(b.index)
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -76,53 +65,50 @@ compute_scene_init :: proc(s: ^Scene) {
 
 	particles := generate_particlls(context.temp_allocator)
 
-	data.sb = create_sbo_particle({.Storage, .Vertex, .Host_Read, .Host_Write})
-	sb, _ := ve.get_storage_buffer(data.sb)
+	data.sbo_h = create_sbo_particle({.Storage, .Vertex, .Host_Read, .Host_Write})
+	sb, _ := ve.get_storage_buffer(data.sbo_h)
 	sbo_particle_set_particles(sb, particles[:])
 	vbo := ve.get_buffer_h(sb.buffer_h)^
 
-	data.mesh = ve.Mesh { 	// TODO:
-		vbo      = vbo,
-		vertices = make([]ve.Vertex, PARTICLE_COUNT),
+	data.mesh = ve.Mesh {
+		vbo          = vbo,
+		vertex_count = PARTICLE_COUNT,
 	}
 
 	// Setup Compute
-	data.comp_mtrl_h = create_mtrl_delta_time_info_ubo({})
-	comp_mtrl, _ := ve.get_material(data.comp_mtrl_h)
-
-	mtrl_delta_time_info_ubo_set_sbo(comp_mtrl, sb.buffer_h)
+	data.time_ubo_h = create_ubo_delta_time()
 	data.comp_pipeline_h = create_compute_pipeline(INVOCATION_SIZE)
 
 	ve.set_target_fps(10000)
+
 	s.data = data
 }
 
 compute_scene_update :: proc(s: ^Scene) {
 	data := cast(^Compute_Scene_Data)s.data
 
-	comp_mtrl, _ := ve.get_material(data.comp_mtrl_h)
-	mtrl_delta_time_info_ubo_set_delta_time(comp_mtrl, ve.get_delta_time())
+	time_ubo, _ := ve.get_uniform_buffer(data.time_ubo_h)
+	ubo_delta_time_set_delta_time(time_ubo, ve.get_delta_time())
 }
 
 compute_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Compute_Scene_Data)s.data
 
-	material, m_ok := ve.get_material(data.material)
-	assert(m_ok)
-	compute, _ := ve.get_compute_pipeline(data.comp_pipeline_h)
-	comp_mtrl, _ := ve.get_material(data.comp_mtrl_h)
-	sb, _ := ve.get_storage_buffer(data.sb)
-	b := ve.get_buffer_h(sb.buffer_h)
+	compute_pipeline, _ := ve.get_compute_pipeline(data.comp_pipeline_h)
+	sbo, _ := ve.get_storage_buffer(data.sbo_h)
+	b := ve.get_buffer_h(sbo.buffer_h)
+
+	render_pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
 
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.compute_pipeline_dispatch(compute^, b^, {GROUP_COUNT, 1, 1}, comp_mtrl)
+	ve.compute_pipeline_dispatch(compute_pipeline^, b^, {GROUP_COUNT, 1, 1}, {h0 = data.sbo_h, h1 = data.time_ubo_h})
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.mesh, material, &data.camera, &data.transform)
+		ve.draw_mesh(&data.mesh, render_pipeline, {h0 = data.sbo_h}) // FIXME:
 	}
 	ve.end_draw()
 

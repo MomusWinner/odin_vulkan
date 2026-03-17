@@ -36,7 +36,6 @@ _init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
 
 	_init_swapchaint_cfg()
 
-	_init_g_res_manager()
 	_init_pipeline_manager(ODIN_DEBUG)
 	_init_surface_manager()
 	_init_sync_obj()
@@ -44,14 +43,12 @@ _init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
 	_init_deffered_destructor()
 	_init_buffer_manager()
 	_init_bindless()
-	_init_temp_pools()
 	_init_buildin_resources()
 }
 
 @(private)
 _destroy_gfx :: proc() {
 	_destroy_buildin()
-	_destroy_temp_pools()
 	_destroy_bindless()
 	_destroy_buffer_manager()
 	_destroy_deffered_destructor()
@@ -60,7 +57,6 @@ _destroy_gfx :: proc() {
 	_destroy_swapchain()
 	_destroy_pipeline_manager()
 	_destroy_surface_manager()
-	_destroy_g_res_manager()
 	_destroy_vulkan_state()
 
 	ctx.gfx = Graphics{}
@@ -599,9 +595,9 @@ _init_buildin_resources :: proc() {
 
 @(private = "file")
 _destroy_buildin :: proc() {
-	delete(ctx.gfx.buildin.square.materials)
-	ctx.gfx.buildin.square.materials = {}
-	destroy_model(&ctx.gfx.buildin.square)
+	// delete(ctx.gfx.buildin.square.materials)
+	// ctx.gfx.buildin.square.materials = {} // FIXME:
+	// destroy_model(&ctx.gfx.buildin.square)
 	destroy_mesh(&ctx.gfx.buildin.unit_square)
 	free(ctx.gfx.buildin)
 }

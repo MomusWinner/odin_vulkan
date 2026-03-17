@@ -11,6 +11,6 @@ layout(location = 1) out vec4 fragColor;
 void main() {
 	gl_Position = getCamera().projection * getCamera().view * getModel() * vec4(inPosition, 1.0);
 
-	fragColor = getMtrlBase().color;
+	fragColor = getBaseUBO(H0()).color;
 	fragTexCoord = inTexCoord;
 }

@@ -74,70 +74,6 @@ create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/postprocessing.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/postprocessing.frag"},
-	)
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-
-	return ve.create_render_pipeline(create_info)
-}
-
-create_depth_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/depth.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/depth.frag"},
-	)
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-
-	return ve.create_render_pipeline(create_info)
-}
-
-create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/light.frag"},
-	)
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-
-	return ve.create_render_pipeline(create_info)
-}
-
-create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
-
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(&stages, ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light.vert"})
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-	create_info.depth.bias = {
-		enable          = true,
-		constant_factor = 1.25,
-		clamp           = 0,
-		slope_factor    = 4.75,
-	}
-
-	return ve.create_render_pipeline(create_info)
-}
-
 create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
@@ -186,64 +122,6 @@ create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/buildin/shaders/default.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/buildin/shaders/default.frag"},
-	)
-
-	stencil_state := ve.Stencil_Op_State {
-		failOp      = .Replace,
-		passOp      = .Replace,
-		depthFailOp = .Replace,
-		compareOp   = .Always,
-		compareMask = 0xff,
-		writeMask   = 0xff,
-		reference   = 1,
-	}
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-	create_info.stencil = {
-		enable = true,
-		front  = stencil_state,
-		back   = stencil_state,
-	}
-
-	return ve.create_render_pipeline(create_info)
-}
-
-create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/outline.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/outline.frag"},
-	)
-
-	stencil_state := ve.Stencil_Op_State {
-		failOp      = .Keep,
-		passOp      = .Replace,
-		depthFailOp = .Keep,
-		compareOp   = .Not_Equal,
-		compareMask = 0xff,
-		writeMask   = 0xff,
-		reference   = 1,
-	}
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-	create_info.stencil = {
-		enable = true,
-		front  = stencil_state,
-		back   = stencil_state,
-	}
-
-	return ve.create_render_pipeline(create_info)
-}
-
 create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
@@ -259,7 +137,7 @@ create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 
-create_mulilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_multilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,

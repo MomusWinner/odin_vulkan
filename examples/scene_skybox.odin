@@ -8,12 +8,12 @@ import "core:math/rand"
 import "core:time"
 
 Skybox_Scene_Data :: struct {
-	cubemap_h:        ve.Texture_Handle,
-	skybox_material:  ve.Material_Handle,
-	reflect_material: ve.Material_Handle,
-	cube:             ve.Mesh,
-	transform:        ve.Gfx_Transform,
-	camera:           ve.Camera,
+	cubemap_h:          ve.Texture_Handle,
+	skybox_pipeline_h:  ve.Render_Pipeline_Handle,
+	reflect_pipeline_h: ve.Render_Pipeline_Handle,
+	cube:               ve.Mesh,
+	transform:          ve.Gfx_Transform,
+	camera:             ve.Camera,
 }
 
 create_skybox_scene :: proc() -> Scene {
@@ -50,17 +50,9 @@ skybox_scene_init :: proc(s: ^Scene) {
 		},
 	)
 
-	pipeline_h := create_skybox_pipeline()
+	data.skybox_pipeline_h = create_skybox_pipeline()
 
-	// Setup Material
-	data.skybox_material = ve.create_mtrl_base(pipeline_h)
-	skybox_material, _ := ve.get_material(data.skybox_material)
-	ve.mtrl_base_set_texture(skybox_material, data.cubemap_h)
-
-	reflect_pipeline_h := create_reflect_pipeline()
-	data.reflect_material = ve.create_mtrl_base(reflect_pipeline_h)
-	reflect_material, _ := ve.get_material(data.reflect_material)
-	ve.mtrl_base_set_texture(reflect_material, data.cubemap_h)
+	data.reflect_pipeline_h = create_reflect_pipeline()
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -79,8 +71,8 @@ skybox_scene_update :: proc(s: ^Scene) {
 skybox_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Skybox_Scene_Data)s.data
 
-	skybox_mtrl, _ := ve.get_material(data.skybox_material)
-	reflect_mtrl, _ := ve.get_material(data.reflect_material)
+	skybox_pipeline, _ := ve.get_render_pipeline(data.skybox_pipeline_h)
+	reflect_pipeline, _ := ve.get_render_pipeline(data.reflect_pipeline_h)
 
 	ve.begin_render()
 	// Begin ve.
@@ -89,10 +81,10 @@ skybox_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw()
 	{
 		// Skybox
-		ve.draw_mesh(&data.cube, skybox_mtrl, &data.camera, nil)
+		ve.draw_mesh(&data.cube, skybox_pipeline, {camera = &data.camera, h0 = data.cubemap_h})
 
 		// Diamond
-		ve.draw_mesh(&data.cube, reflect_mtrl, &data.camera, &data.transform)
+		ve.draw_mesh(&data.cube, reflect_pipeline, {camera = &data.camera, trf = &data.transform, h0 = data.cubemap_h})
 	}
 	ve.end_draw()
 

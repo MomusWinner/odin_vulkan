@@ -240,15 +240,30 @@ Compute_Pipeline :: struct {
 	create_info: Create_Compute_Pipeline_Info,
 }
 
-Push_Constant :: struct {
+
+Push_Constants_Data :: struct {
 	model:    mat4,
 	camera:   u32,
-	material: u32,
+	handles:  [PUSH_CONSTANTS_HANDLE_COUNT]u32,
 	reserve0: u32,
 	reserve1: u32,
 	reserve2: u32,
 	reserve3: u32,
-	slots:    [MAX_SLOT_COUNT]u32,
+}
+
+Push_Constants :: struct {
+	trf:    ^Gfx_Transform,
+	camera: ^Camera,
+	h0:     Resource_Handle,
+	h1:     Resource_Handle,
+	h2:     Resource_Handle,
+	h3:     Resource_Handle,
+	h4:     Resource_Handle,
+	h5:     Resource_Handle,
+	h6:     Resource_Handle,
+	h7:     Resource_Handle,
+	h8:     Resource_Handle,
+	h9:     Resource_Handle,
 }
 
 Pipeline_Handle :: distinct hm.Handle
@@ -534,11 +549,16 @@ destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline) {
 	_destroy_pipline(pipeline)
 }
 
-compute_pipeline_dispatch :: proc(pipeline: Compute_Pipeline, buffer: Buffer, group_count: uvec3, mtrl: ^Material) {
+compute_pipeline_dispatch :: proc(
+	pipeline: Compute_Pipeline,
+	buffer: Buffer,
+	group_count: uvec3,
+	consts: Push_Constants,
+) {
 	cmd_bind_compute_pipeline(pipeline)
 
-	consts := _get_push_constants(mtrl, nil, nil)
-	cmd_push_constants(pipeline, &consts, {.COMPUTE})
+	consts_data := _push_constants_to_data(consts)
+	cmd_push_constants(pipeline, &consts_data, {.COMPUTE})
 
 	bindless_descriptor_set := get_descriptor_set_bindless()
 	vk.CmdBindDescriptorSets(
@@ -757,7 +777,7 @@ _create_graphics_pipeline :: proc(
 	if create_info.bindless {
 		pipeline_layout_info.push_constant = Push_Constant_Range {
 			offset     = 0,
-			size       = size_of(Push_Constant),
+			size       = size_of(Push_Constants_Data),
 			stageFlags = vk.ShaderStageFlags_ALL_GRAPHICS,
 		}
 		sm.append(&create_info.descriptor_set_infos, get_bindless_pipeline_set_info())
@@ -872,7 +892,7 @@ _create_compute_pipeline :: proc(
 	if create_info.bindless {
 		pipeline_layout_info.push_constant = Push_Constant_Range {
 			offset     = 0,
-			size       = size_of(Push_Constant),
+			size       = size_of(Push_Constants_Data),
 			stageFlags = {.COMPUTE},
 		}
 		sm.append(&create_info.descriptor_set_infos, get_bindless_pipeline_set_info())
