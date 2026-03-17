@@ -13,6 +13,6 @@ void main() {
 	mat4 view = mat4(mat3(getCamera().view));
 	gl_Position = getCamera().projection * view * vec4(inPosition, 1.0);
 
- getMtrlBase(H).texture fragPos = vec3(inPosition);
-  fragPos.xy *= -1;
+	fragPos = vec3(inPosition);
+	fragPos.xy *= -1;
 }
