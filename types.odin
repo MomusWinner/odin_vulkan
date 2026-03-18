@@ -26,7 +26,7 @@ Vertex :: struct {
 game_event_proc :: proc(user_data: rawptr)
 
 Game_Time :: struct {
-	total_game_time:         f64,
+	total_time:              f64,
 	delta_time:              f32,
 	target_time:             f32,
 	fixed_target_time:       f32,

@@ -74,13 +74,13 @@ run :: proc() {
 		}
 		ctx.game_time.previous_frame = start
 
-		ctx.game_time.total_game_time += cast(f64)ctx.game_time.delta_time
+		ctx.game_time.total_time += cast(f64)ctx.game_time.delta_time
 
 		free_all(context.temp_allocator)
 
 		_update_input()
 
-		fixed_update_dept_time := ctx.game_time.total_game_time - ctx.game_time.fixed_update_total_time
+		fixed_update_dept_time := ctx.game_time.total_time - ctx.game_time.fixed_update_total_time
 		fixed_update_dept_count := cast(int)(fixed_update_dept_time / cast(f64)ctx.game_time.fixed_target_time)
 
 		if fixed_update_dept_count > 0 {

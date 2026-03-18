@@ -27,8 +27,8 @@ get_fixed_delta_time :: proc() -> f32 {
 	return ctx.game_time.fixed_target_time
 }
 
-get_total_game_time :: proc() -> f64 {
-	return ctx.game_time.total_game_time
+get_total_time :: proc() -> f64 {
+	return ctx.game_time.total_time
 }
 
 @(private)
