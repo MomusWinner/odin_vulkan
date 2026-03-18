@@ -1,6 +1,7 @@
 package ve
 
 import "core:c"
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:mem"
@@ -140,6 +141,7 @@ Image :: struct {
 	height:   u32,
 	channels: u32,
 	data:     [^]byte,
+	path:     string,
 }
 
 Sampler_Border_Color :: enum {
@@ -179,6 +181,19 @@ Sampler_Info :: struct {
 	lod_clamp:         Sampler_Lod_Clamp,
 }
 
+DEFAULT_SURFACE_SAMPLER_INFO :: Sampler_Info {
+	mag_filter        = .Linear,
+	min_filter        = .Linear,
+	address_mode_u    = .Clamp_To_Border,
+	address_mode_v    = .Clamp_To_Border,
+	address_mode_w    = .Clamp_To_Border,
+	anisotropy_enable = false,
+	border_color      = .Transparent_Black,
+	mipmap_mode       = .Linear,
+	lod_clamp         = SAMPLER_LOD_CLAMP_NONE,
+}
+
+
 Texture_Encoding :: enum {
 	Linear,
 	sRGB,
@@ -186,7 +201,7 @@ Texture_Encoding :: enum {
 
 Texture :: struct {
 	id:              vk.Image,
-	name:            string,
+	debug_name:      string,
 	view:            vk.ImageView,
 	sampler:         vk.Sampler,
 	format:          vk.Format,
@@ -212,7 +227,7 @@ load_image :: proc(path: string, desired_channels: i32 = 0, loc := #caller_locat
 	image.width = cast(u32)width
 	image.height = cast(u32)height
 	image.channels = desired_channels == 0 ? cast(u32)channels : cast(u32)desired_channels
-
+	image.path = path
 	image.data = data
 	ok = true
 
@@ -231,7 +246,7 @@ load_texture :: proc(path: string, mip_levels: u32 = 1, anisotropy: f32 = 1) -> 
 		log.error("couldn't load texture by path: ", path)
 		return {}
 	}
-	texture := create_texture(image, path, mip_levels)
+	texture := create_texture(image, mip_levels)
 
 	return store_texture(texture)
 }
@@ -240,12 +255,13 @@ unload_texture :: destroy_texture_h
 
 create_texture :: proc(
 	image: Image,
-	name: string = "empty_texture",
 	mip_levels: u32 = 1,
 	encoding: Texture_Encoding = .sRGB,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
-) -> Texture {
+) -> (
+	texture: Texture,
+) {
 	assert_gfx_ctx(loc)
 
 	desired_channels: u32 = image.channels
@@ -309,15 +325,18 @@ create_texture :: proc(
 	image_view := _create_image_view(vk_image, format, {.COLOR}, mip_levels)
 	sampler: vk.Sampler = create_sampler(sampler_info)
 
-	return Texture {
-		name = name,
-		id = vk_image,
-		view = image_view,
-		format = format,
-		sampler = sampler,
-		allocation = allocation,
-		allocation_info = allocation_info,
+	texture.id = vk_image
+	texture.view = image_view
+	texture.format = format
+	texture.sampler = sampler
+	texture.allocation = allocation
+	texture.allocation_info = allocation_info
+	when GFX_DEBUG {
+		texture.debug_name = fmt.aprintf("%s %s", image.path, _location_to_string(loc))
+		_vk_set_debug_texture_name(texture)
 	}
+
+	return
 }
 
 destroy_texture :: proc(texture: ^Texture, loc := #caller_location) {
@@ -357,7 +376,7 @@ load_cubemap_texture :: proc(
 		images[i] = image
 	}
 
-	texture := create_texture_cubemap(images, paths[0], mip_levels)
+	texture := create_texture_cubemap(images, mip_levels)
 
 	for &image in images {
 		unload_image(image)
@@ -375,12 +394,13 @@ unload_cubemap_texture :: destroy_texture_h
 // 4: +Z (front)   5: -Z (back)
 create_texture_cubemap :: proc(
 	faces: [CUBEMAP_LAYERS_COUNT]Image,
-	name: string = "empty_cubemap",
 	mip_levels: u32 = 1,
 	encoding: Texture_Encoding = .sRGB,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
-) -> Texture_Cubemap {
+) -> (
+	cubemap: Texture_Cubemap,
+) {
 	for _, i in faces {
 		for _, j in faces {
 			if i == j do continue
@@ -435,7 +455,6 @@ create_texture_cubemap :: proc(
 		6,
 		{.CUBE_COMPATIBLE},
 	)
-	_vk_set_debug_object_name(cast(u64)vk_image, .IMAGE, name)
 
 	_cmd_image_transition_layout(
 		sc.cmd,
@@ -474,15 +493,19 @@ create_texture_cubemap :: proc(
 	image_view := _create_image_view(vk_image, format, {.COLOR}, mip_levels, .CUBE, CUBEMAP_LAYERS_COUNT)
 	sampler: vk.Sampler = create_sampler(sampler_info)
 
-	return Texture_Cubemap {
-		name = name,
-		id = vk_image,
-		view = image_view,
-		format = format,
-		sampler = sampler,
-		allocation = allocation,
-		allocation_info = allocation_info,
+	cubemap.id = vk_image
+	cubemap.view = image_view
+	cubemap.format = format
+	cubemap.sampler = sampler
+	cubemap.allocation = allocation
+	cubemap.allocation_info = allocation_info
+
+	when GFX_DEBUG {
+		cubemap.debug_name = fmt.aprintf("%s %s", image.path, _location_to_string(loc))
+		_vk_set_debug_texture_name(cubemap)
 	}
+
+	return
 }
 
 create_sampler :: proc(info: Sampler_Info, loc := #caller_location) -> Sampler {
@@ -861,4 +884,12 @@ _cmd_image_transition_layout :: proc(
 	}
 
 	vk.CmdPipelineBarrier2(cmd, &dependency_info)
+}
+
+_vk_set_debug_texture_name :: #force_inline proc(texture: Texture) {
+	when (GFX_DEBUG) {
+		_vk_set_debug_object_name(cast(u64)texture.id, .IMAGE, texture.debug_name)
+		_vk_set_debug_object_name(cast(u64)texture.view, .IMAGE_VIEW, texture.debug_name)
+		_vk_set_debug_object_name(cast(u64)texture.sampler, .SAMPLER, texture.debug_name)
+	}
 }

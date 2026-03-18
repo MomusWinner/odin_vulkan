@@ -48,18 +48,6 @@ Render_Target :: struct {
 	sample_count:      Sample_Count_Flag,
 }
 
-DEFAULT_SURFACE_SAMPLER_INFO :: Sampler_Info {
-	mag_filter        = .Linear,
-	min_filter        = .Linear,
-	address_mode_u    = .Clamp_To_Border,
-	address_mode_v    = .Clamp_To_Border,
-	address_mode_w    = .Clamp_To_Border,
-	anisotropy_enable = false,
-	border_color      = .Transparent_Black,
-	mipmap_mode       = .Linear,
-	lod_clamp         = SAMPLER_LOD_CLAMP_NONE,
-}
-
 init_render_target :: proc(
 	render_target: ^Render_Target,
 	width, height: u32,
@@ -455,7 +443,7 @@ _create_render_target_color_resource :: proc(
 
 	return Texture {
 		id = image,
-		name = "surface color attachment",
+		debug_name = "surface color attachment",
 		view = view,
 		format = format,
 		allocation = allocation,
@@ -492,7 +480,7 @@ _create_render_target_color_resolve_resource :: proc(
 
 	return Texture {
 		id = image,
-		name = "surface resolve color attachment",
+		debug_name = "surface resolve color attachment",
 		sampler = sampler,
 		view = view,
 		format = format,
@@ -543,7 +531,7 @@ _create_render_target_depth_resource :: proc(
 
 	return Texture {
 		id = image,
-		name = "surface depth attachment",
+		debug_name = "surface depth attachment",
 		view = view,
 		format = format,
 		allocation = allocation,
@@ -590,7 +578,7 @@ _create_render_target_depth_resource_sampled :: proc(
 
 	return Texture {
 		id = image,
-		name = "surface depth msaa attachment",
+		debug_name = "surface depth msaa attachment",
 		view = view,
 		sampler = sampler,
 		format = format,

@@ -655,9 +655,9 @@ get_field_type_default_value :: proc(field_type: Field_Type, gfx_pref: string) -
 	case .None, .Int, .Bool, .Float, .Vector2, .Vector3, .Vector4, .Mat4, .Array, .Custom:
 		return nil
 	case .Texture_Handle:
-		return fmt.aprintf("%sNil_Texture_Handle", gfx_pref)
+		return fmt.aprintf("%sINVALID_TEXTURE_HANDLE", gfx_pref)
 	case .Buffer_Handle:
-		return fmt.aprintf("%sNil_Buffer_Handle", gfx_pref)
+		return fmt.aprintf("%sINVALID_BUFFER_HANDLE", gfx_pref)
 	}
 	return nil
 }

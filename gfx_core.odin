@@ -260,9 +260,9 @@ Sync_Data :: struct {
 // BINDLESS
 
 Texture_Handle :: distinct hm.Handle
-Nil_Texture_Handle :: Texture_Handle{max(u32), max(u32)}
+INVALID_TEXTURE_HANDLE :: Texture_Handle{max(u32), max(u32)}
 Buffer_Handle :: distinct hm.Handle
-Nil_Buffer_Handle :: Buffer_Handle{max(u32), max(u32)}
+INVALID_BUFFER_HANDLE :: Buffer_Handle{max(u32), max(u32)}
 
 Bindless :: struct {
 	set:        vk.DescriptorSet,
@@ -768,7 +768,7 @@ _push_constants_to_data :: proc(consts: Push_Constants, loc := #caller_location)
 	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
 	consts_data := Push_Constants_Data {
 		model  = trf_get_matrix(consts.trf) if consts.trf != nil else 1,
-		camera = _camera_get_buffer(consts.camera, aspect).index if consts.camera != nil else Nil_Buffer_Handle.index,
+		camera = _camera_get_buffer(consts.camera, aspect).index if consts.camera != nil else INVALID_TEXTURE_HANDLE.index,
 	}
 
 	resource_to_index :: proc(r: Resource_Handle) -> u32 {
@@ -992,7 +992,7 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 
 	texture := Texture {
 		id              = image,
-		name            = "swapchain_msaa_color_texture",
+		debug_name      = "swapchain_msaa_color_texture",
 		format          = color_format,
 		view            = view,
 		allocation      = allocation,
