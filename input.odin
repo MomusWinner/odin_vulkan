@@ -157,7 +157,6 @@ MouseButton :: enum {
 
 @(private = "file")
 input: struct {
-	window:   ^glfw.WindowHandle,
 	keyboard: struct {
 		states:          [KEYBOARD_MAX_KEY]i32,
 		previous_states: [KEYBOARD_MAX_KEY]i32,
@@ -212,11 +211,11 @@ is_mouse_button_up :: proc(button: MouseButton) -> bool {
 }
 
 cursor_disable :: proc() {
-	glfw.SetInputMode(ctx.window, glfw.CURSOR, glfw.CURSOR_DISABLED)
+	glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_DISABLED)
 }
 
 cursor_enable :: proc() {
-	glfw.SetInputMode(ctx.window, glfw.CURSOR, glfw.CURSOR_NORMAL)
+	glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_NORMAL)
 }
 
 get_scroll_vec2 :: proc() -> vec2 {
@@ -230,9 +229,8 @@ get_scroll_f32 :: proc() -> f32 {
 }
 
 @(private)
-_init_input :: proc(window: ^glfw.WindowHandle) {
-	input.window = window
-	glfw.SetScrollCallback(window^, _scroll_callback)
+_init_input :: proc() {
+	glfw.SetScrollCallback(ctx.window.id, _scroll_callback)
 	input.mouse.previouse_position = vec2{cast(f32)get_screen_width(), cast(f32)get_screen_height()} / 2
 }
 
@@ -244,7 +242,7 @@ _update_input :: proc() {
 	// Keyboard
 	input.keyboard.previous_states = input.keyboard.states
 	for key in glfw.KEY_SPACE ..< KEYBOARD_MAX_KEY {
-		state := glfw.GetKey(input.window^, cast(i32)key)
+		state := glfw.GetKey(ctx.window.id, cast(i32)key)
 
 		input.keyboard.states[key] = state
 	}
@@ -252,11 +250,11 @@ _update_input :: proc() {
 	// Mouse
 	input.mouse.previous_states = input.mouse.states
 	for key in glfw.MOUSE_BUTTON_1 ..< glfw.MOUSE_BUTTON_LAST {
-		input.mouse.states[key] = glfw.GetMouseButton(input.window^, cast(i32)key)
+		input.mouse.states[key] = glfw.GetMouseButton(ctx.window.id, cast(i32)key)
 	}
 
 	input.mouse.previouse_position = input.mouse.position
-	mouse_pos_x, mouse_pos_y := glfw.GetCursorPos(input.window^)
+	mouse_pos_x, mouse_pos_y := glfw.GetCursorPos(ctx.window.id)
 	input.mouse.position = {cast(f32)mouse_pos_x, cast(f32)mouse_pos_y}
 }
 

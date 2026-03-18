@@ -24,11 +24,10 @@ when ODIN_OS == .Darwin {
 g_context: runtime.Context // FIXME: used for system callback procedures
 
 @(private)
-_init_gfx :: proc(init_info: Graphics_Init_Info, window: ^glfw.WindowHandle) {
+_init_gfx :: proc(init_info: Graphics_Init_Info) {
 	g_context = context
 
 	ctx.gfx.initialized = true
-	ctx.gfx.window = window
 
 	_init_vulkan_state()
 	ctx.gfx.cmd = _create_draw_command_buffers(ctx.gfx.vk_state) // TODO:
@@ -199,7 +198,7 @@ _destroy_instance :: proc() {
 
 @(private = "file")
 _create_surface :: proc() {
-	must(glfw.CreateWindowSurface(ctx.gfx.vk_state.instance, ctx.gfx.window^, nil, &ctx.gfx.vk_state.surface))
+	must(glfw.CreateWindowSurface(ctx.gfx.vk_state.instance, ctx.window.id, nil, &ctx.gfx.vk_state.surface))
 }
 
 @(private = "file")

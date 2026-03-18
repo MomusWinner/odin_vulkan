@@ -35,7 +35,14 @@ Game_Time :: struct {
 }
 
 Ve :: struct {
-	window:            glfw.WindowHandle,
+	window:            struct {
+		id:         glfw.WindowHandle,
+		fullscreen: bool,
+		prev:       struct {
+			width, height: int,
+			x, y:          int,
+		},
+	},
 	info:              Ve_Info,
 	should_close:      bool,
 	gfx:               Graphics,
@@ -50,8 +57,11 @@ Ve :: struct {
 Ve_Info :: struct {
 	gfx:    Graphics_Init_Info,
 	window: struct {
-		title:  string,
-		width:  i32,
-		height: i32,
+		title:      string,
+		fullscreen: bool,
+		resizable:  bool,
+		floating:   bool,
+		width:      int,
+		height:     int,
 	},
 }

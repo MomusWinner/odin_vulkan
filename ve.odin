@@ -12,7 +12,51 @@ import vk "vendor:vulkan"
 ctx: Ve
 
 @(private)
-g_err_ctx: runtime.Context
+g_err_ctx: runtime.Context // FIXME:
+
+@(require_results)
+get_screen_width :: proc() -> int {return ctx.gfx.swapchain.width}
+@(require_results)
+get_screen_height :: proc() -> int {return ctx.gfx.swapchain.height}
+@(require_results)
+get_screen_aspect :: proc() -> f32 {return cast(f32)get_screen_width() / cast(f32)get_screen_height()}
+@(require_results)
+screen_resized :: proc() -> bool {return ctx.gfx.frame.swapchain_resized}
+
+
+@(require_results)
+get_window_pos :: proc() -> (int, int) {
+	xpos, ypos := glfw.GetWindowPos(ctx.window.id)
+	return cast(int)xpos, cast(int)ypos
+}
+
+set_window_pos :: proc(x, y: int) {
+	glfw.SetWindowPos(ctx.window.id, cast(i32)x, cast(i32)y)
+}
+
+set_window_fullscreen :: proc(enable: bool) {
+	if enable == ctx.window.fullscreen do return
+
+	if enable {
+		ctx.window.prev.width, ctx.window.prev.height = get_screen_width(), get_screen_height()
+		ctx.window.prev.x, ctx.window.prev.y = get_window_pos()
+		monitor := glfw.GetPrimaryMonitor()
+		video := glfw.GetVideoMode(monitor)
+		glfw.SetWindowMonitor(ctx.window.id, monitor, 0, 0, video.width, video.height, video.refresh_rate)
+	} else {
+		glfw.SetWindowMonitor(
+			ctx.window.id,
+			nil,
+			cast(i32)ctx.window.prev.x,
+			cast(i32)ctx.window.prev.y,
+			cast(i32)ctx.window.prev.width,
+			cast(i32)ctx.window.prev.height,
+			0,
+		)
+	}
+
+	ctx.window.fullscreen = enable
+}
 
 init :: proc(
 	user_data: rawptr,
@@ -39,28 +83,49 @@ init :: proc(
 	}
 
 	glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
-	glfw.WindowHint(glfw.RESIZABLE, glfw.TRUE)
+	glfw.WindowHint(glfw.RESIZABLE, cast(b32)info.window.resizable)
+	glfw.WindowHint(glfw.FLOATING, cast(b32)info.window.floating)
 
-	window := glfw.CreateWindow(
-		info.window.width,
-		info.window.height,
-		strings.clone_to_cstring(info.window.title, context.temp_allocator),
-		nil,
-		nil,
-	)
+	window: glfw.WindowHandle
+	if info.window.fullscreen {
+		ctx.window.prev.width, ctx.window.prev.height = info.window.width, info.window.height
+		ctx.window.fullscreen = true
+		monitor := glfw.GetPrimaryMonitor()
+		video := glfw.GetVideoMode(monitor)
+
+		ctx.window.prev.x = (cast(int)video.width - info.window.width) / 2
+		ctx.window.prev.y = (cast(int)video.height - info.window.height) / 2
+		if ctx.window.prev.x < 0 do ctx.window.prev.x = 0
+		if ctx.window.prev.y < 0 do ctx.window.prev.y = 0
+
+		window = glfw.CreateWindow(
+			video.width,
+			video.height,
+			strings.clone_to_cstring(info.window.title, context.temp_allocator),
+			monitor,
+			nil,
+		)
+	} else {
+		window = glfw.CreateWindow(
+			cast(i32)info.window.width,
+			cast(i32)info.window.height,
+			strings.clone_to_cstring(info.window.title, context.temp_allocator),
+			nil,
+			nil,
+		)
+	}
 	assert(window != nil, "Couldn't create window. Please check window settings", loc)
 
 	g_err_ctx = context
 	glfw.SetErrorCallback(_glfw_error_callback)
 
-	ctx.window = window
+	ctx.window.id = window
 	ctx.game_time.target_time = 1.0 / 60.0
 	ctx.game_time.fixed_target_time = 1.0 / 38.0
-	ctx.window = window
 	ctx.info = info
 
-	_init_gfx(info.gfx, &ctx.window)
-	_init_input(&ctx.window)
+	_init_gfx(info.gfx)
+	_init_input()
 }
 
 run :: proc() {
@@ -117,7 +182,7 @@ close :: proc() {
 @(private)
 _destroy :: proc() {
 	_destroy_gfx()
-	glfw.DestroyWindow(ctx.window)
+	glfw.DestroyWindow(ctx.window.id)
 	glfw.Terminate()
 }
 

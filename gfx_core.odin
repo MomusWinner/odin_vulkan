@@ -78,7 +78,6 @@ Swapchain_Configuration :: struct {
 
 Graphics :: struct {
 	initialized:               bool,
-	window:                    ^glfw.WindowHandle,
 	vk_state:                  Vulkan_State,
 	limits:                    Graphics_Limits,
 	swapchain_cfg:             Swapchain_Configuration,
@@ -271,29 +270,6 @@ Bindless :: struct {
 	buffers:    hm.Handle_Map(Buffer, Buffer_Handle),
 }
 
-@(require_results)
-get_screen_size :: proc() -> (w: int, h: int) {return ctx.gfx.swapchain.width, ctx.gfx.swapchain.height}
-@(require_results)
-get_screen_width :: proc() -> int {return ctx.gfx.swapchain.width}
-@(require_results)
-get_screen_height :: proc() -> int {return ctx.gfx.swapchain.height}
-@(require_results)
-get_screen_aspect :: proc() -> f32 {return cast(f32)get_screen_width() / cast(f32)get_screen_height()}
-@(require_results)
-get_device_width :: proc() -> u32 {
-	width, _ := glfw.GetFramebufferSize(ctx.gfx.window^)
-	return cast(u32)width
-}
-@(require_results)
-get_device_height :: proc() -> u32 {
-	_, height := glfw.GetFramebufferSize(ctx.gfx.window^)
-	return cast(u32)height
-}
-@(require_results)
-screen_resized :: proc() -> bool {
-	return ctx.gfx.frame.swapchain_resized
-}
-
 @(private)
 _get_cmd :: proc() -> Command_Buffer {return ctx.gfx.cmd}
 
@@ -481,13 +457,13 @@ end_draw :: proc() {
 @(private)
 _on_screen_resized :: proc() {
 	// Don't do anything when minimized.
-	for w, h := glfw.GetFramebufferSize(ctx.gfx.window^);
+	for w, h := glfw.GetFramebufferSize(ctx.window.id);
 	    w == 0 || h == 0;
-	    w, h = glfw.GetFramebufferSize(ctx.gfx.window^) {
+	    w, h = glfw.GetFramebufferSize(ctx.window.id) {
 		glfw.WaitEvents()
 
 		// Handle closing while minimized.
-		if glfw.WindowShouldClose(ctx.gfx.window^) {return}
+		if glfw.WindowShouldClose(ctx.window.id) {return}
 	}
 	_recreate_swapchain()
 }
@@ -867,7 +843,7 @@ _swapchain_new :: proc(sample_count: Sample_Count_Flag) -> ^Swapchain {
 	surface_format := ctx.gfx.swapchain_cfg.vk_surface_format
 	present_mode := ctx.gfx.swapchain_cfg.present_mode
 	capabilities := _get_swapchaint_capabilites()
-	extent := _choose_swapchain_extent(ctx.gfx.window, capabilities)
+	extent := _choose_swapchain_extent(ctx.window.id, capabilities)
 
 	image_count := capabilities.minImageCount + 1
 	if capabilities.maxImageCount > 0 && image_count > capabilities.maxImageCount {
@@ -1077,14 +1053,14 @@ _swapchain_setup_semaphores :: proc(swapchain: ^Swapchain) {
 
 @(private = "file")
 @(require_results)
-_choose_swapchain_extent :: proc(window: ^glfw.WindowHandle, capabilities: vk.SurfaceCapabilitiesKHR) -> vk.Extent2D {
+_choose_swapchain_extent :: proc(window: glfw.WindowHandle, capabilities: vk.SurfaceCapabilitiesKHR) -> vk.Extent2D {
 	// special value (0xFFFFFFFF, 0xFFFFFFFF) indicating that the surface size will be determined
 	// by the extent of a swapchain targeting the surface.
 	if capabilities.currentExtent.width != max(u32) {
 		return capabilities.currentExtent
 	}
 
-	width, height := glfw.GetFramebufferSize(window^)
+	width, height := glfw.GetFramebufferSize(window)
 	return vk.Extent2D {
 		width = clamp(u32(width), capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
 		height = clamp(u32(height), capabilities.minImageExtent.height, capabilities.maxImageExtent.height),
