@@ -992,7 +992,7 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 
 	texture := Texture {
 		id              = image,
-		debug_name      = "swapchain_msaa_color_texture",
+		// debug_name      = "swapchain_msaa_color_texture", // FIXME:
 		format          = color_format,
 		view            = view,
 		allocation      = allocation,
@@ -1448,8 +1448,10 @@ has_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
 
 detstroy_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
-	destroy_buffer_h(uniform_buffer.buffer_h)
-	return ok
+	if !ok do return false
+	b, b_ok := restore_buffer_h(uniform_buffer.buffer_h)
+	if b_ok do destroy_buffer(&b)
+	return b_ok
 }
 
 store_storage_buffer :: proc(sbo: Storage_Buffer) -> Storage_Buffer_Handle {
@@ -1466,8 +1468,10 @@ get_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> (^Storage_Buffer, b
 
 detstroy_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
-	destroy_buffer_h(storage_buffer.buffer_h)
-	return ok
+	if !ok do return false
+	b, b_ok := restore_buffer_h(storage_buffer.buffer_h)
+	if b_ok do destroy_buffer(&b)
+	return b_ok
 }
 
 // ██████╗ ███████╗███████╗███████╗███████╗██████╗ ███████╗██████╗                     
@@ -1515,11 +1519,13 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 		case Buffer:
 			destroy_buffer(&resource)
 		case Buffer_Handle:
-			destroy_buffer_h(resource)
+			b, ok := restore_buffer_h(resource)
+			if ok do destroy_buffer(&b)
 		case Texture:
 			destroy_texture(&resource)
 		case Texture_Handle:
-			destroy_texture_h(resource)
+			t, ok := restore_texture_h(resource)
+			if ok do destroy_texture(&t)
 		}
 	}
 	d.next_index = 0

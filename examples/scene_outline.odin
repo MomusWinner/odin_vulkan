@@ -45,7 +45,7 @@ outline_scene_init :: proc(s: ^Scene) {
 	}
 	ve.camera_init(&data.camera)
 
-	data.model = ve.load_meshes("./assets/Suzanne.obj")[0]
+	data.model = ve.load_meshes("./assets/Suzanne.obj", context.temp_allocator)[0]
 
 	data.pipeline_h = create_outline_model_pipeline()
 	data.outline_pipeline_h = create_outline_pipeline()

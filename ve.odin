@@ -124,7 +124,7 @@ _destroy :: proc() {
 
 
 @(require_results)
-load_meshes :: proc(path: string) -> []Mesh {
+load_meshes :: proc(path: string, allocator := context.allocator) -> []Mesh {
 	imp_meshes, ok := import_obj(path)
 	defer {
 		for m in imp_meshes {
@@ -136,7 +136,7 @@ load_meshes :: proc(path: string) -> []Mesh {
 	if !ok {
 		log.error("Couldn't import obj", path)
 	}
-	meshes := make([]Mesh, len(imp_meshes))
+	meshes := make([]Mesh, len(imp_meshes), allocator)
 
 	for imp_mesh, i in imp_meshes {
 		meshes[i] = create_mesh(imp_mesh.vertices, imp_mesh.indices)

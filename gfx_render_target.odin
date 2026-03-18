@@ -3,6 +3,7 @@ package ve
 import "base:runtime"
 import hm "container/handle_map"
 import sm "core:container/small_array"
+import "core:fmt"
 import "core:log"
 import "core:mem"
 import "core:slice"
@@ -73,7 +74,8 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 	depth_attachment, has_depth_attachment := render_target.depth_attachment.?
 
 	for ca in sm.slice(&render_target.color_attachments) {
-		destroy_texture_h(ca.texture_h)
+		t, ok := restore_texture_h(ca.texture_h)
+		if ok do destroy_texture(&t)
 		msaa, has_msaa := ca.msaa_texture.?
 		if has_msaa do destroy_texture(&msaa)
 	}
@@ -83,13 +85,14 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 		case Render_Target_Common_Depth_Attachment:
 			destroy_texture(&attachment.resource)
 		case Render_Target_Readable_Depth_Attachment:
-			destroy_texture_h(attachment.texture_h)
+			t, ok := restore_texture_h(attachment.texture_h)
+			if ok do destroy_texture(&t)
+
 			msaa, has_msaa := attachment.msaa_texture.?
 			if has_msaa do destroy_texture(&msaa)
 		}
 	}
 }
-
 
 @(require_results)
 render_target_add_color_attachment :: proc(
@@ -196,7 +199,7 @@ render_target_add_readable_depth_attachment :: proc(
 	depth_attachment := Render_Target_Readable_Depth_Attachment{}
 
 	sc := begin_single_cmd()
-	depth_resource := _create_render_target_depth_resource_sampled(w, h, sc.cmd, sampler_info)
+	depth_resource := _create_render_target_depth_resource_sampled(w, h, sc.cmd, sampler_info, loc)
 	depth_attachment.texture_h = store_texture(depth_resource)
 
 	if surface.sample_count == ._1 {
@@ -438,17 +441,17 @@ _create_render_target_color_resource :: proc(
 
 	view := _create_image_view(image, format, {.COLOR}, 1)
 
-	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface msaa image")
-	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface msaa view")
-
-	return Texture {
-		id = image,
-		debug_name = "surface color attachment",
-		view = view,
-		format = format,
-		allocation = allocation,
+	texture := Texture {
+		id              = image,
+		view            = view,
+		format          = format,
+		allocation      = allocation,
 		allocation_info = allocation_info,
 	}
+
+	_vk_set_debug_texture_name(texture, fmt.tprintf("render target color msaa %s", _location_to_string(loc)))
+
+	return texture
 }
 
 @(private = "file")
@@ -474,19 +477,18 @@ _create_render_target_color_resolve_resource :: proc(
 	view := _create_image_view(image, format, {.COLOR}, 1)
 	sampler: Sampler = create_sampler(sampler_info)
 
-	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface resolve image")
-	_vk_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface resolve sampler")
-	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface resolve view")
-
-	return Texture {
-		id = image,
-		debug_name = "surface resolve color attachment",
-		sampler = sampler,
-		view = view,
-		format = format,
-		allocation = allocation,
+	texture := Texture {
+		id              = image,
+		sampler         = sampler,
+		view            = view,
+		format          = format,
+		allocation      = allocation,
 		allocation_info = allocation_info,
 	}
+
+	_vk_set_debug_texture_name(texture, fmt.tprintf("render resolve color msaa %s", _location_to_string(loc)))
+
+	return texture
 }
 
 @(private = "file")
@@ -499,9 +501,6 @@ _create_render_target_depth_resource :: proc(
 	stencil: bool,
 	loc := #caller_location,
 ) -> Texture {
-	if stencil {
-
-	}
 	format := ctx.gfx.swapchain_cfg.depth_stencil_format if stencil else ctx.gfx.swapchain_cfg.depth_format
 	aspect: vk.ImageAspectFlags = {.DEPTH, .STENCIL} if stencil else {.DEPTH}
 
@@ -526,17 +525,17 @@ _create_render_target_depth_resource :: proc(
 	)
 	view := _create_image_view(image, format, aspect, 1)
 
-	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth image")
-	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth view")
-
-	return Texture {
-		id = image,
-		debug_name = "surface depth attachment",
-		view = view,
-		format = format,
-		allocation = allocation,
+	texture := Texture {
+		id              = image,
+		view            = view,
+		format          = format,
+		allocation      = allocation,
 		allocation_info = allocation_info,
 	}
+
+	_vk_set_debug_texture_name(texture, fmt.tprintf("render target depth msaa %s", _location_to_string(loc)))
+
+	return texture
 }
 
 @(private = "file")
@@ -572,19 +571,19 @@ _create_render_target_depth_resource_sampled :: proc(
 	view := _create_image_view(image, format, {.DEPTH}, 1)
 	sampler: Sampler = create_sampler(sampler_info)
 
-	_vk_set_debug_object_name(cast(u64)image, .IMAGE, "surface depth msaa image")
-	_vk_set_debug_object_name(cast(u64)view, .IMAGE_VIEW, "surface depth msaa view")
-	_vk_set_debug_object_name(cast(u64)sampler, .SAMPLER, "surface depth msaa sampler")
 
-	return Texture {
-		id = image,
-		debug_name = "surface depth msaa attachment",
-		view = view,
-		sampler = sampler,
-		format = format,
-		allocation = allocation,
+	texture := Texture {
+		id              = image,
+		view            = view,
+		sampler         = sampler,
+		format          = format,
+		allocation      = allocation,
 		allocation_info = allocation_info,
 	}
+
+	_vk_set_debug_texture_name(texture, fmt.tprintf("render target depth msaa %s", _location_to_string(loc)))
+
+	return texture
 }
 
 @(private = "file")
@@ -643,7 +642,7 @@ _render_target_resize_readable_depth_attachment :: proc(
 
 	sc := begin_single_cmd()
 
-	resolve := _create_render_target_depth_resource_sampled(width, height, sc.cmd, attachment.sampler_info)
+	resolve := _create_render_target_depth_resource_sampled(width, height, sc.cmd, attachment.sampler_info, loc)
 	update_texture_h(attachment.texture_h, resolve)
 	attachment.info.imageView = resolve.view
 

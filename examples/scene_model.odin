@@ -39,7 +39,8 @@ model_scene_init :: proc(s: ^Scene) {
 
 	// Load Model
 	data.texture_h = ve.load_texture("./assets/room.png")
-	data.model = ve.load_meshes("./assets/room.obj")[0]
+	data.model = ve.load_meshes("./assets/room.obj", context.temp_allocator)[0]
+
 	data.pipeline_h = create_default_pipeline()
 
 	// Setup Material
@@ -84,7 +85,6 @@ model_scene_draw :: proc(s: ^Scene) {
 model_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Model_Scene_Data)s.data
 
-	ve.destroy_texture_h(data.texture_h)
 	ve.destroy_mesh(&data.model)
 
 	free(data)

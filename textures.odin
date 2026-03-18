@@ -201,7 +201,6 @@ Texture_Encoding :: enum {
 
 Texture :: struct {
 	id:              vk.Image,
-	debug_name:      string,
 	view:            vk.ImageView,
 	sampler:         vk.Sampler,
 	format:          vk.Format,
@@ -234,14 +233,14 @@ load_image :: proc(path: string, desired_channels: i32 = 0, loc := #caller_locat
 	return
 }
 
-unload_image :: proc(image: Image) {
+destroy_image :: proc(image: Image) {
 	stb_image.image_free(image.data)
 }
 
 @(require_results)
 load_texture :: proc(path: string, mip_levels: u32 = 1, anisotropy: f32 = 1) -> Texture_Handle {
 	image, ok := load_image(path)
-	defer unload_image(image)
+	defer destroy_image(image)
 	if !ok {
 		log.error("couldn't load texture by path: ", path)
 		return {}
@@ -250,8 +249,6 @@ load_texture :: proc(path: string, mip_levels: u32 = 1, anisotropy: f32 = 1) -> 
 
 	return store_texture(texture)
 }
-
-unload_texture :: destroy_texture_h
 
 create_texture :: proc(
 	image: Image,
@@ -331,10 +328,8 @@ create_texture :: proc(
 	texture.sampler = sampler
 	texture.allocation = allocation
 	texture.allocation_info = allocation_info
-	when GFX_DEBUG {
-		texture.debug_name = fmt.aprintf("%s %s", image.path, _location_to_string(loc))
-		_vk_set_debug_texture_name(texture)
-	}
+
+	_vk_set_debug_texture_name(texture, fmt.tprintf("%s %s", image.path, _location_to_string(loc)))
 
 	return
 }
@@ -379,13 +374,11 @@ load_cubemap_texture :: proc(
 	texture := create_texture_cubemap(images, mip_levels)
 
 	for &image in images {
-		unload_image(image)
+		destroy_image(image)
 	}
 
 	return store_texture(texture)
 }
-
-unload_cubemap_texture :: destroy_texture_h
 
 // Creates a cubemap texture from 6 face images.
 // Face orientation follows the standard cubemap layout:
@@ -500,10 +493,7 @@ create_texture_cubemap :: proc(
 	cubemap.allocation = allocation
 	cubemap.allocation_info = allocation_info
 
-	when GFX_DEBUG {
-		cubemap.debug_name = fmt.aprintf("%s %s", image.path, _location_to_string(loc))
-		_vk_set_debug_texture_name(cubemap)
-	}
+	_vk_set_debug_texture_name(cubemap, fmt.tprintf("%s %s", image.path, _location_to_string(loc)))
 
 	return
 }
@@ -886,10 +876,10 @@ _cmd_image_transition_layout :: proc(
 	vk.CmdPipelineBarrier2(cmd, &dependency_info)
 }
 
-_vk_set_debug_texture_name :: #force_inline proc(texture: Texture) {
-	when (GFX_DEBUG) {
-		_vk_set_debug_object_name(cast(u64)texture.id, .IMAGE, texture.debug_name)
-		_vk_set_debug_object_name(cast(u64)texture.view, .IMAGE_VIEW, texture.debug_name)
-		_vk_set_debug_object_name(cast(u64)texture.sampler, .SAMPLER, texture.debug_name)
+_vk_set_debug_texture_name :: #force_inline proc(texture: Texture, debug_name: string) {
+	when ENABLE_VALIDATION_LAYERS {
+		_vk_set_debug_object_name(cast(u64)texture.id, .IMAGE, debug_name)
+		if texture.view != 0 do _vk_set_debug_object_name(cast(u64)texture.view, .IMAGE_VIEW, debug_name)
+		if texture.view != 0 do _vk_set_debug_object_name(cast(u64)texture.sampler, .SAMPLER, debug_name)
 	}
 }

@@ -50,7 +50,7 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 
 	// Load Model
 	data.texture_h = ve.load_texture("./assets/room.png")
-	data.model = ve.load_meshes("./assets/room.obj")[0]
+	data.model = ve.load_meshes("./assets/room.obj", context.temp_allocator)[0]
 	data.square = ve.create_primitive_square()
 	data.pipeline_h = create_default_pipeline()
 
@@ -119,7 +119,6 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 postprocessing_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Postprocessing_Scene_Data)s.data
 
-	ve.destroy_texture_h(data.texture_h)
 	ve.destroy_mesh(&data.model)
 	ve.destroy_mesh(&data.square)
 	ve.destroy_render_target(&data.rt)

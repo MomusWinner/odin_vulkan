@@ -97,7 +97,6 @@ skybox_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Skybox_Scene_Data)s.data
 
 	ve.destroy_mesh(&data.cube)
-	ve.destroy_texture_h(data.cubemap_h)
 
 	free(data)
 }

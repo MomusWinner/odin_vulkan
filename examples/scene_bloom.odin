@@ -237,7 +237,6 @@ hdr_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^HDR_Scene_Data)s.data
 
 	ve.destroy_render_target(&data.hdr_rt)
-	ve.destroy_texture_h(data.texture_h)
 	ve.destroy_mesh(&data.cube)
 	ve.destroy_mesh(&data.square)
 

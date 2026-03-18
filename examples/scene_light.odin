@@ -108,7 +108,8 @@ light_scene_init :: proc(s: ^Scene) {
 	ubo_light_data_set_color(light_data, 1)
 
 	// Load Model
-	data.model = ve.load_meshes("./assets/Suzanne.obj")[0]
+	data.model = ve.load_meshes("./assets/Suzanne.obj", context.temp_allocator)[0]
+
 	data.ground = ve.create_primitive_square()
 
 	// Setup Transform

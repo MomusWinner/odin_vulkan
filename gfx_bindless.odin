@@ -25,16 +25,10 @@ update_texture_h :: proc(texture_h: Texture_Handle, new_texture: Texture, loc :=
 	_bindless_update_texture(ctx.gfx.bindless, texture_h, new_texture, loc)
 }
 
-destroy_texture_h :: proc(texture_h: Texture_Handle, loc := #caller_location) -> bool {
-	assert_gfx_ctx(loc)
 
-	texture, has_texture := _bindless_remove_texture(ctx.gfx.bindless, texture_h)
-	if has_texture {
-		destroy_texture(&texture)
-		return true
-	}
-
-	return false
+@(require_results)
+restore_texture_h :: proc(texture_h: Texture_Handle) -> (Texture, bool) {
+	return _bindless_remove_texture(ctx.gfx.bindless, texture_h)
 }
 
 @(require_results)
@@ -44,13 +38,9 @@ store_buffer :: proc(buffer: Buffer, loc := #caller_location) -> Buffer_Handle {
 	return _bindless_store_buffer(ctx.gfx.bindless, buffer, loc)
 }
 
-destroy_buffer_h :: proc(buffer_h: Buffer_Handle, loc := #caller_location) {
-	assert_gfx_ctx(loc)
-
-	buffer, has_buffer := _bindless_remove_buffer(ctx.gfx.bindless, buffer_h)
-	if has_buffer {
-		destroy_buffer(&buffer)
-	}
+@(require_results)
+restore_buffer_h :: proc(buffer_h: Buffer_Handle) -> (Buffer, bool) {
+	return _bindless_remove_buffer(ctx.gfx.bindless, buffer_h)
 }
 
 @(require_results)
