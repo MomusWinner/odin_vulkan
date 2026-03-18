@@ -880,6 +880,6 @@ _vk_set_debug_texture_name :: #force_inline proc(texture: Texture, debug_name: s
 	when ENABLE_VALIDATION_LAYERS {
 		_vk_set_debug_object_name(cast(u64)texture.id, .IMAGE, debug_name)
 		if texture.view != 0 do _vk_set_debug_object_name(cast(u64)texture.view, .IMAGE_VIEW, debug_name)
-		if texture.view != 0 do _vk_set_debug_object_name(cast(u64)texture.sampler, .SAMPLER, debug_name)
+		if texture.sampler != 0 do _vk_set_debug_object_name(cast(u64)texture.sampler, .SAMPLER, debug_name)
 	}
 }

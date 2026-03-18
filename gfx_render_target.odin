@@ -42,7 +42,7 @@ Render_Target_Readable_Depth_Attachment :: struct {
 }
 
 Render_Target :: struct {
-	width, height:     u32,
+	width, height:     int,
 	transform:         Gfx_Transform,
 	color_attachments: Render_Target_Color_Attachments,
 	depth_attachment:  Maybe(Render_Target_Depth_Attachment),
@@ -51,12 +51,13 @@ Render_Target :: struct {
 
 init_render_target :: proc(
 	render_target: ^Render_Target,
-	width, height: u32,
+	width, height: int,
 	sample_count: Sample_Count_Flag,
 	allocator := context.allocator,
 	loc := #caller_location,
 ) {
 	assert_not_nil(render_target, loc)
+	assert(width > 0 && height > 0, loc = loc)
 	assert_gfx_ctx(loc)
 
 	render_target.width = width
@@ -105,7 +106,7 @@ render_target_add_color_attachment :: proc(
 	assert_gfx_ctx(loc)
 	assert_not_nil(surface, loc)
 
-	w, h := surface.width, surface.height
+	w, h := cast(u32)surface.width, cast(u32)surface.height
 
 	vk_format := _format_to_vk(format)
 	color_attachment := Render_Target_Color_Attachment{}
@@ -162,10 +163,10 @@ render_target_add_depth_attachment :: proc(
 	assert(has_depth_attachment == false, "Surface already has a depth attachment.", loc)
 
 	stencil, has_stencil := stencil_info.?
-	width, height := surface.width, surface.height
+	w, h := cast(u32)surface.width, cast(u32)surface.height
 
 	sc := begin_single_cmd()
-	depth_resource := _create_render_target_depth_resource(width, height, sc.cmd, surface.sample_count, has_stencil)
+	depth_resource := _create_render_target_depth_resource(w, h, sc.cmd, surface.sample_count, has_stencil)
 	end_single_cmd(sc)
 
 	depth_attachment := Render_Target_Common_Depth_Attachment {
@@ -194,7 +195,7 @@ render_target_add_readable_depth_attachment :: proc(
 	_, has_depth_attachment := surface.depth_attachment.?
 	assert(has_depth_attachment == false, "Surface already has a depth attachment.", loc)
 
-	w, h := surface.width, surface.height
+	w, h := cast(u32)surface.width, cast(u32)surface.height
 
 	depth_attachment := Render_Target_Readable_Depth_Attachment{}
 
@@ -310,7 +311,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 
 	rendering_info := vk.RenderingInfo {
 		sType = .RENDERING_INFO,
-		renderArea = {extent = {width = surface.width, height = surface.height}},
+		renderArea = {extent = {width = cast(u32)surface.width, height = cast(u32)surface.height}},
 		layerCount = 1,
 		colorAttachmentCount = cast(u32)src_color_attachments.len,
 		pColorAttachments = raw_data(sm.slice(&p_color_attachments)),
@@ -383,12 +384,13 @@ end_render_target :: proc(surface: ^Render_Target, loc := #caller_location) {
 	}
 }
 
-render_target_resize :: proc(surface: ^Render_Target, width, height: u32, loc := #caller_location) {
+render_target_resize :: proc(surface: ^Render_Target, width, height: int, loc := #caller_location) {
 	_render_target_resize(surface, width, height, loc)
 }
 
 @(private = "file")
-_render_target_resize :: proc(surface: ^Render_Target, width, height: u32, loc := #caller_location) {
+_render_target_resize :: proc(surface: ^Render_Target, width, height: int, loc := #caller_location) {
+	assert(width > 0 && height > 0)
 	surface.width = width
 	surface.height = height
 
@@ -588,8 +590,8 @@ _create_render_target_depth_resource_sampled :: proc(
 
 @(private = "file")
 _render_target_resize_color_attachments :: proc(
-	width: u32,
-	height: u32,
+	width: int,
+	height: int,
 	surface: ^Render_Target,
 	loc := #caller_location,
 ) {
@@ -598,10 +600,11 @@ _render_target_resize_color_attachments :: proc(
 
 	for &ca in sm.slice(&surface.color_attachments) {
 		msaa, has_msaa := ca.msaa_texture.?
+		w, h := cast(u32)width, cast(u32)height
 
 		resolve := _create_render_target_color_resolve_resource(
-			width,
-			height,
+			w,
+			h,
 			ctx.gfx.swapchain.color_format.format,
 			ca.sampler_info,
 		)
@@ -611,8 +614,8 @@ _render_target_resize_color_attachments :: proc(
 		if has_msaa {
 			destroy_texture(&msaa)
 			new_msaa := _create_render_target_color_resource(
-				width,
-				height,
+				w,
+				h,
 				ctx.gfx.swapchain.color_format.format,
 				surface.sample_count,
 			)
@@ -625,8 +628,8 @@ _render_target_resize_color_attachments :: proc(
 
 @(private = "file")
 _render_target_resize_readable_depth_attachment :: proc(
-	width: u32,
-	height: u32,
+	width: int,
+	height: int,
 	surface: ^Render_Target,
 	loc := #caller_location,
 ) {
@@ -638,17 +641,18 @@ _render_target_resize_readable_depth_attachment :: proc(
 	attachment, ok := depth_attachment.(Render_Target_Readable_Depth_Attachment)
 	assert(ok)
 
-	msaa, has_msaa := attachment.msaa_texture.?
+	w, h := cast(u32)width, cast(u32)height
 
+	msaa, has_msaa := attachment.msaa_texture.?
 	sc := begin_single_cmd()
 
-	resolve := _create_render_target_depth_resource_sampled(width, height, sc.cmd, attachment.sampler_info, loc)
+	resolve := _create_render_target_depth_resource_sampled(w, h, sc.cmd, attachment.sampler_info, loc)
 	update_texture_h(attachment.texture_h, resolve)
 	attachment.info.imageView = resolve.view
 
 	if has_msaa {
 		destroy_texture(&msaa)
-		new_msaa := _create_render_target_depth_resource(width, height, sc.cmd, surface.sample_count, false)
+		new_msaa := _create_render_target_depth_resource(w, h, sc.cmd, surface.sample_count, false)
 		attachment.msaa_texture = new_msaa
 		attachment.info.imageView = new_msaa.view
 		attachment.info.resolveImageView = resolve.view

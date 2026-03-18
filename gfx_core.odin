@@ -161,7 +161,7 @@ Single_Command :: struct {
 Swapchain :: struct {
 	swapchain:                  vk.SwapchainKHR,
 	color_format:               vk.SurfaceFormatKHR,
-	extent:                     vk.Extent2D,
+	width, height:              int,
 	sample_count:               Sample_Count_Flag,
 	msaa_color_texture:         Maybe(Texture),
 	depth_image:                Texture,
@@ -237,8 +237,8 @@ Surface_Info :: struct {
 	depth_format:             vk.Format,
 	color_formats:            sm.Small_Array(MAX_COLOR_ATTACHMENTS, vk.Format),
 	active_color_attachments: sm.Small_Array(MAX_COLOR_ATTACHMENTS, int), // FIX:
-	width:                    u32,
-	height:                   u32,
+	width:                    int,
+	height:                   int,
 }
 
 Frame_Data :: struct {
@@ -272,13 +272,11 @@ Bindless :: struct {
 }
 
 @(require_results)
-get_screen_size :: proc() -> (width: u32, height: u32) {
-	return ctx.gfx.swapchain.extent.width, ctx.gfx.swapchain.extent.height
-}
+get_screen_size :: proc() -> (w: int, h: int) {return ctx.gfx.swapchain.width, ctx.gfx.swapchain.height}
 @(require_results)
-get_screen_width :: proc() -> u32 {return ctx.gfx.swapchain.extent.width}
+get_screen_width :: proc() -> int {return ctx.gfx.swapchain.width}
 @(require_results)
-get_screen_height :: proc() -> u32 {return ctx.gfx.swapchain.extent.height}
+get_screen_height :: proc() -> int {return ctx.gfx.swapchain.height}
 @(require_results)
 get_screen_aspect :: proc() -> f32 {return cast(f32)get_screen_width() / cast(f32)get_screen_height()}
 @(require_results)
@@ -445,7 +443,7 @@ begin_draw :: proc(clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) {
 
 	rendering_info := vk.RenderingInfo {
 		sType = .RENDERING_INFO,
-		renderArea = {extent = ctx.gfx.swapchain.extent},
+		renderArea = {extent = {width = cast(u32)ctx.gfx.swapchain.width, height = cast(u32)ctx.gfx.swapchain.height}},
 		layerCount = 1,
 		colorAttachmentCount = 1,
 		pColorAttachments = &color_attachment_info,
@@ -459,8 +457,8 @@ begin_draw :: proc(clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) {
 		type         = .Swapchain,
 		sample_count = ctx.gfx.swapchain.sample_count,
 		depth_format = ctx.gfx.swapchain.depth_image.format,
-		width        = ctx.gfx.swapchain.extent.width,
-		height       = ctx.gfx.swapchain.extent.height,
+		width        = ctx.gfx.swapchain.width,
+		height       = ctx.gfx.swapchain.height,
 	}
 	sm.push(&surface_info.color_formats, ctx.gfx.swapchain.color_format.format)
 
@@ -514,7 +512,7 @@ cmd_set_full_viewport_scissor :: proc(loc := #caller_location) {
 	cmd_set_scissor(width, height, loc = loc)
 }
 
-cmd_set_viewport :: proc(width, height: u32, max_depth: f32 = 1, loc := #caller_location) {
+cmd_set_viewport :: proc(width, height: int, max_depth: f32 = 1, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 
 	viewport := vk.Viewport {
@@ -525,11 +523,11 @@ cmd_set_viewport :: proc(width, height: u32, max_depth: f32 = 1, loc := #caller_
 	vk.CmdSetViewport(_get_cmd(), 0, 1, &viewport)
 }
 
-cmd_set_scissor :: proc(width, height: u32, offset: ivec2 = 0, loc := #caller_location) {
+cmd_set_scissor :: proc(width, height: int, offset: ivec2 = 0, loc := #caller_location) {
 	assert_gfx_ctx(loc)
 
 	scissor := vk.Rect2D {
-		extent = {width = width, height = height},
+		extent = {width = cast(u32)width, height = cast(u32)height},
 		offset = {x = offset.x, y = offset.y},
 	}
 	vk.CmdSetScissor(_get_cmd(), 0, 1, &scissor)
@@ -903,7 +901,8 @@ _swapchain_new :: proc(sample_count: Sample_Count_Flag) -> ^Swapchain {
 	swapchain := new(Swapchain)
 	swapchain.swapchain = vk_swapchain
 	swapchain.color_format = surface_format
-	swapchain.extent = extent
+	swapchain.width = cast(int)extent.width
+	swapchain.height = cast(int)extent.height
 	swapchain.sample_count = sample_count
 	_swapchain_setup_images(swapchain)
 	_swapchain_setup_semaphores(swapchain)
@@ -977,8 +976,8 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 	color_format := swapchain.color_format.format
 
 	image, allocation, allocation_info := _create_image(
-		swapchain.extent.width,
-		swapchain.extent.height,
+		cast(u32)swapchain.width,
+		cast(u32)swapchain.height,
 		1,
 		swapchain.sample_count,
 		color_format,
@@ -1018,8 +1017,8 @@ _swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: v
 	}
 
 	image, allocation, allocation_info := _create_image(
-		swapchain.extent.width,
-		swapchain.extent.height,
+		cast(u32)swapchain.width,
+		cast(u32)swapchain.height,
 		1,
 		swapchain.sample_count,
 		format,

@@ -23,14 +23,13 @@ init :: proc(
 	info: Ve_Info,
 	loc := #caller_location,
 ) {
-
 	ctx.user_data = user_data
 	ctx.fixed_update_proc = fixed_update_proc
 	ctx.update_proc = update_proc
 	ctx.draw_proc = draw_proc
 	ctx.destroy_proc = destroy_proc
 
-	// TODO: update vendor bindings to glfw 3.4 and use this to set a custom allocator.
+	// TODO: set custom allocator.
 	// glfw.InitAllocator()
 
 	if !glfw.Init() {
