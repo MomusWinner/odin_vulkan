@@ -18,8 +18,8 @@ Outline_Scene_Data :: struct {
 	model:              ve.Mesh,
 	outline_ubo:        ve.Uniform_Buffer_Handle,
 	base_ubo:           ve.Uniform_Buffer_Handle,
-	pipeline_h:         ve.Render_Pipeline_Handle,
-	outline_pipeline_h: ve.Render_Pipeline_Handle,
+	pipeline_h:         ve.Graphics_Pipeline,
+	outline_pipeline_h: ve.Graphics_Pipeline,
 	transform:          ve.Gfx_Transform,
 	camera:             ve.Camera,
 	model_rotation:     f32,
@@ -87,9 +87,6 @@ outline_scene_update :: proc(s: ^Scene) {
 outline_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Outline_Scene_Data)s.data
 
-	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
-	outline_pipeline, _ := ve.get_render_pipeline(data.outline_pipeline_h)
-
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
@@ -101,10 +98,10 @@ outline_scene_draw :: proc(s: ^Scene) {
 			trf    = &data.transform,
 			h0     = data.outline_ubo,
 		}
-		ve.draw_mesh(&data.model, pipeline, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
 		ve.draw_mesh(
 			&data.model,
-			outline_pipeline,
+			data.outline_pipeline_h,
 			{camera = &data.camera, trf = &data.transform, h0 = data.outline_ubo},
 		)
 	}
@@ -123,7 +120,7 @@ outline_scene_destroy :: proc(s: ^Scene) {
 	free(data)
 }
 
-create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_outline_model_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -152,7 +149,7 @@ create_outline_model_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_outline_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_outline_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,

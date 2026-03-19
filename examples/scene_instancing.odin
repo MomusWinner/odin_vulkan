@@ -18,7 +18,7 @@ Rock_Instance :: struct {
 
 Instancing_Scene_Data :: struct {
 	cube:                   ve.Mesh,
-	pipeline_h:             ve.Render_Pipeline_Handle,
+	pipeline_h:             ve.Graphics_Pipeline,
 	transform:              ve.Gfx_Transform,
 	instance_vertex_buffer: ve.Buffer,
 	camera:                 ve.Camera,
@@ -85,8 +85,6 @@ instancing_scene_update :: proc(s: ^Scene) {
 instancing_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Instancing_Scene_Data)s.data
 
-	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
-
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
@@ -96,7 +94,7 @@ instancing_scene_draw :: proc(s: ^Scene) {
 		ve.cmd_bind_vertex_buffer(data.instance_vertex_buffer, 1)
 		ve.draw_mesh(
 			&data.cube,
-			pipeline,
+			data.pipeline_h,
 			{camera = &data.camera, trf = &data.transform},
 			instance_count = INSTANCE_COUNT,
 		)
@@ -117,7 +115,7 @@ instancing_scene_destroy :: proc(s: ^Scene) {
 	free(data)
 }
 
-create_instancing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_instancing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 	sm.append(&vert_descriptions, _create_instance_vertex_description())

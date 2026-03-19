@@ -33,9 +33,9 @@ Compute_Scene_Data :: struct {
 	mesh:            ve.Mesh,
 	time_ubo_h:      ve.Uniform_Buffer_Handle,
 	transform:       ve.Gfx_Transform,
-	pipeline_h:      ve.Render_Pipeline_Handle,
+	pipeline_h:      ve.Graphics_Pipeline,
 	sbo_h:           ve.Storage_Buffer_Handle,
-	comp_pipeline_h: ve.Pipeline_Handle,
+	comp_pipeline_h: ve.Compute_Pipeline,
 	model_rotation:  f32,
 }
 
@@ -92,21 +92,18 @@ compute_scene_update :: proc(s: ^Scene) {
 compute_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Compute_Scene_Data)s.data
 
-	compute_pipeline, _ := ve.get_compute_pipeline(data.comp_pipeline_h)
 	sbo, _ := ve.get_storage_buffer(data.sbo_h)
 	b := ve.get_buffer_h(sbo.buffer_h)
-
-	render_pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
 
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.compute_pipeline_dispatch(compute_pipeline^, b^, {GROUP_COUNT, 1, 1}, {h0 = data.sbo_h, h1 = data.time_ubo_h})
+	ve.cmd_dispatch(data.comp_pipeline_h, b^, {GROUP_COUNT, 1, 1}, {h0 = data.sbo_h, h1 = data.time_ubo_h})
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.mesh, render_pipeline, {})
+		ve.draw_mesh(&data.mesh, data.pipeline_h, {})
 	}
 	ve.end_draw()
 
@@ -161,7 +158,7 @@ create_particle_vertex_description :: proc() -> ve.Vertex_Input_Description {
 	}
 }
 
-create_particle_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_particle_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -182,7 +179,7 @@ create_particle_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_compute_pipeline :: proc(x_invocations: i32) -> ve.Pipeline_Handle {
+create_compute_pipeline :: proc(x_invocations: i32) -> ve.Compute_Pipeline {
 	consts := ve.Shader_Constants{}
 	sm.append(&consts, ve.Shader_Constant{id = 0, value = {int = x_invocations}})
 
@@ -191,6 +188,6 @@ create_compute_pipeline :: proc(x_invocations: i32) -> ve.Pipeline_Handle {
 		shader_path = "assets/shaders/particle.comp",
 		consts      = consts,
 	}
-	handle, _ := ve.create_compute_pipeline(info)
+	handle := ve.create_compute_pipeline(info)
 	return handle
 }

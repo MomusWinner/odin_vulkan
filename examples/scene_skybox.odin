@@ -9,8 +9,8 @@ import "core:time"
 
 Skybox_Scene_Data :: struct {
 	cubemap_h:          ve.Texture_Handle,
-	skybox_pipeline_h:  ve.Render_Pipeline_Handle,
-	reflect_pipeline_h: ve.Render_Pipeline_Handle,
+	skybox_pipeline_h:  ve.Graphics_Pipeline,
+	reflect_pipeline_h: ve.Graphics_Pipeline,
 	cube:               ve.Mesh,
 	transform:          ve.Gfx_Transform,
 	camera:             ve.Camera,
@@ -71,9 +71,6 @@ skybox_scene_update :: proc(s: ^Scene) {
 skybox_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Skybox_Scene_Data)s.data
 
-	skybox_pipeline, _ := ve.get_render_pipeline(data.skybox_pipeline_h)
-	reflect_pipeline, _ := ve.get_render_pipeline(data.reflect_pipeline_h)
-
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
@@ -81,10 +78,14 @@ skybox_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw()
 	{
 		// Skybox
-		ve.draw_mesh(&data.cube, skybox_pipeline, {camera = &data.camera, h0 = data.cubemap_h})
+		ve.draw_mesh(&data.cube, data.skybox_pipeline_h, {camera = &data.camera, h0 = data.cubemap_h})
 
 		// Diamond
-		ve.draw_mesh(&data.cube, reflect_pipeline, {camera = &data.camera, trf = &data.transform, h0 = data.cubemap_h})
+		ve.draw_mesh(
+			&data.cube,
+			data.reflect_pipeline_h,
+			{camera = &data.camera, trf = &data.transform, h0 = data.cubemap_h},
+		)
 	}
 	ve.end_draw()
 

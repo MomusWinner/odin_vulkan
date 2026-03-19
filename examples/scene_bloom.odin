@@ -55,11 +55,11 @@ HDR_Scene_Data :: struct {
 	hdr_ubo_h:             ve.Uniform_Buffer_Handle,
 	blur_ubo_h:            ve.Uniform_Buffer_Handle,
 	// Pipelines
-	blur_hor_pipeline_h:   ve.Render_Pipeline_Handle,
-	blur_ver_pipeline_h:   ve.Render_Pipeline_Handle,
-	multilight_pipeline_h: ve.Render_Pipeline_Handle,
-	hdr_pipeline_h:        ve.Render_Pipeline_Handle,
-	light_box_pipeline_h:  ve.Render_Pipeline_Handle,
+	blur_hor_pipeline_h:   ve.Graphics_Pipeline,
+	blur_ver_pipeline_h:   ve.Graphics_Pipeline,
+	multilight_pipeline_h: ve.Graphics_Pipeline,
+	hdr_pipeline_h:        ve.Graphics_Pipeline,
+	light_box_pipeline_h:  ve.Graphics_Pipeline,
 	//
 	transform:             ve.Gfx_Transform,
 	camera:                ve.Camera,
@@ -187,12 +187,6 @@ hdr_scene_update :: proc(s: ^Scene) {
 hdr_scene_draw :: proc(s: ^Scene) {
 	data := cast(^HDR_Scene_Data)s.data
 
-	multilight_pipeline, _ := ve.get_render_pipeline(data.multilight_pipeline_h)
-	light_box_pipeline, _ := ve.get_render_pipeline(data.light_box_pipeline_h)
-	hdr_pipeline, _ := ve.get_render_pipeline(data.hdr_pipeline_h)
-	blur_hor_pipeline, _ := ve.get_render_pipeline(data.blur_hor_pipeline_h)
-	blur_ver_pipeline, _ := ve.get_render_pipeline(data.blur_ver_pipeline_h)
-
 	if (ve.screen_resized()) {
 		ve.render_target_resize(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height())
 	}
@@ -203,28 +197,32 @@ hdr_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render_target(&data.hdr_rt)
 	for &t in data.positions {
-		ve.draw_mesh(&data.cube, multilight_pipeline, {camera = &data.camera, trf = &t, h0 = data.multilight_ubo_h})
+		ve.draw_mesh(
+			&data.cube,
+			data.multilight_pipeline_h,
+			{camera = &data.camera, trf = &t, h0 = data.multilight_ubo_h},
+		)
 	}
 	for &l in data.light_boxes {
-		ve.draw_mesh(&data.cube, light_box_pipeline, {camera = &data.camera, trf = &l.trans, h0 = l.box_ubo})
+		ve.draw_mesh(&data.cube, data.light_box_pipeline_h, {camera = &data.camera, trf = &l.trans, h0 = l.box_ubo})
 	}
 	ve.end_render_target(&data.hdr_rt)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
 		ve.begin_render_target(&data.hdr_rt, {1})
-		ve.draw_mesh(&data.square, blur_hor_pipeline, {camera = &data.camera, h0 = data.blur_ubo_h})
+		ve.draw_mesh(&data.square, data.blur_hor_pipeline_h, {camera = &data.camera, h0 = data.blur_ubo_h})
 		ve.end_render_target(&data.hdr_rt)
 
 		// Vertical gaussian blur
 		ve.begin_render_target(&data.hdr_rt, {1})
-		ve.draw_mesh(&data.square, blur_ver_pipeline, {camera = &data.camera, h0 = data.blur_ubo_h})
+		ve.draw_mesh(&data.square, data.blur_ver_pipeline_h, {camera = &data.camera, h0 = data.blur_ubo_h})
 		ve.end_render_target(&data.hdr_rt)
 	}
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, hdr_pipeline, {h0 = data.hdr_ubo_h})
+		ve.draw_mesh(&data.square, data.hdr_pipeline_h, {h0 = data.hdr_ubo_h})
 	}
 	ve.end_draw()
 

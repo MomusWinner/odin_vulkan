@@ -60,7 +60,7 @@ get_base_create_pipeline_info :: proc() -> ve.Create_Pipeline_Info {
 	}
 }
 
-create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_default_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -74,7 +74,7 @@ create_default_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
@@ -96,12 +96,9 @@ create_skybox_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_reflect_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
@@ -122,7 +119,7 @@ create_reflect_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_hdr_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -137,7 +134,7 @@ create_hdr_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 }
 
 
-create_multilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_multilight_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -151,7 +148,7 @@ create_multilight_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Render_Pipeline_Handle {
+create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Graphics_Pipeline {
 	consts := ve.Shader_Constants{}
 	sm.append(&consts, ve.Shader_Constant{id = 0, value = {bool = horizontal}})
 
@@ -168,7 +165,7 @@ create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Render_Pipeline_Han
 	return ve.create_render_pipeline(create_info)
 }
 
-create_light_box_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_light_box_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,

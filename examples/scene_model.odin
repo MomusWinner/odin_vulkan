@@ -11,7 +11,7 @@ Model_Scene_Data :: struct {
 	texture_h:      ve.Texture_Handle,
 	model:          ve.Mesh,
 	ubo:            ve.Uniform_Buffer_Handle,
-	pipeline_h:     ve.Render_Pipeline_Handle,
+	pipeline_h:     ve.Graphics_Pipeline,
 	transform:      ve.Gfx_Transform,
 	camera:         ve.Camera,
 	model_rotation: f32,
@@ -65,15 +65,13 @@ model_scene_update :: proc(s: ^Scene) {
 model_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Model_Scene_Data)s.data
 
-	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
-
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.model, pipeline, {trf = &data.transform, camera = &data.camera, h0 = data.ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, {trf = &data.transform, camera = &data.camera, h0 = data.ubo})
 	}
 	ve.end_draw()
 

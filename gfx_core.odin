@@ -30,9 +30,9 @@ Descriptor_Set :: vk.DescriptorSet
 Buildin_Resource :: struct {
 	pipeline:    struct {
 		// FIX:
-		default_h:   Render_Pipeline_Handle,
-		primitive_h: Render_Pipeline_Handle,
-		text_h:      Render_Pipeline_Handle,
+		default_h:   Graphics_Pipeline,
+		primitive_h: Graphics_Pipeline,
+		text_h:      Graphics_Pipeline,
 	},
 	unit_square: Mesh,
 }
@@ -584,8 +584,7 @@ cmd_bind_index_buffer :: proc(
 	vk.CmdBindIndexBuffer(_get_cmd(), buffer.id, offset, index_type)
 }
 
-cmd_push_constants :: proc(pipeline: Pipeline, const: ^$T, stages := vk.ShaderStageFlags_ALL_GRAPHICS) {
-	layout := get_pipeline_layout(pipeline.layout)
+cmd_push_constants :: proc(layout: Pipeline_Layout, const: ^$T, stages := vk.ShaderStageFlags_ALL_GRAPHICS) {
 	vk.CmdPushConstants(_get_cmd(), layout, stages, 0, size_of(const^), const)
 }
 
@@ -597,16 +596,17 @@ cmd_draw_indexed :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #cal
 	vk.CmdDrawIndexed(_get_cmd(), vertex_count, instance_count, 0, 0, 0)
 }
 
-cmd_bind_render_pipeline :: proc(pipeline: ^Render_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline {
-	graphics_pipeline := render_pipeline_get_pipeline(pipeline, loc)
+cmd_bind_render_pipeline :: proc(pipeline: Graphics_Pipeline, loc := #caller_location) -> Pipeline_Layout {
+	graphics_pipeline := _render_pipeline_get_variant(_get_render_pipeline(pipeline, loc), loc)
 	vk.CmdBindPipeline(_get_cmd(), .GRAPHICS, graphics_pipeline.id)
 	cmd_bind_descriptor_set_graphics(graphics_pipeline, get_descriptor_set_bindless())
-
-	return graphics_pipeline
+	return _get_pipeline_layout(graphics_pipeline.layout)
 }
 
-cmd_bind_compute_pipeline :: proc(pipeline: Compute_Pipeline, loc := #caller_location) {
-	vk.CmdBindPipeline(_get_cmd(), .COMPUTE, pipeline.id)
+cmd_bind_compute_pipeline :: proc(pipeline: Compute_Pipeline, loc := #caller_location) -> Pipeline_Layout {
+	p := _get_compute_pipeline(pipeline, loc)
+	vk.CmdBindPipeline(_get_cmd(), .COMPUTE, p.id)
+	return _get_pipeline_layout(p.layout)
 }
 
 cmd_bind_descriptor_set_graphics :: proc(
@@ -634,7 +634,7 @@ _cmd_bind_descriptor_set :: proc(
 	loc := #caller_location,
 ) {
 
-	layout := get_pipeline_layout(pipeline.layout)
+	layout := _get_pipeline_layout(pipeline.layout)
 
 	vk.CmdBindDescriptorSets(
 		cmd,
@@ -646,6 +646,20 @@ _cmd_bind_descriptor_set :: proc(
 		0,
 		nil,
 	)
+}
+
+cmd_dispatch :: proc(pipeline: Compute_Pipeline, buffer: Buffer, group_count: uvec3, consts: Push_Constants) {
+	layout := cmd_bind_compute_pipeline(pipeline)
+
+	consts_data := _push_constants_to_data(consts)
+	cmd_push_constants(layout, &consts_data, {.COMPUTE})
+
+	bindless_descriptor_set := get_descriptor_set_bindless()
+	vk.CmdBindDescriptorSets(ctx.gfx.cmd, .COMPUTE, layout, 0, 1, &bindless_descriptor_set, 0, nil)
+	vk.CmdDispatch(_get_cmd(), group_count.x, group_count.y, group_count.z)
+
+	_, dst_access, dst_stage := _buffer_get_usage_and_dst_access_stage_mask(buffer.usage)
+	_cmd_buffer_barrier(_get_cmd(), buffer.id, {.SHADER_WRITE, .SHADER_READ}, dst_access, {.COMPUTE_SHADER}, dst_stage)
 }
 
 @(require_results)
@@ -758,13 +772,12 @@ destroy_mesh :: proc(mesh: ^Mesh, loc := #caller_location) {
 
 draw_mesh :: proc(
 	mesh: ^Mesh,
-	pipeline: ^Render_Pipeline,
+	pipeline: Graphics_Pipeline,
 	consts: Push_Constants,
 	instance_count: u32 = 1,
 	loc := #caller_location,
 ) {
 	assert_not_nil(mesh, loc)
-	assert_not_nil(pipeline, loc)
 
 	ebo, has_ebo := mesh.ebo.?
 
@@ -773,10 +786,10 @@ draw_mesh :: proc(
 		cmd_bind_index_buffer(ebo, loc = loc)
 	}
 
-	g_pipeline := cmd_bind_render_pipeline(pipeline, loc)
+	layout := cmd_bind_render_pipeline(pipeline, loc)
 
 	consts := _push_constants_to_data(consts)
-	cmd_push_constants(g_pipeline, &consts)
+	cmd_push_constants(layout, &consts)
 
 	if has_ebo {
 		cmd_draw_indexed(mesh.index_count, instance_count)
@@ -1583,7 +1596,7 @@ Pipeline_Layout_Info :: struct {
 
 Descriptor_Layout_Manager :: struct {
 	layouts:           map[Pipeline_Set_Layout_Info]vk.DescriptorSetLayout,
-	pipeline_layoutes: map[Pipeline_Layout_Info]vk.PipelineLayout,
+	pipeline_layoutes: map[Pipeline_Layout_Info]Pipeline_Layout,
 }
 
 @(private)
@@ -1621,7 +1634,8 @@ get_descriptor_set_layout :: proc(info: Pipeline_Set_Layout_Info) -> vk.Descript
 }
 
 @(require_results)
-get_pipeline_layout :: proc(info: Pipeline_Layout_Info) -> vk.PipelineLayout {
+@(private)
+_get_pipeline_layout :: proc(info: Pipeline_Layout_Info) -> Pipeline_Layout {
 	pipeline_layout, ok := ctx.gfx.descriptor_layout_manager.pipeline_layoutes[info]
 	if ok do return pipeline_layout
 	layouts := get_descriptor_set_layouts(info.layout_infos)
@@ -1697,7 +1711,7 @@ _set_info_to_descriptor_set_layout :: proc(set_info: Pipeline_Set_Layout_Info) -
 _create_pipeline_layout :: proc(
 	descriptor_set_layouts: Descriptor_Set_Layouts,
 	push_constant: Maybe(vk.PushConstantRange) = nil,
-) -> vk.PipelineLayout {
+) -> Pipeline_Layout {
 	descriptor_set_layouts := descriptor_set_layouts
 	push, has_push := push_constant.?
 
@@ -1708,7 +1722,7 @@ _create_pipeline_layout :: proc(
 		pushConstantRangeCount = 1 if has_push else 0,
 		pPushConstantRanges    = &push,
 	}
-	layout := vk.PipelineLayout{}
+	layout := Pipeline_Layout{}
 	must(vk.CreatePipelineLayout(ctx.gfx.vk_state.device, &pipeline_layout_info, nil, &layout))
 
 	return layout
@@ -1726,7 +1740,7 @@ _destroy_descriptor_set_layout :: proc(descriptor_set_layout: vk.DescriptorSetLa
 // ██║     ██║  ██║██║██║ ╚═╝ ██║██║   ██║   ██║ ╚████╔╝ ███████╗
 // ╚═╝     ╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
 
-create_primitive_pipeline :: proc() -> Render_Pipeline_Handle {
+create_primitive_pipeline :: proc() -> Graphics_Pipeline {
 	vert_descriptions: Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 

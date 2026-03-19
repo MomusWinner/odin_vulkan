@@ -20,12 +20,12 @@ Postprocessing_Scene_Data :: struct {
 	square:              ve.Mesh,
 	base_ubo:            ve.Uniform_Buffer_Handle,
 	texture_h:           ve.Texture_Handle,
-	pipeline_h:          ve.Render_Pipeline_Handle,
+	pipeline_h:          ve.Graphics_Pipeline,
 	transform:           ve.Gfx_Transform,
 	camera:              ve.Camera,
 	rt:                  ve.Render_Target,
 	postproc_ubo_h:      ve.Uniform_Buffer_Handle,
-	postproc_pipeline_h: ve.Render_Pipeline_Handle,
+	postproc_pipeline_h: ve.Graphics_Pipeline,
 }
 
 create_postprocessing_scene :: proc() -> Scene {
@@ -84,9 +84,6 @@ postprocessing_scene_update :: proc(s: ^Scene) {
 postprocessing_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Postprocessing_Scene_Data)s.data
 
-	postproc_pipeline, _ := ve.get_render_pipeline(data.postproc_pipeline_h)
-	pipeline, _ := ve.get_render_pipeline(data.pipeline_h)
-
 	ubo, _ := ve.get_uniform_buffer(data.postproc_ubo_h)
 	ubo_postprocessing_set_width(ubo, cast(f32)ve.get_screen_width())
 	ubo_postprocessing_set_height(ubo, cast(f32)ve.get_screen_height())
@@ -101,13 +98,13 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render_target(&data.rt)
 	{
-		ve.draw_mesh(&data.model, pipeline, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
 	}
 	ve.end_render_target(&data.rt)
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, postproc_pipeline, {camera = &data.camera, h0 = data.postproc_ubo_h})
+		ve.draw_mesh(&data.square, data.postproc_pipeline_h, {camera = &data.camera, h0 = data.postproc_ubo_h})
 	}
 	ve.end_draw()
 
@@ -126,7 +123,7 @@ postprocessing_scene_destroy :: proc(s: ^Scene) {
 	free(data)
 }
 
-create_postprocessing_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_postprocessing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,

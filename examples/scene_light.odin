@@ -37,10 +37,10 @@ Lighting_Scene_Data :: struct {
 	shadow_map_view_mesh: ve.Mesh,
 	shadow_map_texture:   ve.Texture_Handle,
 	square_trf:           ve.Gfx_Transform,
-	light_pipeline_h:     ve.Render_Pipeline_Handle,
+	light_pipeline_h:     ve.Graphics_Pipeline,
 	light_ubo:            ve.Uniform_Buffer_Handle,
 	surf_draw_ubo:        ve.Uniform_Buffer_Handle,
-	depth_only_pipeline:  ve.Render_Pipeline_Handle,
+	depth_only_pipeline:  ve.Graphics_Pipeline,
 	light_data:           ve.Uniform_Buffer_Handle,
 }
 
@@ -160,16 +160,13 @@ light_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render()
 
-	depth_only_pipeline, _ := ve.get_render_pipeline(data.depth_only_pipeline)
-	light_pipeline, _ := ve.get_render_pipeline(data.light_pipeline_h)
-
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
 	ve.begin_render_target(&data.shadow_map_rt)
 	{
-		ve.draw_mesh(&data.model, depth_only_pipeline, {camera = &data.l_camera, trf = &data.transform})
-		ve.draw_mesh(&data.ground, depth_only_pipeline, {camera = &data.l_camera, trf = &data.ground_transform})
+		ve.draw_mesh(&data.model, data.depth_only_pipeline, {camera = &data.l_camera, trf = &data.transform})
+		ve.draw_mesh(&data.ground, data.depth_only_pipeline, {camera = &data.l_camera, trf = &data.ground_transform})
 	}
 	ve.end_render_target(&data.shadow_map_rt)
 
@@ -181,9 +178,9 @@ light_scene_draw :: proc(s: ^Scene) {
 			h0     = data.light_ubo,
 			h1     = data.light_data,
 		}
-		ve.draw_mesh(&data.model, light_pipeline, consts)
+		ve.draw_mesh(&data.model, data.light_pipeline_h, consts)
 		consts.trf = &data.ground_transform
-		ve.draw_mesh(&data.ground, light_pipeline, consts)
+		ve.draw_mesh(&data.ground, data.light_pipeline_h, consts)
 	}
 	ve.end_draw()
 
@@ -203,7 +200,7 @@ light_scene_destroy :: proc(s: ^Scene) {
 	free(data)
 }
 
-create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_light_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
@@ -217,12 +214,12 @@ create_light_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	return ve.create_render_pipeline(create_info)
 }
 
-create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
+create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
-	set_infos := ve.Pipeline_Set_Layout_Infos{}
-	sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
+	// set_infos := ve.Pipeline_Set_Layout_Infos{} // FIXME:
+	// sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(&stages, ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light.vert"})
@@ -231,8 +228,8 @@ create_depth_only_pipeline :: proc() -> ve.Render_Pipeline_Handle {
 	create_info.stage_infos = stages
 	create_info.depth.bias = {
 		enable          = true,
-		constant_factor = 1.25,
-		clamp           = 0,
+		clamp           = 1.25,
+		constant_factor = 0,
 		slope_factor    = 4.75,
 	}
 
