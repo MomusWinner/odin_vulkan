@@ -28,15 +28,6 @@ merge :: proc(a: []$T, b: []T, allocator := context.allocator, loc := #caller_lo
 }
 
 @(private)
-assert_gfx_ctx :: #force_inline proc(loc := #caller_location) {
-	assert(
-		ctx.gfx.initialized == true,
-		"Graphics not initialized. Call 'graphics.init()' before using any graphics functions.",
-		loc = loc,
-	)
-}
-
-@(private)
 must :: proc(result: vk.Result, msg: string = "", loc := #caller_location) {
 	if result != .SUCCESS {
 		log.panicf("vulkan failure: %s (%v)", msg, result, location = loc)

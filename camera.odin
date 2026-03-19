@@ -52,7 +52,6 @@ camera_init_custom :: proc(
 	projection: Camera_Custom_Projection_Proc,
 	loc := #caller_location,
 ) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(camera, loc)
 	assert(projection != nil, loc = loc)
 
@@ -68,7 +67,6 @@ camera_init_custom :: proc(
 }
 
 camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(camera, loc)
 	assert(
 		type != .Custom,
@@ -211,7 +209,6 @@ camera_get_projection :: proc(camera: ^Camera, aspect: f32, loc := #caller_locat
 
 @(private)
 _camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location) -> Buffer_Handle {
-	assert_gfx_ctx(loc)
 	assert_not_nil(camera, loc)
 
 	if !camera.dirty && aspect == camera.last_aspect {

@@ -259,8 +259,6 @@ create_texture :: proc(
 ) -> (
 	texture: Texture,
 ) {
-	assert_gfx_ctx(loc)
-
 	desired_channels: u32 = image.channels
 	image_size := cast(vk.DeviceSize)(image.width * image.height * desired_channels)
 
@@ -405,11 +403,7 @@ create_texture_cubemap :: proc(
 	}
 
 	image := faces[0]
-
-	assert_gfx_ctx(loc)
-
 	desired_channels: u32 = image.channels
-
 	layer_size := cast(Device_Size)(image.width * image.height * desired_channels)
 	image_size := layer_size * CUBEMAP_LAYERS_COUNT
 
@@ -702,8 +696,6 @@ _generate_mipmaps :: proc(
 	mip_levels: u32,
 	loc := #caller_location,
 ) {
-	assert_gfx_ctx(loc)
-
 	format_properties := vk.FormatProperties{}
 	vk.GetPhysicalDeviceFormatProperties(ctx.gfx.vk_state.physical_device, format, &format_properties)
 	if .SAMPLED_IMAGE_FILTER_LINEAR not_in format_properties.optimalTilingFeatures {

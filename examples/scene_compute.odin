@@ -106,7 +106,7 @@ compute_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.mesh, render_pipeline, {h0 = data.sbo_h}) // FIXME:
+		ve.draw_mesh(&data.mesh, render_pipeline, {})
 	}
 	ve.end_draw()
 

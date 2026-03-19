@@ -58,7 +58,6 @@ init_render_target :: proc(
 ) {
 	assert_not_nil(render_target, loc)
 	assert(width > 0 && height > 0, loc = loc)
-	assert_gfx_ctx(loc)
 
 	render_target.width = width
 	render_target.height = height
@@ -69,7 +68,6 @@ init_render_target :: proc(
 }
 
 destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(render_target, loc)
 
 	depth_attachment, has_depth_attachment := render_target.depth_attachment.?
@@ -103,7 +101,6 @@ render_target_add_color_attachment :: proc(
 	sampler_info: Sampler_Info = DEFAULT_SURFACE_SAMPLER_INFO,
 	loc := #caller_location,
 ) -> Texture_Handle {
-	assert_gfx_ctx(loc)
 	assert_not_nil(surface, loc)
 
 	w, h := cast(u32)surface.width, cast(u32)surface.height
@@ -595,7 +592,6 @@ _render_target_resize_color_attachments :: proc(
 	surface: ^Render_Target,
 	loc := #caller_location,
 ) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(surface, loc)
 
 	for &ca in sm.slice(&surface.color_attachments) {
@@ -633,7 +629,6 @@ _render_target_resize_readable_depth_attachment :: proc(
 	surface: ^Render_Target,
 	loc := #caller_location,
 ) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(surface, loc)
 
 	depth_attachment, has_depth_attachment := surface.depth_attachment.?

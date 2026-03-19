@@ -27,8 +27,6 @@ g_context: runtime.Context // FIXME: used for system callback procedures
 _init_gfx :: proc(init_info: Graphics_Init_Info) {
 	g_context = context
 
-	ctx.gfx.initialized = true
-
 	_init_vulkan_state()
 	ctx.gfx.cmd = _create_draw_command_buffers(ctx.gfx.vk_state) // TODO:
 	_init_limits()

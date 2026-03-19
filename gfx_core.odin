@@ -77,21 +77,20 @@ Swapchain_Configuration :: struct {
 }
 
 Graphics :: struct {
-	initialized:               bool,
 	vk_state:                  Vulkan_State,
+	image_available_semaphore: vk.Semaphore,
+	fence:                     vk.Fence,
 	limits:                    Graphics_Limits,
+	cmd:                       vk.CommandBuffer,
 	swapchain_cfg:             Swapchain_Configuration,
-	swapchain:                 ^Swapchain,
+	frame:                     Frame_Data,
+	render_started:            bool,
 	// managers
+	swapchain:                 ^Swapchain,
 	buffer_manager:            ^Buffer_Manager,
 	pipeline_manager:          ^Pipeline_Manager,
 	descriptor_layout_manager: Descriptor_Layout_Manager,
 	bindless:                  ^Bindless,
-	cmd:                       vk.CommandBuffer,
-	frame:                     Frame_Data,
-	image_available_semaphore: vk.Semaphore,
-	fence:                     vk.Fence,
-	render_started:            bool,
 	deffered_destructor:       ^Deferred_Destructor,
 	buildin:                   ^Buildin_Resource,
 }
@@ -274,7 +273,6 @@ Bindless :: struct {
 _get_cmd :: proc() -> Command_Buffer {return ctx.gfx.cmd}
 
 begin_render :: proc(loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert(!ctx.gfx.render_started, "Call end_render() after begin_render()", loc)
 
 	_update_buffers()
@@ -316,7 +314,7 @@ begin_render :: proc(loc := #caller_location) {
 	must(vk.BeginCommandBuffer(_get_cmd(), &begin_info))
 }
 
-end_render :: proc(sync_data: Sync_Data = {}) {
+end_render :: proc() {
 	if !ctx.gfx.render_started {
 		log.error("Call begin_render() before end_render()")
 	}
@@ -327,18 +325,26 @@ end_render :: proc(sync_data: Sync_Data = {}) {
 
 	must(vk.EndCommandBuffer(_get_cmd()))
 
-	wait_semaphore_infos := merge(
-		sync_data.wait_semaphore_infos,
-		[]vk.SemaphoreSubmitInfo {
-			{
-				sType       = .SEMAPHORE_SUBMIT_INFO,
-				semaphore   = ctx.gfx.image_available_semaphore,
-				stageMask   = {.ALL_COMMANDS}, // {.COLOR_ATTACHMENT_OUTPUT}, // FIXME:
-				deviceIndex = 0,
-			},
+	// wait_semaphore_infos := merge(
+	// 	ctx.gfx.wait_semaphore_infos[:],
+	// 	[]vk.SemaphoreSubmitInfo {
+	// 		{
+	// 			sType       = .SEMAPHORE_SUBMIT_INFO,
+	// 			semaphore   = ctx.gfx.image_available_semaphore,
+	// 			stageMask   = {.ALL_COMMANDS}, // {.COLOR_ATTACHMENT_OUTPUT},
+	// 			deviceIndex = 0,
+	// 		},
+	// 	},
+	// 	context.temp_allocator,
+	// )
+	wait_semaphore_infos := []vk.SemaphoreSubmitInfo {
+		{
+			sType       = .SEMAPHORE_SUBMIT_INFO,
+			semaphore   = ctx.gfx.image_available_semaphore,
+			stageMask   = {.ALL_COMMANDS}, // {.COLOR_ATTACHMENT_OUTPUT}, // FIXME:
+			deviceIndex = 0,
 		},
-		context.temp_allocator,
-	)
+	}
 
 	comand_buffer_info := vk.CommandBufferSubmitInfo {
 		sType         = .COMMAND_BUFFER_SUBMIT_INFO,
@@ -454,6 +460,55 @@ end_draw :: proc() {
 	)
 }
 
+// @(private)
+// _create_semapthore :: proc() -> vk.Semaphore {
+// 	semaphore: vk.Semaphore
+// 	info := vk.SemaphoreCreateInfo {
+// 		sType = .SEMAPHORE_CREATE_INFO,
+// 	}
+// 	vk.CreateSemaphore(ctx.gfx.vk_state.device, &info, nil, &semaphore)
+// 	return semaphore
+// }
+
+// TODO: add semaphore pool
+begin_compute :: proc() {
+	log.panic("Not implemented")
+	// vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64))
+	// vk.ResetFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence)
+	// vk.ResetCommandBuffer(ctx.gfx.cmd, {})
+	// being_info := vk.CommandBufferBeginInfo {
+	// 	sType = .COMMAND_BUFFER_BEGIN_INFO,
+	// 	flags = {},
+	// }
+	// vk.BeginCommandBuffer(ctx.gfx.cmd, &being_info)
+}
+
+end_compute :: proc() {
+	log.panic("Not implemented")
+	// semaphore := _create_semapthore()
+	//
+	// vk.EndCommandBuffer(ctx.gfx.cmd)
+	// comand_buffer_info := vk.CommandBufferSubmitInfo {
+	// 	sType         = .COMMAND_BUFFER_SUBMIT_INFO,
+	// 	commandBuffer = ctx.gfx.cmd,
+	// }
+	// semaphore_info := vk.SemaphoreSubmitInfo {
+	// 	sType       = .SEMAPHORE_SUBMIT_INFO,
+	// 	semaphore   = semaphore,
+	// 	stageMask   = {.COMPUTE_SHADER},
+	// 	deviceIndex = 0,
+	// }
+	// submit_info := vk.SubmitInfo2 {
+	// 	sType                    = .SUBMIT_INFO_2,
+	// 	commandBufferInfoCount   = 1,
+	// 	pCommandBufferInfos      = &comand_buffer_info,
+	// 	signalSemaphoreInfoCount = 1,
+	// 	pSignalSemaphoreInfos    = &semaphore_info,
+	// }
+	// must(vk.QueueSubmit2(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, ctx.gfx.fence))
+	// append(&ctx.gfx.wait_semaphore_infos, semaphore_info)
+}
+
 @(private)
 _on_screen_resized :: proc() {
 	// Don't do anything when minimized.
@@ -480,7 +535,6 @@ wait_render_completion :: proc() {
 //  ╚═════╝╚═╝     ╚═╝╚═════╝ 
 
 cmd_set_full_viewport_scissor :: proc(loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	width := get_screen_width()
 	height := get_screen_height()
 
@@ -489,7 +543,6 @@ cmd_set_full_viewport_scissor :: proc(loc := #caller_location) {
 }
 
 cmd_set_viewport :: proc(width, height: int, max_depth: f32 = 1, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 
 	viewport := vk.Viewport {
 		width    = cast(f32)width,
@@ -500,7 +553,6 @@ cmd_set_viewport :: proc(width, height: int, max_depth: f32 = 1, loc := #caller_
 }
 
 cmd_set_scissor :: proc(width, height: int, offset: ivec2 = 0, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 
 	scissor := vk.Rect2D {
 		extent = {width = cast(u32)width, height = cast(u32)height},
@@ -581,7 +633,6 @@ _cmd_bind_descriptor_set :: proc(
 	descriptor_sets: []vk.DescriptorSet,
 	loc := #caller_location,
 ) {
-	assert_gfx_ctx(loc)
 
 	layout := get_pipeline_layout(pipeline.layout)
 
@@ -712,7 +763,6 @@ draw_mesh :: proc(
 	instance_count: u32 = 1,
 	loc := #caller_location,
 ) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(mesh, loc)
 	assert_not_nil(pipeline, loc)
 
@@ -1180,7 +1230,7 @@ _buffer_get_usage_and_dst_access_stage_mask :: proc(
 	if .Uniform in usage {
 		vk_usage += {.UNIFORM_BUFFER}
 		dst_access_mask += {.UNIFORM_READ}
-		dst_stage_mask += {.VERTEX_SHADER, .FRAGMENT_SHADER, .GEOMETRY_SHADER}
+		dst_stage_mask += {.COMPUTE_SHADER, .VERTEX_SHADER, .FRAGMENT_SHADER, .GEOMETRY_SHADER}
 	}
 	if .Storage in usage {
 		vk_usage += {.STORAGE_BUFFER}
@@ -1218,28 +1268,6 @@ buffer_fill :: proc(b: ^Buffer, data: rawptr, size: Device_Size, offset: Device_
 		log.info(b.vk_usage)
 		log.panic("Couldn't fill buffer", loc)
 	}
-}
-
-_vk_buffer_fill_mapped_memory :: proc(
-	alloc: vma.Allocation,
-	allloc_info: vma.AllocationInfo,
-	data: rawptr,
-	size: Device_Size,
-	mapped: rawptr,
-) {
-	assert(data != nil)
-	assert(size > 0)
-	assert(mapped != nil)
-	mem_props := _get_memory_properties(allloc_info)
-	mem.copy(mapped, data, int(size))
-	if !(.HOST_COHERENT in mem_props) {
-		vma.FlushAllocation(ctx.gfx.vk_state.allocator, alloc, 0, cast(vk.DeviceSize)vk.WHOLE_SIZE)
-	}
-}
-
-@(private)
-_get_memory_properties :: proc(alloc_info: vma.AllocationInfo) -> vk.MemoryPropertyFlags {
-	return ctx.gfx.vk_state.memory_propertices.memoryTypes[alloc_info.memoryType].propertyFlags
 }
 
 buffer_read :: proc(b: ^Buffer, loc := #caller_location) -> (data: rawptr, size: Device_Size) {
@@ -1346,6 +1374,7 @@ _vk_create_device_local_buffer :: proc(
 	return
 }
 
+@(private = "file")
 _create_staging_buffer :: proc(data: rawptr, size: Device_Size, loc := #caller_location) -> (buffer: Buffer) {
 	assert(data != nil, loc = loc)
 	assert(size > 0, loc = loc)
@@ -1405,6 +1434,30 @@ _update_buffers :: proc() {
 	}
 }
 
+@(private)
+_vk_buffer_fill_mapped_memory :: proc(
+	alloc: vma.Allocation,
+	allloc_info: vma.AllocationInfo,
+	data: rawptr,
+	size: Device_Size,
+	mapped: rawptr,
+) {
+	assert(data != nil)
+	assert(size > 0)
+	assert(mapped != nil)
+	mem_props := _get_memory_properties(allloc_info)
+	mem.copy(mapped, data, int(size))
+	if !(.HOST_COHERENT in mem_props) {
+		vma.FlushAllocation(ctx.gfx.vk_state.allocator, alloc, 0, cast(vk.DeviceSize)vk.WHOLE_SIZE)
+	}
+}
+
+@(private)
+_get_memory_properties :: proc(alloc_info: vma.AllocationInfo) -> vk.MemoryPropertyFlags {
+	return ctx.gfx.vk_state.memory_propertices.memoryTypes[alloc_info.memoryType].propertyFlags
+}
+
+
 // ▄▄ ▄▄ ▄▄  ▄▄ ▄▄ ▄▄▄▄▄  ▄▄▄  ▄▄▄▄  ▄▄   ▄▄   ▄▄▄▄  ▄▄ ▄▄ ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄
 // ██ ██ ███▄██ ██ ██▄▄  ██▀██ ██▄█▄ ██▀▄▀██   ██▄██ ██ ██ ██▄▄  ██▄▄  ██▄▄  ██▄█
 // ▀███▀ ██ ▀██ ██ ██    ▀███▀ ██ ██ ██   ██   ██▄█▀ ▀███▀ ██    ██    ██▄▄▄ ██ ██
@@ -1463,6 +1516,7 @@ detstroy_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> bool {
 // ██████╔╝███████╗███████║   ██║   ██║  ██║╚██████╔╝╚██████╗   ██║   ╚██████╔╝██║  ██║
 // ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 
+@(private)
 _init_deffered_destructor :: proc() {
 	ctx.gfx.deffered_destructor = new(Deferred_Destructor)
 	ctx.gfx.deffered_destructor.next_index = 0
@@ -1532,6 +1586,7 @@ Descriptor_Layout_Manager :: struct {
 	pipeline_layoutes: map[Pipeline_Layout_Info]vk.PipelineLayout,
 }
 
+@(private)
 _destroy_descriptor_layout_manager :: proc() {
 	for k, layout in ctx.gfx.descriptor_layout_manager.layouts {
 		vk.DestroyDescriptorSetLayout(ctx.gfx.vk_state.device, layout, nil)
@@ -1760,39 +1815,3 @@ create_primitive_cube :: proc(size: f32 = 1) -> Mesh {
 	}
 	return create_mesh(vertices[:], {})
 }
-
-// draw_square :: proc(camera: ^Camera, position: vec3, scale: vec3, color: vec4) {// FIXME:
-// 	model := ctx.gfx.buildin.square
-//
-// 	material_h := _temp_pool_acquire_material()
-// 	model.materials[0] = material_h
-// 	material, ok := get_material(material_h)
-// 	assert(ok)
-// 	mtrl_set_pipeline(material, ctx.gfx.buildin.pipeline.primitive_h)
-// 	mtrl_base_set_color(material, color)
-//
-// 	transform: Gfx_Transform
-// 	init_trf(&transform)
-// 	trf_set_position(&transform, position)
-// 	trf_set_scale(&transform, scale)
-//
-// 	draw_model(model, camera, &transform)
-// }
-//
-// draw_square_texture :: proc(camera: ^Camera, position: vec3, scale: vec3, texture: Texture_Handle) {
-// 	model := ctx.gfx.buildin.square
-//
-// 	material_h := _temp_pool_acquire_material()
-// 	model.materials[0] = material_h
-// 	material, ok := get_material(material_h)
-// 	assert(ok)
-// 	mtrl_set_pipeline(material, ctx.gfx.buildin.pipeline.primitive_h)
-// 	mtrl_base_set_texture(material, texture)
-//
-// 	transform: Gfx_Transform
-// 	init_trf(&transform)
-// 	trf_set_position(&transform, position)
-// 	trf_set_scale(&transform, scale)
-//
-// 	draw_model(model, camera, &transform)
-// }

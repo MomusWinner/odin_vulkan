@@ -549,6 +549,15 @@ destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline) {
 	_destroy_pipline(pipeline)
 }
 
+create_semapthore :: proc() -> vk.Semaphore {
+	semaphore: vk.Semaphore
+	info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+	}
+	vk.CreateSemaphore(ctx.gfx.vk_state.device, &info, nil, &semaphore)
+	return semaphore
+}
+
 compute_pipeline_dispatch :: proc(
 	pipeline: Compute_Pipeline,
 	buffer: Buffer,
@@ -572,14 +581,9 @@ compute_pipeline_dispatch :: proc(
 		nil,
 	)
 	vk.CmdDispatch(_get_cmd(), group_count.x, group_count.y, group_count.z)
-	_cmd_buffer_barrier(
-		_get_cmd(),
-		buffer.id,
-		{.SHADER_WRITE, .SHADER_READ},
-		{.VERTEX_ATTRIBUTE_READ},
-		{.COMPUTE_SHADER},
-		{.VERTEX_INPUT},
-	)
+
+	_, dst_access, dst_stage := _buffer_get_usage_and_dst_access_stage_mask(buffer.usage)
+	_cmd_buffer_barrier(_get_cmd(), buffer.id, {.SHADER_WRITE, .SHADER_READ}, dst_access, {.COMPUTE_SHADER}, dst_stage)
 }
 
 @(private)

@@ -16,8 +16,6 @@ BINDLESS_STAGE_FLAGS :: vk.ShaderStageFlags_ALL_GRAPHICS + {.COMPUTE}
 
 @(require_results)
 store_texture :: proc(texture: Texture, loc := #caller_location) -> Texture_Handle {
-	assert_gfx_ctx(loc)
-
 	return _bindless_store_texture(ctx.gfx.bindless, texture, loc)
 }
 
@@ -33,8 +31,6 @@ acquire_texture_h :: proc(texture_h: Texture_Handle) -> (Texture, bool) {
 
 @(require_results)
 store_buffer :: proc(buffer: Buffer, loc := #caller_location) -> Buffer_Handle {
-	assert_gfx_ctx(loc)
-
 	return _bindless_store_buffer(ctx.gfx.bindless, buffer, loc)
 }
 
@@ -45,8 +41,6 @@ acquire_buffer_h :: proc(buffer_h: Buffer_Handle) -> (Buffer, bool) {
 
 @(require_results)
 get_buffer_h :: proc(buffer_h: Buffer_Handle, loc := #caller_location) -> ^Buffer {
-	assert_gfx_ctx(loc)
-
 	result, ok := hm.get(&ctx.gfx.bindless.buffers, buffer_h)
 	if !ok {
 		log.error("couln't get buffer by handle ", buffer_h, loc)
@@ -89,22 +83,16 @@ get_bindless_pipeline_set_info :: proc() -> Pipeline_Set_Layout_Info {
 
 @(require_results)
 get_texture_h :: proc(texture_h: Texture_Handle, loc := #caller_location) -> (^Texture, bool) {
-	assert_gfx_ctx(loc)
-
 	return hm.get(&ctx.gfx.bindless.textures, texture_h)
 }
 
 @(require_results)
 has_texture_h :: proc(texture_h: Texture_Handle, loc := #caller_location) -> bool {
-	assert_gfx_ctx(loc)
-
 	return hm.has_handle(&ctx.gfx.bindless.textures, texture_h)
 }
 
 @(require_results)
 has_buffer_h :: proc(buffer_h: Buffer_Handle, loc := #caller_location) -> bool {
-	assert_gfx_ctx(loc)
-
 	return hm.has_handle(&ctx.gfx.bindless.buffers, buffer_h)
 }
 

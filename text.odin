@@ -54,7 +54,6 @@ Create_Font_Info :: struct {
 PIXEL_SIZE :: 0.002 // TODO:
 
 load_font :: proc(create_info: Create_Font_Info, loc := #caller_location) -> Font {
-	assert_gfx_ctx(loc)
 	assert(create_info.path != "", loc = loc)
 	assert(create_info.atlas_width > 0, loc = loc)
 	assert(create_info.atlas_height > 0, loc = loc)
@@ -174,7 +173,6 @@ load_font :: proc(create_info: Create_Font_Info, loc := #caller_location) -> Fon
 }
 
 unload_font :: proc(font: ^Font, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(font, loc)
 
 	delete(font.packed_chars)
@@ -190,7 +188,6 @@ create_text :: proc(
 	size: f32,
 	loc := #caller_location,
 ) -> Text {
-	assert_gfx_ctx(loc)
 	assert_not_nil(font, loc)
 
 	trf := Gfx_Transform{}
@@ -222,7 +219,6 @@ create_text :: proc(
 }
 
 text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(text, loc)
 
 	text.text = text_str
@@ -241,14 +237,12 @@ text_set_color :: proc(text: ^Text, color: vec4, loc := #caller_location) {
 }
 
 text_set_position :: proc(text: ^Text, position: vec3, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(text, loc)
 
 	trf_set_position(&text.transform, position)
 }
 
 draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(text, loc)
 
 	ubo, ok := get_uniform_buffer(text.ubo_h)
@@ -267,7 +261,6 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 }
 
 destroy_text :: proc(text: ^Text, loc := #caller_location) {
-	assert_gfx_ctx(loc)
 	assert_not_nil(text, loc)
 
 	destroy_buffer(&text.vbo)
