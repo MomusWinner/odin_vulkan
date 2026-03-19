@@ -1,14 +1,14 @@
 package main
 
 import ve ".."
-import gn "../tools/shadertypegen/"
 import "core:fmt"
 import "core:log"
 import "core:mem"
+import "core:time"
 
 current_scene: Scene
 
-t :: gn.MATERIAL_ATTRIBUTE
+TARGET_FPS :: 120
 
 main :: proc() {
 	when ODIN_DEBUG {
@@ -39,19 +39,14 @@ main :: proc() {
 	defer log.destroy_console_logger(context.logger)
 
 	ve.init(
-		nil,
-		fixed_update,
-		update,
-		draw,
-		destroy,
 		{
 			gfx = {swapchain_sample_count = ._4, attachments = {.Depth, .Stencil}},
 			window = {width = 800, height = 400, title = "Examples"},
 		},
 	)
 
-	// current_scene = create_model_scene()
-	current_scene = create_postprocessing_scene()
+	current_scene = create_model_scene()
+	// current_scene = create_postprocessing_scene()
 	// current_scene = create_light_scene()
 	// current_scene = create_skybox_scene()
 	// current_scene = create_outline_scene()
@@ -63,30 +58,32 @@ main :: proc() {
 
 	current_scene.init(&current_scene)
 
-	ve.run()
+	prev: time.Time
+	for !ve.should_close() {
+		if (ve.is_key_pressed(.Escape)) {
+			break
+		}
+
+		if (ve.is_key_pressed(.R)) {
+			ve.hot_reload_shaders()
+		}
+
+		current_scene.update(&current_scene)
+		current_scene.draw(&current_scene)
+
+		target_delta_time: f64 = (1.0 / TARGET_FPS) * f64(time.Second)
+		target_delta_duration := time.Duration(target_delta_time)
+		frame_duration := time.diff(prev, time.now())
+		if frame_duration < target_delta_duration {
+			time.accurate_sleep(target_delta_duration - frame_duration)
+		}
+		prev = time.now()
+	}
+
+	ve.wait_render_completion()
+	current_scene.destroy(&current_scene)
+
+	ve.close()
 
 	log.info("Successfuly close")
-}
-
-fixed_update :: proc(user_data: rawptr) {
-}
-
-update :: proc(user_data: rawptr) {
-	if (ve.is_key_pressed(.R)) {
-		ve.hot_reload_shaders()
-	}
-
-	if (ve.is_key_pressed(.Escape)) {
-		ve.close()
-	}
-
-	current_scene.update(&current_scene)
-}
-
-draw :: proc(user_data: rawptr) {
-	current_scene.draw(&current_scene)
-}
-
-destroy :: proc(user_data: rawptr) {
-	current_scene.destroy(&current_scene)
 }

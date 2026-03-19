@@ -79,8 +79,6 @@ compute_scene_init :: proc(s: ^Scene) {
 	data.time_ubo_h = create_ubo_delta_time()
 	data.comp_pipeline_h = create_compute_pipeline(INVOCATION_SIZE)
 
-	ve.set_target_fps(10000)
-
 	s.data = data
 }
 

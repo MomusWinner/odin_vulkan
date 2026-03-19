@@ -1,5 +1,6 @@
 package ve
 
+import "core:time"
 import "math"
 import "vendor:glfw"
 
@@ -25,17 +26,8 @@ Vertex :: struct {
 
 game_event_proc :: proc(user_data: rawptr)
 
-Game_Time :: struct {
-	total_time:              f64,
-	delta_time:              f32,
-	target_time:             f32,
-	fixed_target_time:       f32,
-	previous_frame:          f64,
-	fixed_update_total_time: f64,
-}
-
 Ve :: struct {
-	window:            struct {
+	window:       struct {
 		id:         glfw.WindowHandle,
 		fullscreen: bool,
 		prev:       struct {
@@ -43,15 +35,15 @@ Ve :: struct {
 			x, y:          int,
 		},
 	},
-	info:              Ve_Info,
-	should_close:      bool,
-	gfx:               Graphics,
-	game_time:         Game_Time,
-	user_data:         rawptr,
-	fixed_update_proc: game_event_proc,
-	update_proc:       game_event_proc,
-	draw_proc:         game_event_proc,
-	destroy_proc:      game_event_proc,
+	info:         Ve_Info,
+	should_close: bool,
+	gfx:          Graphics,
+	time:         struct {
+		start_time:     time.Time,
+		previous_frame: time.Time,
+		delta_time:     f32,
+		total_time:     f64,
+	},
 }
 
 Ve_Info :: struct {

@@ -19,17 +19,13 @@ get_screen_width :: proc() -> int {return ctx.gfx.swapchain.width}
 @(require_results)
 get_screen_height :: proc() -> int {return ctx.gfx.swapchain.height}
 @(require_results)
-get_screen_aspect :: proc() -> f32 {return cast(f32)get_screen_width() / cast(f32)get_screen_height()}
-@(require_results)
 screen_resized :: proc() -> bool {return ctx.gfx.frame.swapchain_resized}
-
 
 @(require_results)
 get_window_pos :: proc() -> (int, int) {
 	xpos, ypos := glfw.GetWindowPos(ctx.window.id)
 	return cast(int)xpos, cast(int)ypos
 }
-
 set_window_pos :: proc(x, y: int) {
 	glfw.SetWindowPos(ctx.window.id, cast(i32)x, cast(i32)y)
 }
@@ -58,21 +54,15 @@ set_window_fullscreen :: proc(enable: bool) {
 	ctx.window.fullscreen = enable
 }
 
-init :: proc(
-	user_data: rawptr,
-	fixed_update_proc: game_event_proc,
-	update_proc: game_event_proc,
-	draw_proc: game_event_proc,
-	destroy_proc: game_event_proc,
-	info: Ve_Info,
-	loc := #caller_location,
-) {
-	ctx.user_data = user_data
-	ctx.fixed_update_proc = fixed_update_proc
-	ctx.update_proc = update_proc
-	ctx.draw_proc = draw_proc
-	ctx.destroy_proc = destroy_proc
+get_delta_time :: proc() -> f32 {
+	return ctx.time.delta_time
+}
 
+get_total_time :: proc() -> f64 {
+	return ctx.time.total_time
+}
+
+init :: proc(info: Ve_Info, loc := #caller_location) {
 	// TODO: set custom allocator.
 	// glfw.InitAllocator()
 
@@ -120,72 +110,34 @@ init :: proc(
 	glfw.SetErrorCallback(_glfw_error_callback)
 
 	ctx.window.id = window
-	ctx.game_time.target_time = 1.0 / 60.0
-	ctx.game_time.fixed_target_time = 1.0 / 38.0
 	ctx.info = info
 
 	_init_gfx(info.gfx)
 	_init_input()
 }
 
-run :: proc() {
-	for (!_window_should_close() && !ctx.should_close) {
-		start := glfw.GetTime()
-
-		ctx.game_time.delta_time = cast(f32)(start - ctx.game_time.previous_frame)
-		if ctx.game_time.delta_time < 0 {
-			ctx.game_time.delta_time = 0
-		}
-		ctx.game_time.previous_frame = start
-
-		ctx.game_time.total_time += cast(f64)ctx.game_time.delta_time
-
-		free_all(context.temp_allocator)
-
-		_update_input()
-
-		fixed_update_dept_time := ctx.game_time.total_time - ctx.game_time.fixed_update_total_time
-		fixed_update_dept_count := cast(int)(fixed_update_dept_time / cast(f64)ctx.game_time.fixed_target_time)
-
-		if fixed_update_dept_count > 0 {
-			for i in 0 ..< fixed_update_dept_count {
-				ctx.fixed_update_proc(ctx.user_data)
-				ctx.game_time.fixed_update_total_time += cast(f64)ctx.game_time.fixed_target_time
-			}
-		}
-
-		ctx.update_proc(ctx.user_data)
-		ctx.draw_proc(ctx.user_data)
-
-		end := glfw.GetTime()
-
-		frame_duration := cast(f32)(end - start)
-
-		if frame_duration < ctx.game_time.target_time {
-			wait_time: f32 = ctx.game_time.target_time - frame_duration
-			wait_duration := cast(time.Duration)(wait_time * 1e9) * time.Nanosecond
-			time.accurate_sleep(wait_duration)
-		}
-	}
-
-	wait_render_completion()
-
-	ctx.destroy_proc(ctx.user_data)
-
-	_destroy()
-}
-
 close :: proc() {
-	ctx.should_close = true
-}
-
-@(private)
-_destroy :: proc() {
 	_destroy_gfx()
 	glfw.DestroyWindow(ctx.window.id)
 	glfw.Terminate()
 }
 
+should_close :: proc() -> bool {
+	now := time.now()
+	if ctx.time.previous_frame != {} {
+		ctx.time.delta_time = cast(f32)time.duration_seconds(time.diff(ctx.time.previous_frame, now))
+	}
+	ctx.time.previous_frame = now
+
+	if ctx.time.start_time == {} {
+		ctx.time.start_time = time.now()
+	}
+	ctx.time.total_time = time.duration_seconds(time.since(ctx.time.start_time))
+
+	_update_input()
+
+	return cast(bool)_window_should_close()
+}
 
 @(require_results)
 load_meshes :: proc(path: string, allocator := context.allocator) -> []Mesh {
@@ -214,4 +166,9 @@ load_meshes :: proc(path: string, allocator := context.allocator) -> []Mesh {
 _glfw_error_callback :: proc "c" (code: i32, description: cstring) {
 	context = g_err_ctx
 	log.errorf("glfw: %i: %s", code, description)
+}
+
+@(private)
+_window_should_close :: proc() -> b32 {
+	return glfw.WindowShouldClose(ctx.window.id)
 }
