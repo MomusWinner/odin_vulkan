@@ -27,7 +27,7 @@ update_texture_h :: proc(texture_h: Texture_Handle, new_texture: Texture, loc :=
 
 
 @(require_results)
-restore_texture_h :: proc(texture_h: Texture_Handle) -> (Texture, bool) {
+acquire_texture_h :: proc(texture_h: Texture_Handle) -> (Texture, bool) {
 	return _bindless_remove_texture(ctx.gfx.bindless, texture_h)
 }
 
@@ -39,7 +39,7 @@ store_buffer :: proc(buffer: Buffer, loc := #caller_location) -> Buffer_Handle {
 }
 
 @(require_results)
-restore_buffer_h :: proc(buffer_h: Buffer_Handle) -> (Buffer, bool) {
+acquire_buffer_h :: proc(buffer_h: Buffer_Handle) -> (Buffer, bool) {
 	return _bindless_remove_buffer(ctx.gfx.bindless, buffer_h)
 }
 

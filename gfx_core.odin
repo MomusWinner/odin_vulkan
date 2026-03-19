@@ -1424,7 +1424,7 @@ has_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
 detstroy_uniform_buffer :: proc(handle: Uniform_Buffer_Handle) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	if !ok do return false
-	b, b_ok := restore_buffer_h(uniform_buffer.buffer_h)
+	b, b_ok := acquire_buffer_h(uniform_buffer.buffer_h)
 	if b_ok do destroy_buffer(&b)
 	return b_ok
 }
@@ -1444,7 +1444,7 @@ get_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> (^Storage_Buffer, b
 detstroy_storage_buffer :: proc(handle: Storage_Buffer_Handle) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	if !ok do return false
-	b, b_ok := restore_buffer_h(storage_buffer.buffer_h)
+	b, b_ok := acquire_buffer_h(storage_buffer.buffer_h)
 	if b_ok do destroy_buffer(&b)
 	return b_ok
 }
@@ -1494,12 +1494,12 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 		case Buffer:
 			destroy_buffer(&resource)
 		case Buffer_Handle:
-			b, ok := restore_buffer_h(resource)
+			b, ok := acquire_buffer_h(resource)
 			if ok do destroy_buffer(&b)
 		case Texture:
 			destroy_texture(&resource)
 		case Texture_Handle:
-			t, ok := restore_texture_h(resource)
+			t, ok := acquire_texture_h(resource)
 			if ok do destroy_texture(&t)
 		}
 	}

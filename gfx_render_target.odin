@@ -75,7 +75,7 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 	depth_attachment, has_depth_attachment := render_target.depth_attachment.?
 
 	for ca in sm.slice(&render_target.color_attachments) {
-		t, ok := restore_texture_h(ca.texture_h)
+		t, ok := acquire_texture_h(ca.texture_h)
 		if ok do destroy_texture(&t)
 		msaa, has_msaa := ca.msaa_texture.?
 		if has_msaa do destroy_texture(&msaa)
@@ -86,7 +86,7 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 		case Render_Target_Common_Depth_Attachment:
 			destroy_texture(&attachment.resource)
 		case Render_Target_Readable_Depth_Attachment:
-			t, ok := restore_texture_h(attachment.texture_h)
+			t, ok := acquire_texture_h(attachment.texture_h)
 			if ok do destroy_texture(&t)
 
 			msaa, has_msaa := attachment.msaa_texture.?
