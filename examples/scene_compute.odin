@@ -31,10 +31,10 @@ Delta_Time_UBO :: struct {
 
 Compute_Scene_Data :: struct {
 	mesh:            ve.Mesh,
-	time_ubo_h:      ve.Uniform_Buffer_Handle,
+	time_ubo_h:      ve.Uniform_Buffer,
 	transform:       ve.Gfx_Transform,
 	pipeline_h:      ve.Graphics_Pipeline,
-	sbo_h:           ve.Storage_Buffer_Handle,
+	sbo_h:           ve.Storage_Buffer,
 	comp_pipeline_h: ve.Compute_Pipeline,
 	model_rotation:  f32,
 }
@@ -51,14 +51,8 @@ create_compute_scene :: proc() -> Scene {
 compute_scene_init :: proc(s: ^Scene) {
 	data := new(Compute_Scene_Data)
 
-	// Load Model
 	data.pipeline_h = create_particle_pipeline()
 
-	b1 := ve.create_buffer({.Vertex}, 4)
-	b := ve.store_buffer(b1)
-	log.info(b.index)
-
-	// Setup Transform
 	ve.init_trf(&data.transform)
 	ve.trf_set_position(&data.transform, {0, -0.5, -1})
 	ve.trf_set_scale(&data.transform, {0.5, 0.5, 0.5})
@@ -66,9 +60,8 @@ compute_scene_init :: proc(s: ^Scene) {
 	particles := generate_particlls(context.temp_allocator)
 
 	data.sbo_h = create_sbo_particle({.Storage, .Vertex, .Host_Read, .Host_Write})
-	sb, _ := ve.get_storage_buffer(data.sbo_h)
-	sbo_particle_set_particles(sb, particles[:])
-	vbo := ve.get_buffer_h(sb.buffer_h)^
+	sbo_particle_set_particles(data.sbo_h, particles[:])
+	vbo := sbo_get_buffer(data.sbo_h)
 
 	data.mesh = ve.Mesh {
 		vbo          = vbo,
@@ -85,21 +78,19 @@ compute_scene_init :: proc(s: ^Scene) {
 compute_scene_update :: proc(s: ^Scene) {
 	data := cast(^Compute_Scene_Data)s.data
 
-	time_ubo, _ := ve.get_uniform_buffer(data.time_ubo_h)
-	ubo_delta_time_set_delta_time(time_ubo, ve.get_delta_time())
+	ubo_delta_time_set_delta_time(data.time_ubo_h, ve.get_delta_time())
 }
 
 compute_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Compute_Scene_Data)s.data
 
-	sbo, _ := ve.get_storage_buffer(data.sbo_h)
-	b := ve.get_buffer_h(sbo.buffer_h)
+	b := sbo_get_buffer(data.sbo_h)
 
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.cmd_dispatch(data.comp_pipeline_h, b^, {GROUP_COUNT, 1, 1}, {h0 = data.sbo_h, h1 = data.time_ubo_h})
+	ve.cmd_dispatch(data.comp_pipeline_h, b, {GROUP_COUNT, 1, 1}, {h0 = data.sbo_h, h1 = data.time_ubo_h})
 
 	ve.begin_draw()
 	{

@@ -116,8 +116,8 @@ create_texture :: proc(
 	sc := begin_single_cmd()
 
 	// Staging Buffer
-	staging_buffer := create_buffer({.Transfer, .Host_Write}, image_size, image.data)
-	defer destroy_buffer(&staging_buffer)
+	staging_buffer := _create_buffer({.Transfer, .Host_Write}, image_size, image.data)
+	defer _destroy_buffer(&staging_buffer)
 
 	format: Format = _channels_and_encoding_to_format(image.channels, encoding)
 
@@ -283,8 +283,8 @@ create_texture_cubemap :: proc(
 	sc := begin_single_cmd()
 
 	// Staging Buffer
-	staging_buffer := create_buffer({.Transfer, .Host_Write}, size = image_size)
-	defer destroy_buffer(&staging_buffer)
+	staging_buffer := _create_buffer({.Transfer, .Host_Write}, size = image_size)
+	defer _destroy_buffer(&staging_buffer)
 
 	data := make([]byte, image_size, context.temp_allocator)
 	for face, i in faces {
@@ -295,7 +295,7 @@ create_texture_cubemap :: proc(
 		mem.copy(dest, src, int(layer_size))
 	}
 
-	buffer_fill(&staging_buffer, raw_data(data), image_size)
+	_buffer_fill(&staging_buffer, raw_data(data), image_size)
 
 	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 

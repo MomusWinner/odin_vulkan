@@ -41,7 +41,7 @@ Camera :: struct {
 		projection: Camera_Custom_Projection_Proc,
 		user_data:  rawptr,
 	},
-	buffer_h:    Buffer_Handle, // Camera_UBO
+	buffer_h:    Buffer, // Camera_UBO
 }
 
 // Sets a custom projection for the camera.
@@ -81,7 +81,7 @@ camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective
 	camera.type = type
 	camera.dirty = true
 
-	buffer := create_buffer({.Uniform, .Host_Write}, size_of(Camera_UBO))
+	buffer := _create_buffer({.Uniform, .Host_Write}, size_of(Camera_UBO))
 
 	camera.buffer_h = store_buffer(buffer, loc)
 }
@@ -208,7 +208,7 @@ camera_get_projection :: proc(camera: ^Camera, aspect: f32, loc := #caller_locat
 }
 
 @(private)
-_camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location) -> Buffer_Handle {
+_camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location) -> Buffer {
 	assert_not_nil(camera, loc)
 
 	if !camera.dirty && aspect == camera.last_aspect {
@@ -226,7 +226,7 @@ _camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location
 		projection = projection,
 		position   = camera.position,
 	}
-	buffer_fill(buffer, &camera_ubo, size_of(Camera_UBO))
+	_buffer_fill(buffer, &camera_ubo, size_of(Camera_UBO))
 	camera.dirty = false
 
 	return camera.buffer_h

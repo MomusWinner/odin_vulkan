@@ -23,8 +23,8 @@ Field_Type :: enum {
 	Vector3,
 	Vector4,
 	Mat4,
-	Texture_Handle,
-	Buffer_Handle,
+	Texture,
+	Buffer,
 	Array,
 	Custom,
 }
@@ -106,7 +106,20 @@ get_odin_proc_struct_name :: proc(s: Struct) -> string {
 	name = strings.trim_space(name)
 	return name
 }
-get_odin_buffer_type_name :: proc(s: Struct) -> string {
+get_odin_buffer_handle_get_proc_name :: proc(s: Struct) -> string {
+	switch s.type {
+	case .None:
+		return "None"
+	case .Material:
+		return "None"
+	case .Uniform_Buffer:
+		return "get_uniform_buffer"
+	case .Storage_Buffer:
+		return "get_storage_buffer"
+	}
+	return "None"
+}
+get_odin_buffer_handle_type_name :: proc(s: Struct) -> string {
 	switch s.type {
 	case .None:
 		return "None"
@@ -116,6 +129,19 @@ get_odin_buffer_type_name :: proc(s: Struct) -> string {
 		return "Uniform_Buffer"
 	case .Storage_Buffer:
 		return "Storage_Buffer"
+	}
+	return "None"
+}
+get_odin_buffer_type_name :: proc(s: Struct) -> string {
+	switch s.type {
+	case .None:
+		return "None"
+	case .Material:
+		return "Material"
+	case .Uniform_Buffer:
+		return "Uniform_Buffer_Data"
+	case .Storage_Buffer:
+		return "Uniform_Buffer_Data"
 	}
 	return "None"
 }
@@ -270,26 +296,41 @@ generate_odin :: proc(
 		fmt.fprintfln(f, "import {0:s} \"{1:s}\"", gfx_pkg_info.alias, gfx_pkg_info.path)
 	}
 
-	gfx_pref := ""
-
+	pkg_pref := ""
 	if gfx_pkg_info.alias != "" {
-		gfx_pref = fmt.aprintf("%s.", gfx_pkg_info.alias)
+		pkg_pref = fmt.aprintf("%s.", gfx_pkg_info.alias)
 	} else if gfx_pkg_info.path != "" {
 		path := strings.split(gfx_pkg_info.path, "/")
-		gfx_pref = fmt.aprintf("%s.", path[len(path) - 1])
+		pkg_pref = fmt.aprintf("%s.", path[len(path) - 1])
 	}
+
+	fmt.fprintfln(
+		f,
+		`
+ubo_get_buffer :: proc(h: {0:s}Uniform_Buffer) -> {0:s}Buffer{{
+	b := {0:s}get_uniform_buffer(h)
+	return b.buffer_h
+}}
+sbo_get_buffer :: proc(h: {0:s}Storage_Buffer) -> {0:s}Buffer{{
+	b := {0:s}get_storage_buffer(h)
+	return b.buffer_h
+}}
+	`,
+		pkg_pref,
+	)
+
 
 	for name in d.ordered {
 		s := d.structures[name]
 		switch s.type {
 		case .Material:
-			generate_odin_material_struct(d, f, s, gfx_pref)
+			generate_odin_material_struct(d, f, s, pkg_pref)
 		case .Uniform_Buffer:
-			generate_odin_uniform_buffer_struct(d, f, s, gfx_pref)
+			generate_odin_uniform_buffer_struct(d, f, s, pkg_pref)
 		case .Storage_Buffer:
-			generate_odin_storage_buffer_struct(d, f, s, gfx_pref)
+			generate_odin_storage_buffer_struct(d, f, s, pkg_pref)
 		case .None:
-			generate_odin_common_struct(d, f, s, gfx_pref)
+			generate_odin_common_struct(d, f, s, pkg_pref)
 		}
 	}
 
@@ -369,6 +410,7 @@ create_mtrl_{0:s} :: proc(
 	loc := #caller_location
 ) -> {2:s}Material_Handle {{
 	assert(.Uniform in buffer_usage, loc = loc)
+	assert(.Host_Write in buffer_usage, loc = loc)
 	m := {2:s}Material{{}}
 	m.pipeline_h = pipeline_h
 	material_data := new({1:s})
@@ -377,8 +419,7 @@ create_mtrl_{0:s} :: proc(
 	m.dirty = true
 	m.apply = mtrl_{0:s}_apply
 
-	buffer := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
-	m.buffer_h = {2:s}store_buffer(buffer, loc)
+	m.buffer_h := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 `,
 		get_odin_proc_struct_name(s),
 		s.name,
@@ -408,8 +449,8 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 		fmt.fprintf(
 			f,
 			`
-{0:s}_{1:s}_set_{3:s} :: proc(b: ^{6:s}{5:s}, {3:s}_: {4:s}, loc := #caller_location) {{
-	assert(b != nil, loc = loc)
+{0:s}_{1:s}_set_{3:s} :: proc(h: {7:s}{5:s}, {3:s}_: {4:s}, loc := #caller_location) {{
+	b := {7:s}{6:s}(h, loc)
 	assert(b.type == typeid_of(^{2:s}), loc = loc)
 	data := cast(^{2:s})b.data
 `,
@@ -418,7 +459,8 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 			s.name,
 			field.name,
 			field_to_odin_type(field, ve_pkg),
-			get_odin_buffer_type_name(s),
+			get_odin_buffer_handle_type_name(s),
+			get_odin_buffer_handle_get_proc_name(s),
 			ve_pkg,
 		)
 
@@ -433,7 +475,8 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 			f,
 			`	b.dirty = true
 }}
-{0:s}_{1:s}_get_{3:s} :: proc(b: {6:s}{5:s}, loc := #caller_location) -> {4:s}{{
+{0:s}_{1:s}_get_{3:s} :: proc(h: {7:s}{5:s}, loc := #caller_location) -> {4:s}{{
+	b := {7:s}{6:s}(h, loc)
 	assert(b.type == typeid_of(^{2:s}), loc = loc)
 	data := cast(^{2:s})b.data
 `,
@@ -442,7 +485,8 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 			s.name,
 			field.name,
 			field_to_odin_type(field, ve_pkg),
-			get_odin_buffer_type_name(s),
+			get_odin_buffer_handle_type_name(s),
+			get_odin_buffer_handle_get_proc_name(s),
 			ve_pkg,
 		)
 
@@ -487,8 +531,7 @@ generate_odin_apply_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	fmt.fprintf(
 		f,
 		`
-	buffer := {1:s}get_buffer_h(b.buffer_h, loc)
-	{1:s}buffer_fill(buffer, gpu_data_ptr, size_of({0:s}), loc = loc)
+	{1:s}buffer_fill(b.buffer_h, gpu_data_ptr, size_of({0:s}), loc = loc)
 	b.dirty = false
 }}
 `,
@@ -517,17 +560,16 @@ generate_odin_storage_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Stru
 create_sbo_{0:s} :: proc(
 	buffer_usage: {2:s}Buffer_Usage_Flags = {{.Storage}},
 	loc := #caller_location
-) -> {2:s}Storage_Buffer_Handle {{
+) -> {2:s}Storage_Buffer {{
 	assert(.Storage in buffer_usage, loc = loc)
-	s: {2:s}Storage_Buffer
+	s: {2:s}Storage_Buffer_Data
 	data := new({1:s})
 	s.data = data
 	s.type = typeid_of(^{1:s})
 	s.dirty = true
 	s.apply = sbo_{0:s}_apply
 
-	buffer := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
-	s.buffer_h = {2:s}store_buffer(buffer, loc)
+	s.buffer_h = {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 `,
 		get_odin_proc_struct_name(s),
 		s.name,
@@ -567,17 +609,17 @@ generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Stru
 create_ubo_{0:s} :: proc(
 	buffer_usage: {2:s}Buffer_Usage_Flags = {{.Uniform, .Host_Write}},
 	loc := #caller_location
-) -> {2:s}Uniform_Buffer_Handle {{
+) -> {2:s}Uniform_Buffer {{
 	assert(.Uniform in buffer_usage, loc = loc)
-	u: {2:s}Uniform_Buffer
+	assert(.Host_Write in buffer_usage, loc = loc)
+	u: {2:s}Uniform_Buffer_Data
 	uniform_data := new({1:s})
 	u.data = uniform_data
 	u.type = typeid_of(^{1:s})
 	u.dirty = true
 	u.apply = ubo_{0:s}_apply
 
-	buffer := {2:s}create_buffer({{.Uniform, .Host_Write}}, size_of({3:s}), loc = loc)
-	u.buffer_h = {2:s}store_buffer(buffer, loc)
+	u.buffer_h = {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 `,
 		get_odin_proc_struct_name(s),
 		s.name,
@@ -608,7 +650,7 @@ print_field_to_data_field :: proc(
 	gfx_pref: string,
 	layout: Memory_Layout,
 ) {
-	if (field.type == .Texture_Handle) {
+	if (field.type == .Texture) {
 		fmt.fprintfln(
 			f,
 			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}has_texture_h({2:s}.{0:s}) else max(u32)",
@@ -617,7 +659,7 @@ print_field_to_data_field :: proc(
 			src_name,
 			dst_name,
 		)
-	} else if (field.type == .Buffer_Handle) {
+	} else if (field.type == .Buffer) {
 		fmt.fprintfln(
 			f,
 			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}has_buffer_h({2:s}.{0:s}) else max(u32)",
@@ -654,9 +696,9 @@ get_field_type_default_value :: proc(field_type: Field_Type, gfx_pref: string) -
 	switch field_type {
 	case .None, .Int, .Bool, .Float, .Vector2, .Vector3, .Vector4, .Mat4, .Array, .Custom:
 		return nil
-	case .Texture_Handle:
+	case .Texture:
 		return fmt.aprintf("%sINVALID_TEXTURE_HANDLE", gfx_pref)
-	case .Buffer_Handle:
+	case .Buffer:
 		return fmt.aprintf("%sINVALID_BUFFER_HANDLE", gfx_pref)
 	}
 	return nil
@@ -664,7 +706,7 @@ get_field_type_default_value :: proc(field_type: Field_Type, gfx_pref: string) -
 
 get_data_field_for_odin :: proc(field: Field, gfx_pref: string, layout: Memory_Layout) -> string {
 	assert(field.type != .None)
-	if field.type == .Texture_Handle || field.type == .Buffer_Handle {
+	if field.type == .Texture || field.type == .Buffer {
 		return fmt.aprintf("	%s: u32,", field.name)
 	} else if field.type == .Custom {
 		return fmt.aprintf("	%s: %s,", field.name, get_odin_data_struct_name(field.type_string, layout))
@@ -1260,10 +1302,10 @@ odin_type_to_field_type :: proc(str: string) -> Field_Type {
 		return .Vector4
 	case "mat4":
 		return .Mat4
-	case "Texture_Handle":
-		return .Texture_Handle
-	case "Buffer_Handle":
-		return .Buffer_Handle
+	case "Texture":
+		return .Texture
+	case "Buffer":
+		return .Buffer
 	case:
 		return .None
 	}
@@ -1287,9 +1329,9 @@ field_to_glsl_type :: proc(field: Field) -> string {
 		return "vec4"
 	case .Mat4:
 		return "mat4"
-	case .Texture_Handle:
+	case .Texture:
 		return "uint"
-	case .Buffer_Handle:
+	case .Buffer:
 		return "uint"
 	case .Array:
 		type_string := field_to_glsl_type(
@@ -1324,10 +1366,10 @@ field_to_odin_type :: proc(field: Field, gfx_pref: string) -> string {
 		return "glsl.vec4"
 	case .Mat4:
 		return "glsl.mat4"
-	case .Texture_Handle:
-		return fmt.aprintf("%sTexture_Handle", gfx_pref)
-	case .Buffer_Handle:
-		return fmt.aprintf("%sBuffer_Handle", gfx_pref)
+	case .Texture:
+		return fmt.aprintf("%sTexture", gfx_pref)
+	case .Buffer:
+		return fmt.aprintf("%sBuffer", gfx_pref)
 	case .Array:
 		type_string := field_to_odin_type(
 			Field{type = field.array.element_type, type_string = field.array.element_type_string},
@@ -1348,7 +1390,7 @@ get_field_base_alignment_std140 :: proc(d: Parse_Data, field: Field) -> int {
 	switch field.type {
 	case .None:
 		return 0
-	case .Float, .Int, .Bool, .Texture_Handle, .Buffer_Handle:
+	case .Float, .Int, .Bool, .Texture, .Buffer:
 		return 4
 	case .Vector2:
 		return 8
@@ -1364,7 +1406,7 @@ get_field_base_alignment_std430 :: proc(d: Parse_Data, field: Field) -> int {
 	switch field.type {
 	case .None:
 		return 0
-	case .Float, .Int, .Bool, .Texture_Handle, .Buffer_Handle:
+	case .Float, .Int, .Bool, .Texture, .Buffer:
 		return 4
 	case .Vector2:
 		return 8
@@ -1393,7 +1435,7 @@ get_field_type_size :: proc(d: Parse_Data, field: Field, memory_layout: Memory_L
 	switch field.type {
 	case .None:
 		return 0
-	case .Float, .Int, .Bool, .Texture_Handle, .Buffer_Handle:
+	case .Float, .Int, .Bool, .Texture, .Buffer:
 		return 4
 	case .Vector2:
 		return 8

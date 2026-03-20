@@ -18,13 +18,13 @@ Postprocessing :: struct {
 Postprocessing_Scene_Data :: struct {
 	model:               ve.Mesh,
 	square:              ve.Mesh,
-	base_ubo:            ve.Uniform_Buffer_Handle,
+	base_ubo:            ve.Uniform_Buffer,
 	texture_h:           ve.Texture,
 	pipeline_h:          ve.Graphics_Pipeline,
 	transform:           ve.Gfx_Transform,
 	camera:              ve.Camera,
 	rt:                  ve.Render_Target,
-	postproc_ubo_h:      ve.Uniform_Buffer_Handle,
+	postproc_ubo_h:      ve.Uniform_Buffer,
 	postproc_pipeline_h: ve.Graphics_Pipeline,
 }
 
@@ -56,8 +56,7 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 
 	// Setup Material
 	data.base_ubo = ve.create_ubo_base()
-	model_material, _ := ve.get_uniform_buffer(data.base_ubo)
-	ve.ubo_base_set_texture(model_material, data.texture_h)
+	ve.ubo_base_set_texture(data.base_ubo, data.texture_h)
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -71,8 +70,7 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 
 	data.postproc_pipeline_h = create_postprocessing_pipeline()
 	data.postproc_ubo_h = create_ubo_postprocessing()
-	postproc_ubo, _ := ve.get_uniform_buffer(data.postproc_ubo_h)
-	ubo_postprocessing_set_texture(postproc_ubo, color_attachment)
+	ubo_postprocessing_set_texture(data.postproc_ubo_h, color_attachment)
 
 	s.data = data
 }
@@ -84,9 +82,8 @@ postprocessing_scene_update :: proc(s: ^Scene) {
 postprocessing_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Postprocessing_Scene_Data)s.data
 
-	ubo, _ := ve.get_uniform_buffer(data.postproc_ubo_h)
-	ubo_postprocessing_set_width(ubo, cast(f32)ve.get_screen_width())
-	ubo_postprocessing_set_height(ubo, cast(f32)ve.get_screen_height())
+	ubo_postprocessing_set_width(data.postproc_ubo_h, cast(f32)ve.get_screen_width())
+	ubo_postprocessing_set_height(data.postproc_ubo_h, cast(f32)ve.get_screen_height())
 
 	if (ve.screen_resized()) {
 		ve.render_target_resize(&data.rt, ve.get_screen_width(), ve.get_screen_height())

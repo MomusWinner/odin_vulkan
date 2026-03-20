@@ -16,8 +16,8 @@ Outline_UBO :: struct {
 
 Outline_Scene_Data :: struct {
 	model:              ve.Mesh,
-	outline_ubo:        ve.Uniform_Buffer_Handle,
-	base_ubo:           ve.Uniform_Buffer_Handle,
+	outline_ubo:        ve.Uniform_Buffer,
+	base_ubo:           ve.Uniform_Buffer,
 	pipeline_h:         ve.Graphics_Pipeline,
 	outline_pipeline_h: ve.Graphics_Pipeline,
 	transform:          ve.Gfx_Transform,
@@ -51,13 +51,11 @@ outline_scene_init :: proc(s: ^Scene) {
 	data.outline_pipeline_h = create_outline_pipeline()
 
 	data.outline_ubo = create_ubo_outline()
-	ubo, _ := ve.get_uniform_buffer(data.outline_ubo)
-	ubo_outline_set_color(ubo, {1, 0, 0, 1})
-	ubo_outline_set_outline_width(ubo, 0.025)
+	ubo_outline_set_color(data.outline_ubo, {1, 0, 0, 1})
+	ubo_outline_set_outline_width(data.outline_ubo, 0.025)
 
 	data.base_ubo = ve.create_ubo_base()
-	base, _ := ve.get_uniform_buffer(data.base_ubo)
-	ve.ubo_base_set_color(base, {1, 1, 1, 1})
+	ve.ubo_base_set_color(data.base_ubo, {1, 1, 1, 1})
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -70,17 +68,16 @@ outline_scene_init :: proc(s: ^Scene) {
 outline_scene_update :: proc(s: ^Scene) {
 	data := cast(^Outline_Scene_Data)s.data
 
-	ubo, _ := ve.get_uniform_buffer(data.outline_ubo)
-	width := ubo_outline_get_outline_width(ubo^)
+	width := ubo_outline_get_outline_width(data.outline_ubo)
 	speed: f32 = 0.1
 
 	if ve.is_key_down(.W) {
-		ubo_outline_set_outline_width(ubo, width + speed * cast(f32)ve.get_delta_time())
+		ubo_outline_set_outline_width(data.outline_ubo, width + speed * cast(f32)ve.get_delta_time())
 	}
 	if ve.is_key_down(.S) {
 		new_width := width - speed * cast(f32)ve.get_delta_time()
 		if new_width < 0 do new_width = 0
-		ubo_outline_set_outline_width(ubo, new_width)
+		ubo_outline_set_outline_width(data.outline_ubo, new_width)
 	}
 }
 

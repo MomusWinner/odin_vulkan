@@ -42,7 +42,7 @@ Light_Box_UBO :: struct {
 
 Light_Box :: struct {
 	trans:   ve.Gfx_Transform,
-	box_ubo: ve.Uniform_Buffer_Handle,
+	box_ubo: ve.Uniform_Buffer,
 }
 
 HDR_Scene_Data :: struct {
@@ -50,10 +50,10 @@ HDR_Scene_Data :: struct {
 	square:                ve.Mesh,
 	cube:                  ve.Mesh,
 	// Buffers
-	light_box_ubo_h:       ve.Uniform_Buffer_Handle,
-	multilight_ubo_h:      ve.Uniform_Buffer_Handle,
-	hdr_ubo_h:             ve.Uniform_Buffer_Handle,
-	blur_ubo_h:            ve.Uniform_Buffer_Handle,
+	light_box_ubo_h:       ve.Uniform_Buffer,
+	multilight_ubo_h:      ve.Uniform_Buffer,
+	hdr_ubo_h:             ve.Uniform_Buffer,
+	blur_ubo_h:            ve.Uniform_Buffer,
 	// Pipelines
 	blur_hor_pipeline_h:   ve.Graphics_Pipeline,
 	blur_ver_pipeline_h:   ve.Graphics_Pipeline,
@@ -97,23 +97,20 @@ hdr_scene_init :: proc(s: ^Scene) {
 
 	// Setup Material
 	data.hdr_ubo_h = create_ubo_hdr()
-	hdr_ubo, _ := ve.get_uniform_buffer(data.hdr_ubo_h)
-	ubo_hdr_set_scene(hdr_ubo, hdr_color_attachmetn)
-	ubo_hdr_set_bloom(hdr_ubo, bright_color_attachmetn)
-	ubo_hdr_set_exposure(hdr_ubo, 0.5)
+	ubo_hdr_set_scene(data.hdr_ubo_h, hdr_color_attachmetn)
+	ubo_hdr_set_bloom(data.hdr_ubo_h, bright_color_attachmetn)
+	ubo_hdr_set_exposure(data.hdr_ubo_h, 0.5)
 
 	data.blur_hor_pipeline_h = create_gaussian_blur_pipeline(true)
 	data.blur_ver_pipeline_h = create_gaussian_blur_pipeline(false)
 
 	data.blur_ubo_h = create_ubo_gaussian_blur()
-	blur_hor_mtrl, _ := ve.get_uniform_buffer(data.blur_ubo_h)
-	ubo_gaussian_blur_set_blur(blur_hor_mtrl, bright_color_attachmetn)
+	ubo_gaussian_blur_set_blur(data.blur_ubo_h, bright_color_attachmetn)
 
 	data.multilight_pipeline_h = create_multilight_pipeline()
 	data.multilight_ubo_h = create_ubo_multilight()
-	multilight_ubo, _ := ve.get_uniform_buffer(data.multilight_ubo_h)
 
-	ubo_multilight_set_color(multilight_ubo, {0.5, 0.5, 0.5})
+	ubo_multilight_set_color(data.multilight_ubo_h, {0.5, 0.5, 0.5})
 	lights: [4]Light = {}
 	lights[0] = Light {
 		position = {0, 0, -3},
@@ -131,7 +128,7 @@ hdr_scene_init :: proc(s: ^Scene) {
 		position = {0, 0, -12},
 		color    = ({1, 1, 0} * 5),
 	}
-	ubo_multilight_set_lights(multilight_ubo, lights[:])
+	ubo_multilight_set_lights(data.multilight_ubo_h, lights[:])
 
 	// Setup Transform
 	ve.init_trf(&data.transform)
@@ -155,8 +152,7 @@ hdr_scene_init :: proc(s: ^Scene) {
 		ve.trf_set_position(&light.trans, lights[i].position)
 		ve.trf_set_scale(&light.trans, 0.3)
 		light.box_ubo = create_ubo_light_box()
-		ubo, _ := ve.get_uniform_buffer(light.box_ubo)
-		ubo_light_box_set_color(ubo, lights[i].color)
+		ubo_light_box_set_color(light.box_ubo, lights[i].color)
 		data.light_boxes[i] = light
 	}
 
@@ -170,14 +166,13 @@ hdr_scene_update :: proc(s: ^Scene) {
 	ve.cursor_disable()
 	ve.camera_update_simple_controller(&data.camera)
 
-	ubo, _ := ve.get_uniform_buffer(data.hdr_ubo_h)
-	exp := ubo_hdr_get_exposure(ubo^)
+	exp := ubo_hdr_get_exposure(data.hdr_ubo_h)
 	speed: f32 = 1.0
 	if (ve.is_key_down(.Up)) {
-		ubo_hdr_set_exposure(ubo, exp + speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(data.hdr_ubo_h, exp + speed * ve.get_delta_time())
 	}
 	if (ve.is_key_down(.Down)) {
-		ubo_hdr_set_exposure(ubo, exp - speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(data.hdr_ubo_h, exp - speed * ve.get_delta_time())
 	}
 }
 

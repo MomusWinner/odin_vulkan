@@ -33,23 +33,19 @@ acquire_texture_h :: proc(texture_h: Texture) -> (Texture_Data, bool) {
 }
 
 @(require_results)
-store_buffer :: proc(buffer: Buffer, loc := #caller_location) -> Buffer_Handle {
+store_buffer :: proc(buffer: Buffer_Data, loc := #caller_location) -> Buffer {
 	return _bindless_store_buffer(ctx.gfx.bindless, buffer, loc)
 }
 
 @(require_results)
-acquire_buffer_h :: proc(buffer_h: Buffer_Handle) -> (Buffer, bool) {
+acquire_buffer_h :: proc(buffer_h: Buffer) -> Buffer_Data {
 	return _bindless_remove_buffer(ctx.gfx.bindless, buffer_h)
 }
 
 @(require_results)
-get_buffer_h :: proc(buffer_h: Buffer_Handle, loc := #caller_location) -> ^Buffer {
+get_buffer_h :: proc(buffer_h: Buffer, loc := #caller_location) -> ^Buffer_Data {
 	result, ok := hm.get(&ctx.gfx.bindless.buffers, buffer_h)
-	if !ok {
-		log.error("couln't get buffer by handle ", buffer_h, loc)
-		return nil
-	}
-
+	assert(ok, "Invalid buffer handle", loc = loc)
 	return result
 }
 
@@ -97,7 +93,7 @@ has_texture_h :: proc(texture_h: Texture, loc := #caller_location) -> bool {
 }
 
 @(require_results)
-has_buffer_h :: proc(buffer_h: Buffer_Handle, loc := #caller_location) -> bool {
+has_buffer_h :: proc(buffer_h: Buffer, loc := #caller_location) -> bool {
 	return hm.has_handle(&ctx.gfx.bindless.buffers, buffer_h)
 }
 
@@ -178,7 +174,7 @@ _bindless_destroy :: proc(bindless: ^Bindless, loc := #caller_location) {
 	hm.destroy(&bindless.textures)
 
 	for &buffer in bindless.buffers.values {
-		destroy_buffer(&buffer)
+		_destroy_buffer(&buffer)
 	}
 	hm.destroy(&bindless.buffers)
 }
@@ -292,7 +288,7 @@ _bindless_remove_texture :: proc(
 }
 
 @(private = "file")
-_bindless_store_buffer :: proc(bindless: ^Bindless, buffer: Buffer, loc := #caller_location) -> Buffer_Handle {
+_bindless_store_buffer :: proc(bindless: ^Bindless, buffer: Buffer_Data, loc := #caller_location) -> Buffer {
 	assert_not_nil(bindless, loc)
 
 	handle := hm.insert(&bindless.buffers, buffer)
@@ -331,15 +327,9 @@ _bindless_store_buffer :: proc(bindless: ^Bindless, buffer: Buffer, loc := #call
 }
 
 @(private = "file")
-_bindless_remove_buffer :: proc(
-	bindless: ^Bindless,
-	buffer_h: Buffer_Handle,
-	loc := #caller_location,
-) -> (
-	Buffer,
-	bool,
-) {
+_bindless_remove_buffer :: proc(bindless: ^Bindless, buffer_h: Buffer, loc := #caller_location) -> Buffer_Data {
 	assert_not_nil(bindless, loc)
-
-	return hm.remove(&bindless.buffers, buffer_h)
+	b, ok := hm.remove(&bindless.buffers, buffer_h)
+	assert(ok, "Invalid buffer handle", loc = loc)
+	return b
 }

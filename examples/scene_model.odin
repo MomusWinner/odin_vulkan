@@ -10,7 +10,7 @@ import "core:time"
 Model_Scene_Data :: struct {
 	texture_h:      ve.Texture,
 	model:          ve.Mesh,
-	ubo:            ve.Uniform_Buffer_Handle,
+	ubo:            ve.Uniform_Buffer,
 	pipeline_h:     ve.Graphics_Pipeline,
 	transform:      ve.Gfx_Transform,
 	camera:         ve.Camera,
@@ -45,8 +45,7 @@ model_scene_init :: proc(s: ^Scene) {
 
 	// Setup Material
 	data.ubo = ve.create_ubo_base()
-	ubo, _ := ve.get_uniform_buffer(data.ubo)
-	ve.ubo_base_set_texture(ubo, data.texture_h)
+	ve.ubo_base_set_texture(data.ubo, data.texture_h)
 
 	// Setup Transform
 	ve.init_trf(&data.transform)

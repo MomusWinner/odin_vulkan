@@ -109,7 +109,7 @@ instancing_scene_draw :: proc(s: ^Scene) {
 instancing_scene_destroy :: proc(s: ^Scene) {
 	data := cast(^Instancing_Scene_Data)s.data
 
-	ve.destroy_buffer(&data.instance_vertex_buffer)
+	ve.destroy_buffer(data.instance_vertex_buffer)
 	ve.destroy_mesh(&data.cube)
 
 	free(data)

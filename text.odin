@@ -28,10 +28,9 @@ Text :: struct {
 	text:       string,
 	size:       f32,
 	vbo:        Buffer,
-	last_vbo:   Buffer,
 	vertices:   []FontVertex,
 	transform:  Gfx_Transform,
-	ubo_h:      Uniform_Buffer_Handle,
+	ubo_h:      Uniform_Buffer,
 	pipeline_h: Graphics_Pipeline,
 }
 
@@ -196,11 +195,8 @@ create_text :: proc(
 	trf_set_scale(&trf, vec3{1, 1, 1} * size)
 
 	ubo_h := create_ubo_base()
-	ubo, ok := get_uniform_buffer(ubo_h)
-	assert(ok, loc = loc)
-
-	ubo_base_set_texture(ubo, font.texture_h)
-	ubo_base_set_color(ubo, color)
+	ubo_base_set_texture(ubo_h, font.texture_h)
+	ubo_base_set_color(ubo_h, color)
 
 	text := Text {
 		text       = text,
@@ -224,16 +220,13 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 	text.text = text_str
 	_deffered_destructor_add(text.vbo)
 
-	text.last_vbo = text.vbo
 	text.vbo, _ = _generate_text_mesh(text, loc)
 }
 
 text_set_color :: proc(text: ^Text, color: vec4, loc := #caller_location) {
 	assert_not_nil(text, loc)
 
-	ubo, ok := get_uniform_buffer(text.ubo_h)
-	assert(ok, loc = loc)
-	ubo_base_set_color(ubo, color)
+	ubo_base_set_color(text.ubo_h, color)
 }
 
 text_set_position :: proc(text: ^Text, position: vec3, loc := #caller_location) {
@@ -244,9 +237,6 @@ text_set_position :: proc(text: ^Text, position: vec3, loc := #caller_location) 
 
 draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 	assert_not_nil(text, loc)
-
-	ubo, ok := get_uniform_buffer(text.ubo_h)
-	assert(ok, loc = loc)
 
 	cmd_bind_vertex_buffer(text.vbo, 0)
 
@@ -261,7 +251,7 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 destroy_text :: proc(text: ^Text, loc := #caller_location) {
 	assert_not_nil(text, loc)
 
-	destroy_buffer(&text.vbo)
+	destroy_buffer(text.vbo)
 }
 
 @(private)

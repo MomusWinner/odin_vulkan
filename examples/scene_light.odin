@@ -13,7 +13,7 @@ import "vendor:microui"
 
 @(buffer)
 Light_Data_Ubo :: struct {
-	camera:    ve.Buffer_Handle,
+	camera:    ve.Buffer,
 	direction: vec3,
 	color:     vec3,
 	shadow:    ve.Texture,
@@ -38,10 +38,10 @@ Lighting_Scene_Data :: struct {
 	shadow_map_texture:   ve.Texture,
 	square_trf:           ve.Gfx_Transform,
 	light_pipeline_h:     ve.Graphics_Pipeline,
-	light_ubo:            ve.Uniform_Buffer_Handle,
-	surf_draw_ubo:        ve.Uniform_Buffer_Handle,
+	light_ubo:            ve.Uniform_Buffer,
+	surf_draw_ubo:        ve.Uniform_Buffer,
 	depth_only_pipeline:  ve.Graphics_Pipeline,
-	light_data:           ve.Uniform_Buffer_Handle,
+	light_data:           ve.Uniform_Buffer,
 }
 
 DEPTH_SIZE :: 1024 * 2
@@ -94,18 +94,14 @@ light_scene_init :: proc(s: ^Scene) {
 	// Setup Material
 	data.light_pipeline_h = create_light_pipeline()
 	data.light_ubo = create_ubo_light()
-	light_ubo, _ := ve.get_uniform_buffer(data.light_ubo)
-
-	ubo_light_set_diffuse(light_ubo, {0.29, 0.478, 0.588})
-	ubo_light_set_ambient(light_ubo, 0.1)
+	ubo_light_set_diffuse(data.light_ubo, {0.29, 0.478, 0.588})
+	ubo_light_set_ambient(data.light_ubo, 0.1)
 
 	data.light_data = create_ubo_light_data()
-	light_data, _ := ve.get_uniform_buffer(data.light_data)
-
-	ubo_light_data_set_camera(light_data, data.l_camera.buffer_h)
-	ubo_light_data_set_direction(light_data, {0, -1, 0})
-	ubo_light_data_set_shadow(light_data, data.shadow_map_texture)
-	ubo_light_data_set_color(light_data, 1)
+	ubo_light_data_set_camera(data.light_data, data.l_camera.buffer_h)
+	ubo_light_data_set_direction(data.light_data, {0, -1, 0})
+	ubo_light_data_set_shadow(data.light_data, data.shadow_map_texture)
+	ubo_light_data_set_color(data.light_data, 1)
 
 	// Load Model
 	data.model = ve.load_meshes("./assets/Suzanne.obj", context.temp_allocator)[0]
