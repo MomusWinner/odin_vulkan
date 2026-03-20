@@ -15,17 +15,20 @@ TEXTURE_BINDING :: 2
 BINDLESS_STAGE_FLAGS :: vk.ShaderStageFlags_ALL_GRAPHICS + {.COMPUTE}
 
 @(require_results)
-store_texture :: proc(texture: Texture, loc := #caller_location) -> Texture_Handle {
+store_texture :: proc(texture: Texture_Data, loc := #caller_location) -> Texture {
 	return _bindless_store_texture(ctx.gfx.bindless, texture, loc)
 }
 
-update_texture_h :: proc(texture_h: Texture_Handle, new_texture: Texture, loc := #caller_location) {
-	_bindless_update_texture(ctx.gfx.bindless, texture_h, new_texture, loc)
+replace_texture_h :: proc(texture_h: Texture, new_texture: Texture_Data, loc := #caller_location) {
+	_bindless_replace_texture(ctx.gfx.bindless, texture_h, new_texture, loc)
 }
 
+update_texture_h :: proc(texture: Texture, loc := #caller_location) {
+	_bindless_update_texture(ctx.gfx.bindless, texture, loc)
+}
 
 @(require_results)
-acquire_texture_h :: proc(texture_h: Texture_Handle) -> (Texture, bool) {
+acquire_texture_h :: proc(texture_h: Texture) -> (Texture_Data, bool) {
 	return _bindless_remove_texture(ctx.gfx.bindless, texture_h)
 }
 
@@ -82,12 +85,14 @@ get_bindless_pipeline_set_info :: proc() -> Pipeline_Set_Layout_Info {
 }
 
 @(require_results)
-get_texture_h :: proc(texture_h: Texture_Handle, loc := #caller_location) -> (^Texture, bool) {
-	return hm.get(&ctx.gfx.bindless.textures, texture_h)
+get_texture_h :: proc(texture_h: Texture, loc := #caller_location) -> ^Texture_Data {
+	t, ok := hm.get(&ctx.gfx.bindless.textures, texture_h)
+	assert(ok, "Invalid texture handle", loc = loc)
+	return t
 }
 
 @(require_results)
-has_texture_h :: proc(texture_h: Texture_Handle, loc := #caller_location) -> bool {
+has_texture_h :: proc(texture_h: Texture, loc := #caller_location) -> bool {
 	return hm.has_handle(&ctx.gfx.bindless.textures, texture_h)
 }
 
@@ -191,7 +196,7 @@ _bindless_bind :: proc(
 }
 
 @(private = "file")
-_bindless_store_texture :: proc(bindless: ^Bindless, texture: Texture, loc := #caller_location) -> Texture_Handle {
+_bindless_store_texture :: proc(bindless: ^Bindless, texture: Texture_Data, loc := #caller_location) -> Texture {
 	assert_not_nil(bindless, loc)
 
 	handle := hm.insert(&bindless.textures, texture)
@@ -217,10 +222,34 @@ _bindless_store_texture :: proc(bindless: ^Bindless, texture: Texture, loc := #c
 }
 
 @(private = "file")
-_bindless_update_texture :: proc(
+_bindless_update_texture :: proc(bindless: ^Bindless, texture: Texture, loc := #caller_location) {
+	assert_not_nil(bindless, loc)
+
+	data := get_texture_h(texture)
+
+	image_info := vk.DescriptorImageInfo {
+		imageLayout = .SHADER_READ_ONLY_OPTIMAL,
+		imageView   = data.view,
+		sampler     = data.sampler,
+	}
+
+	write := vk.WriteDescriptorSet {
+		sType           = .WRITE_DESCRIPTOR_SET,
+		descriptorType  = .COMBINED_IMAGE_SAMPLER,
+		dstBinding      = TEXTURE_BINDING,
+		dstSet          = bindless.set,
+		descriptorCount = 1,
+		dstArrayElement = texture.index,
+		pImageInfo      = &image_info,
+	}
+	vk.UpdateDescriptorSets(ctx.gfx.vk_state.device, 1, &write, 0, nil)
+}
+
+@(private = "file")
+_bindless_replace_texture :: proc(
 	bindless: ^Bindless,
-	texture_h: Texture_Handle,
-	new_texture: Texture,
+	texture_h: Texture,
+	new_texture: Texture_Data,
 	loc := #caller_location,
 ) {
 	assert_not_nil(bindless, loc)
@@ -251,10 +280,10 @@ _bindless_update_texture :: proc(
 @(private = "file")
 _bindless_remove_texture :: proc(
 	bindless: ^Bindless,
-	texture_h: Texture_Handle,
+	texture_h: Texture,
 	loc := #caller_location,
 ) -> (
-	Texture,
+	Texture_Data,
 	bool,
 ) {
 	assert_not_nil(bindless, loc)

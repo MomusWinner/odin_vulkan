@@ -16,7 +16,7 @@ Light_Data_Ubo :: struct {
 	camera:    ve.Buffer_Handle,
 	direction: vec3,
 	color:     vec3,
-	shadow:    ve.Texture_Handle,
+	shadow:    ve.Texture,
 }
 
 @(buffer)
@@ -35,7 +35,7 @@ Lighting_Scene_Data :: struct {
 	l_camera:             ve.Camera,
 	shadow_map_rt:        ve.Render_Target,
 	shadow_map_view_mesh: ve.Mesh,
-	shadow_map_texture:   ve.Texture_Handle,
+	shadow_map_texture:   ve.Texture,
 	square_trf:           ve.Gfx_Transform,
 	light_pipeline_h:     ve.Graphics_Pipeline,
 	light_ubo:            ve.Uniform_Buffer_Handle,
@@ -153,6 +153,19 @@ light_scene_update :: proc(s: ^Scene) {
 
 	ve.cursor_disable()
 	ve.camera_update_simple_controller(&data.camera)
+
+	if ve.is_key_pressed(.T) {
+		ve.wait_render_completion()
+		ve.texture_set_sampler(
+			data.shadow_map_texture,
+			ve.Sampler_Info {
+				mag_filter = .Linear,
+				min_filter = .Linear,
+				address_mode_u = .Repeat,
+				address_mode_v = .Repeat,
+			},
+		)
+	}
 }
 
 light_scene_draw :: proc(s: ^Scene) {

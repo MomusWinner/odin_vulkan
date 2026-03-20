@@ -26,13 +26,13 @@ Multilight_UBO :: struct {
 @(buffer)
 HDR_UBO :: struct {
 	exposure: f32,
-	scene:    ve.Texture_Handle,
-	bloom:    ve.Texture_Handle,
+	scene:    ve.Texture,
+	bloom:    ve.Texture,
 }
 
 @(buffer)
 Gaussian_Blur_UBO :: struct {
-	blur: ve.Texture_Handle,
+	blur: ve.Texture,
 }
 
 @(buffer)
@@ -46,7 +46,7 @@ Light_Box :: struct {
 }
 
 HDR_Scene_Data :: struct {
-	texture_h:             ve.Texture_Handle,
+	texture_h:             ve.Texture,
 	square:                ve.Mesh,
 	cube:                  ve.Mesh,
 	// Buffers
@@ -85,11 +85,8 @@ hdr_scene_init :: proc(s: ^Scene) {
 	ve.camera_init(&data.camera)
 
 	ve.init_render_target(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
-	hdr_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = ve.Pixel_Format.RGBA_norm_u16)
-	bright_color_attachmetn := ve.render_target_add_color_attachment(
-		&data.hdr_rt,
-		format = ve.Pixel_Format.RGBA_norm_u16,
-	)
+	hdr_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGB_norm_u16)
+	bright_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGB_norm_u16)
 	ve.render_target_add_depth_attachment(&data.hdr_rt)
 
 	// Load Model

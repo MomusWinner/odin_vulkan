@@ -13,8 +13,8 @@ import vk "vendor:vulkan"
 
 Render_Target_Color_Attachment :: struct {
 	info:         vk.RenderingAttachmentInfo,
-	msaa_texture: Maybe(Texture),
-	texture_h:    Texture_Handle,
+	msaa_texture: Maybe(Texture_Data),
+	texture_h:    Texture,
 	sampler_info: Sampler_Info,
 }
 
@@ -30,13 +30,13 @@ Stencil_Info :: struct {
 }
 
 Render_Target_Common_Depth_Attachment :: struct {
-	resource: Texture,
+	resource: Texture_Data,
 	info:     vk.RenderingAttachmentInfo,
 }
 
 Render_Target_Readable_Depth_Attachment :: struct {
-	msaa_texture: Maybe(Texture),
-	texture_h:    Texture_Handle,
+	msaa_texture: Maybe(Texture_Data),
+	texture_h:    Texture,
 	info:         vk.RenderingAttachmentInfo,
 	sampler_info: Sampler_Info,
 }
@@ -97,18 +97,17 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 render_target_add_color_attachment :: proc(
 	surface: ^Render_Target,
 	clear_value: color = {0.0, 0.0, 0.0, 1.0},
-	format: Pixel_Format = .RGBA_norm_u8,
+	format: Format = .RGBA_norm_u8,
 	sampler_info: Sampler_Info = DEFAULT_SURFACE_SAMPLER_INFO,
 	loc := #caller_location,
-) -> Texture_Handle {
+) -> Texture {
 	assert_not_nil(surface, loc)
 
 	w, h := cast(u32)surface.width, cast(u32)surface.height
 
-	vk_format := _format_to_vk(format)
 	color_attachment := Render_Target_Color_Attachment{}
 	if surface.sample_count == ._1 {
-		color_res := _create_render_target_color_resolve_resource(w, h, vk_format, sampler_info)
+		color_res := _create_render_target_color_resolve_resource(w, h, format, sampler_info)
 
 		color_attachment.texture_h = store_texture(color_res, loc)
 
@@ -123,8 +122,8 @@ render_target_add_color_attachment :: proc(
 			clearValue = vk.ClearValue{color = {float32 = clear_value}},
 		}
 	} else {
-		msaa := _create_render_target_color_resource(w, h, vk_format, surface.sample_count)
-		resolve := _create_render_target_color_resolve_resource(w, h, vk_format, sampler_info)
+		msaa := _create_render_target_color_resource(w, h, format, surface.sample_count)
+		resolve := _create_render_target_color_resolve_resource(w, h, format, sampler_info)
 
 		color_attachment.texture_h = store_texture(resolve)
 		color_attachment.msaa_texture = msaa
@@ -187,7 +186,7 @@ render_target_add_readable_depth_attachment :: proc(
 	clear_value: f32 = 1,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
-) -> Texture_Handle {
+) -> Texture {
 	assert_not_nil(surface, loc)
 	_, has_depth_attachment := surface.depth_attachment.?
 	assert(has_depth_attachment == false, "Surface already has a depth attachment.", loc)
@@ -272,8 +271,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 
 	for ca, i in sm.slice(&src_color_attachments) {
 		msaa, has_msaa := ca.msaa_texture.?
-		texture, ok := get_texture_h(ca.texture_h, loc)
-		assert(ok)
+		texture := get_texture_h(ca.texture_h, loc)
 
 		target := &msaa if has_msaa else texture
 		_cmd_image_transition_layout(cmd, target.id, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
@@ -281,7 +279,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 		sm.append(&p_color_attachments, ca.info)
 	}
 
-	depth_format: vk.Format
+	depth_format: Format
 	if has_depth_attachment {
 		switch &attachment in depth_attachment {
 		case Render_Target_Common_Depth_Attachment:
@@ -291,10 +289,9 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 			p_depth_attachment = &attachment.info
 			msaa, has_msaa := attachment.msaa_texture.?
 
-			texture, ok := get_texture_h(attachment.texture_h)
-			assert(ok)
+			texture := get_texture_h(attachment.texture_h)
 			depth_format = texture.format
-			target: ^Texture = &msaa if has_msaa else texture
+			target: ^Texture_Data = &msaa if has_msaa else texture
 
 			_cmd_image_transition_layout(
 				cmd,
@@ -321,7 +318,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 	surface_info := Surface_Info {
 		type                     = .Surface,
 		sample_count             = surface.sample_count,
-		depth_format             = depth_format if has_depth_attachment else .UNDEFINED,
+		depth_format             = depth_format if has_depth_attachment else .None,
 		width                    = surface.width,
 		height                   = surface.height,
 		active_color_attachments = frame_data_acrive_color,
@@ -329,8 +326,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 
 	if (has_color_attachments) {
 		for ca in sm.slice(&src_color_attachments) {
-			texture, ok := get_texture_h(ca.texture_h)
-			assert(ok)
+			texture := get_texture_h(ca.texture_h)
 			sm.push(&surface_info.color_formats, texture.format)
 		}
 	}
@@ -351,8 +347,7 @@ end_render_target :: proc(surface: ^Render_Target, loc := #caller_location) {
 			continue
 		}
 		msaa, has_msaa := ca.msaa_texture.?
-		texture, ok := get_texture_h(ca.texture_h, loc)
-		assert(ok)
+		texture := get_texture_h(ca.texture_h, loc)
 
 		target := &msaa if has_msaa else texture
 		_cmd_image_transition_layout(_get_cmd(), target.id, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
@@ -362,9 +357,8 @@ end_render_target :: proc(surface: ^Render_Target, loc := #caller_location) {
 		switch attachment in depth_attachment {
 		case Render_Target_Common_Depth_Attachment:
 		case Render_Target_Readable_Depth_Attachment:
-			texture, ok := get_texture_h(attachment.texture_h)
+			texture := get_texture_h(attachment.texture_h)
 			msaa, has_msaa := attachment.msaa_texture.?
-			assert(ok)
 
 			sc := begin_single_cmd()
 			target := &msaa if has_msaa else texture
@@ -422,25 +416,25 @@ _render_target_resize :: proc(surface: ^Render_Target, width, height: int, loc :
 @(require_results)
 _create_render_target_color_resource :: proc(
 	width, height: u32,
-	format: vk.Format,
+	format: Format,
 	sample_count: Sample_Count_Flag,
 	loc := #caller_location,
-) -> Texture {
-	image, allocation, allocation_info := _create_image(
+) -> Texture_Data {
+	image, allocation, allocation_info := _create_vk_image(
 		width,
 		height,
 		1,
 		sample_count,
-		format,
+		_format_to_vk(format),
 		.OPTIMAL,
 		{.COLOR_ATTACHMENT, .SAMPLED},
 		.AUTO_PREFER_DEVICE,
 		{},
 	)
 
-	view := _create_image_view(image, format, {.COLOR}, 1)
+	view := _create_vk_image_view(image, _format_to_vk(format), {.COLOR}, 1)
 
-	texture := Texture {
+	texture := Texture_Data {
 		id              = image,
 		view            = view,
 		format          = format,
@@ -457,26 +451,26 @@ _create_render_target_color_resource :: proc(
 @(require_results)
 _create_render_target_color_resolve_resource :: proc(
 	width, height: u32,
-	format: vk.Format,
+	format: Format,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
-) -> Texture {
-	image, allocation, allocation_info := _create_image(
+) -> Texture_Data {
+	image, allocation, allocation_info := _create_vk_image(
 		width,
 		height,
 		1,
 		._1,
-		format,
+		_format_to_vk(format),
 		.OPTIMAL,
 		{.COLOR_ATTACHMENT, .SAMPLED},
 		.AUTO_PREFER_DEVICE,
 		{},
 	)
 
-	view := _create_image_view(image, format, {.COLOR}, 1)
-	sampler: Sampler = create_sampler(sampler_info)
+	view := _create_vk_image_view(image, _format_to_vk(format), {.COLOR}, 1)
+	sampler: Sampler = _create_sampler(sampler_info)
 
-	texture := Texture {
+	texture := Texture_Data {
 		id              = image,
 		sampler         = sampler,
 		view            = view,
@@ -499,16 +493,16 @@ _create_render_target_depth_resource :: proc(
 	sample_count: Sample_Count_Flag,
 	stencil: bool,
 	loc := #caller_location,
-) -> Texture {
-	format := ctx.gfx.swapchain_cfg.depth_stencil_format if stencil else ctx.gfx.swapchain_cfg.depth_format
+) -> Texture_Data {
+	format: Format = ctx.gfx.swapchain_cfg.depth_stencil_format if stencil else ctx.gfx.swapchain_cfg.depth_format
 	aspect: vk.ImageAspectFlags = {.DEPTH, .STENCIL} if stencil else {.DEPTH}
 
-	image, allocation, allocation_info := _create_image(
+	image, allocation, allocation_info := _create_vk_image(
 		width,
 		height,
 		1,
 		sample_count,
-		format,
+		_format_to_vk(format),
 		.OPTIMAL,
 		{.DEPTH_STENCIL_ATTACHMENT},
 		.AUTO_PREFER_DEVICE,
@@ -522,9 +516,9 @@ _create_render_target_depth_resource :: proc(
 		.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 		vk.ImageSubresourceRange{aspectMask = aspect, levelCount = 1, layerCount = 1},
 	)
-	view := _create_image_view(image, format, aspect, 1)
+	view := _create_vk_image_view(image, _format_to_vk(format), aspect, 1)
 
-	texture := Texture {
+	texture := Texture_Data {
 		id              = image,
 		view            = view,
 		format          = format,
@@ -545,14 +539,14 @@ _create_render_target_depth_resource_sampled :: proc(
 	cmd: Command_Buffer,
 	sampler_info: Sampler_Info,
 	loc := #caller_location,
-) -> Texture {
+) -> Texture_Data {
 	format := ctx.gfx.swapchain_cfg.depth_format
-	image, allocation, allocation_info := _create_image(
+	image, allocation, allocation_info := _create_vk_image(
 		width,
 		height,
 		1,
 		._1,
-		format,
+		_format_to_vk(format),
 		.OPTIMAL,
 		{.DEPTH_STENCIL_ATTACHMENT, .SAMPLED},
 		.AUTO_PREFER_DEVICE,
@@ -567,11 +561,10 @@ _create_render_target_depth_resource_sampled :: proc(
 		vk.ImageSubresourceRange{aspectMask = {.DEPTH}, levelCount = 1, layerCount = 1},
 	)
 
-	view := _create_image_view(image, format, {.DEPTH}, 1)
-	sampler: Sampler = create_sampler(sampler_info)
+	view := _create_vk_image_view(image, _format_to_vk(format), {.DEPTH}, 1)
+	sampler: Sampler = _create_sampler(sampler_info)
 
-
-	texture := Texture {
+	texture := Texture_Data {
 		id              = image,
 		view            = view,
 		sampler         = sampler,
@@ -598,13 +591,8 @@ _render_target_resize_color_attachments :: proc(
 		msaa, has_msaa := ca.msaa_texture.?
 		w, h := cast(u32)width, cast(u32)height
 
-		resolve := _create_render_target_color_resolve_resource(
-			w,
-			h,
-			ctx.gfx.swapchain.color_format.format,
-			ca.sampler_info,
-		)
-		update_texture_h(ca.texture_h, resolve)
+		resolve := _create_render_target_color_resolve_resource(w, h, texture_get_format(ca.texture_h), ca.sampler_info)
+		replace_texture_h(ca.texture_h, resolve)
 		ca.info.imageView = resolve.view
 
 		if has_msaa {
@@ -612,7 +600,7 @@ _render_target_resize_color_attachments :: proc(
 			new_msaa := _create_render_target_color_resource(
 				w,
 				h,
-				ctx.gfx.swapchain.color_format.format,
+				texture_get_format(ca.texture_h),
 				surface.sample_count,
 			)
 			ca.msaa_texture = new_msaa
@@ -642,7 +630,7 @@ _render_target_resize_readable_depth_attachment :: proc(
 	sc := begin_single_cmd()
 
 	resolve := _create_render_target_depth_resource_sampled(w, h, sc.cmd, attachment.sampler_info, loc)
-	update_texture_h(attachment.texture_h, resolve)
+	replace_texture_h(attachment.texture_h, resolve)
 	attachment.info.imageView = resolve.view
 
 	if has_msaa {

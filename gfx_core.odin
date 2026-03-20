@@ -71,8 +71,8 @@ Graphics_Init_Info :: struct {
 
 Swapchain_Configuration :: struct {
 	present_mode:         vk.PresentModeKHR,
-	depth_format:         vk.Format,
-	depth_stencil_format: vk.Format,
+	depth_format:         Format,
+	depth_stencil_format: Format,
 	vk_surface_format:    vk.SurfaceFormatKHR,
 }
 
@@ -128,9 +128,9 @@ Buffer_Manager :: struct {
 
 Resource :: union {
 	Buffer,
-	Texture,
+	Texture_Data,
 	Buffer_Handle,
-	Texture_Handle,
+	Texture,
 }
 
 NIL_HANDLE :: Buffer_Handle {
@@ -141,7 +141,7 @@ Resource_Handle :: union {
 	Uniform_Buffer_Handle,
 	Storage_Buffer_Handle,
 	Buffer_Handle,
-	Texture_Handle,
+	Texture,
 }
 
 Deferred_Destructor :: struct {
@@ -158,11 +158,11 @@ Single_Command :: struct {
 
 Swapchain :: struct {
 	swapchain:                  vk.SwapchainKHR,
-	color_format:               vk.SurfaceFormatKHR,
+	color_format:               Format,
 	width, height:              int,
 	sample_count:               Sample_Count_Flag,
-	msaa_color_texture:         Maybe(Texture),
-	depth_image:                Texture,
+	msaa_color_texture:         Maybe(Texture_Data),
+	depth_image:                Texture_Data,
 	image_index:                u32,
 	images:                     []vk.Image,
 	image_views:                []vk.ImageView,
@@ -209,7 +209,7 @@ Storage_Buffer :: Cached_Buffer
 @(buffer)
 Base_UBO :: struct {
 	color:   vec4,
-	texture: Texture_Handle,
+	texture: Texture,
 }
 
 Gfx_Transform :: struct {
@@ -232,8 +232,8 @@ Surface_Info_Type :: enum {
 Surface_Info :: struct {
 	type:                     Surface_Info_Type,
 	sample_count:             Sample_Count_Flag,
-	depth_format:             vk.Format,
-	color_formats:            sm.Small_Array(MAX_COLOR_ATTACHMENTS, vk.Format),
+	depth_format:             Format,
+	color_formats:            sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
 	active_color_attachments: sm.Small_Array(MAX_COLOR_ATTACHMENTS, int), // FIX:
 	width:                    int,
 	height:                   int,
@@ -257,17 +257,148 @@ Sync_Data :: struct {
 
 // BINDLESS
 
-Texture_Handle :: distinct hm.Handle
-INVALID_TEXTURE_HANDLE :: Texture_Handle{max(u32), max(u32)}
+Texture :: distinct hm.Handle
+INVALID_TEXTURE_HANDLE :: Texture{max(u32), max(u32)}
 Buffer_Handle :: distinct hm.Handle
 INVALID_BUFFER_HANDLE :: Buffer_Handle{max(u32), max(u32)}
 
 Bindless :: struct {
 	set:        vk.DescriptorSet,
 	set_layout: vk.DescriptorSetLayout,
-	textures:   hm.Handle_Map(Texture, Texture_Handle),
+	textures:   hm.Handle_Map(Texture_Data, Texture),
 	buffers:    hm.Handle_Map(Buffer, Buffer_Handle),
 }
+
+// *_norm_*
+// Normalized formats automatically convert integer color values to floating-point ranges in shaders.
+//
+// For example:
+//   format     |      input       |    shader
+// RGB_norm_u8: | (255,    0, 128) | (1,  0, 0.5..)
+// RGB_norm_i8: | (127, -128,   0) | (1, -1,   0)
+// ---
+// *_scaled_*
+// Scaled formats convert integer values directly to floating-point in shaders.
+//
+// For example:
+//   format       |     input        |        shader
+// RGB_scaled_u8: | (255,    0, 128) | (255.0,    0.0, 128.0)
+// RGB_scaled_i8: | (127, -128,   0) | (127.0, -128.0,   0.0)
+// ---
+// *_srgb_u*
+// The R, G, and B components are unsigned normalized values that represent values using sRGB nonlinear encoding,
+// while the A component (if one exists) is a regular unsigned normalized value.
+//
+// NOTE: Blending is only defined for floating-point, _norm_, and _srgb_u formats.
+// Transfer function: https://registry.khronos.org/DataFormat/specs/1.4/dataformat.1.4.html#TRANSFER_SRGB
+// May be useful: https://learnopengl.com/Advanced-Lighting/Gamma-Correction
+Format :: enum i32 {
+	None            = 0,
+	// 8 bits
+	R_norm_u8       = 9,
+	R_norm_i8       = 10,
+	R_scaled_u8     = 11,
+	R_scaled_i8     = 12,
+	R_u8            = 13,
+	R_i8            = 14,
+	R_srgb_u8       = 15,
+	RG_norm_u8      = 16,
+	RG_norm_i8      = 17,
+	RG_scaled_u8    = 18,
+	RG_scaled_i8    = 19,
+	RG_u8           = 20,
+	RG_i8           = 21,
+	RG_srgb_u8      = 22,
+	RGB_norm_u8     = 23,
+	RGB_norm_i8     = 24,
+	RGB_scaled_u8   = 25,
+	RGB_scaled_i8   = 26,
+	RGB_u8          = 27,
+	RGB_i8          = 28,
+	RGB_srgb_u8     = 29,
+	BGR_norm_u8     = 30,
+	BGR_norm_i8     = 31,
+	BGR_scaled_u8   = 32,
+	BGR_scaled_i8   = 33,
+	BGR_u8          = 34,
+	BGR_i8          = 35,
+	BGR_srgb_u8     = 36,
+	RGBA_norm_u8    = 37,
+	RGBA_norm_i8    = 38,
+	RGBA_scaled_u8  = 39,
+	RGBA_scaled_i8  = 40,
+	RGBA_u8         = 41,
+	RGBA_i8         = 42,
+	RGBA_srgb_u8    = 43,
+	BGRA_norm_u8    = 44,
+	BGRA_norm_i8    = 45,
+	BGRA_scaled_u8  = 46,
+	BGRA_scaled_i8  = 47,
+	BGRA_u8         = 48,
+	BGRA_i8         = 49,
+	BGRA_srgb_u8    = 50,
+	// 16 bits
+	R_norm_u16      = 70,
+	R_norm_i16      = 71,
+	R_scaled_u16    = 72,
+	R_scaled_i16    = 73,
+	R_u16           = 74,
+	R_i16           = 75,
+	R_f16           = 76,
+	RG_norm_u16     = 77,
+	RG_norm_i16     = 78,
+	RG_scaled_u16   = 79,
+	RG_scaled_i16   = 80,
+	RG_u16          = 81,
+	RG_i16          = 82,
+	RG_f16          = 83,
+	RGB_norm_u16    = 84,
+	RGB_norm_i16    = 85,
+	RGB_scaled_u16  = 86,
+	RGB_scaled_i16  = 87,
+	RGB_u16         = 88,
+	RGB_i16         = 89,
+	RGB_f16         = 90,
+	RGBA_norm_u16   = 91,
+	RGBA_norm_i16   = 92,
+	RGBA_scaled_u16 = 93,
+	RGBA_scaled_i16 = 94,
+	RGBA_u16        = 95,
+	RGBA_i16        = 96,
+	RGBA_f16        = 97,
+	// 32 bits
+	R_u32           = 98,
+	R_i32           = 99,
+	R_f32           = 100,
+	RG_u32          = 101,
+	RG_i32          = 102,
+	RG_f32          = 103,
+	RGB_u32         = 104,
+	RGB_i32         = 105,
+	RGB_f32         = 106,
+	RGBA_u32        = 107,
+	RGBA_i32        = 108,
+	RGBA_f32        = 109,
+	// 64 bits
+	R_u64           = 110,
+	R_i64           = 111,
+	R_f64           = 112,
+	RG_u64          = 113,
+	RG_i64          = 114,
+	RG_f64          = 115,
+	RGB_u64         = 116,
+	RGB_i64         = 117,
+	RGB_f64         = 118,
+	RGBA_u64        = 119,
+	RGBA_i64        = 120,
+	RGBA_f64        = 121,
+	// depth
+	// depth_stencil
+	D_f32           = 126,
+	D_f32_S_u8      = 130,
+}
+
+a: vk.Format
 
 @(private)
 _get_cmd :: proc() -> Command_Buffer {return ctx.gfx.cmd}
@@ -442,7 +573,7 @@ begin_draw :: proc(clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) {
 		width        = ctx.gfx.swapchain.width,
 		height       = ctx.gfx.swapchain.height,
 	}
-	sm.push(&surface_info.color_formats, ctx.gfx.swapchain.color_format.format)
+	sm.push(&surface_info.color_formats, ctx.gfx.swapchain.color_format)
 
 	ctx.gfx.frame.surface_info = surface_info
 
@@ -735,6 +866,121 @@ _cmd_buffer_barrier :: proc(
 	vk.CmdPipelineBarrier2(cmd, &dep_info)
 }
 
+@(private)
+_cmd_copy_buffer_to_image :: proc(
+	cmd: vk.CommandBuffer,
+	buffer: vk.Buffer,
+	image: vk.Image,
+	regions: []vk.BufferImageCopy,
+) {
+	vk.CmdCopyBufferToImage(cmd, buffer, image, .TRANSFER_DST_OPTIMAL, cast(u32)len(regions), raw_data(regions))
+}
+
+@(private)
+_cmd_image_transition_layout :: proc(
+	cmd: vk.CommandBuffer,
+	image: vk.Image,
+	old_layout: vk.ImageLayout,
+	new_layout: vk.ImageLayout,
+	subresource_range: vk.ImageSubresourceRange = {aspectMask = {.COLOR}, levelCount = 1, layerCount = 1},
+) {
+	src_stage, dst_stage: vk.PipelineStageFlags2
+	src_access, dst_access: vk.AccessFlags2
+
+	if old_layout == .UNDEFINED && new_layout == .TRANSFER_DST_OPTIMAL {
+		src_access = {}
+		dst_access = {.TRANSFER_WRITE}
+
+		src_stage = {}
+		dst_stage = {.TRANSFER}
+	} else if old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.TRANSFER_WRITE}
+		dst_access = {.SHADER_READ}
+
+		src_stage = {.TRANSFER}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+	} else if old_layout == .UNDEFINED && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+		src_access = {}
+		dst_access = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE}
+
+		src_stage = {}
+		dst_stage = {.EARLY_FRAGMENT_TESTS}
+	} else if old_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
+		dst_access = {.SHADER_READ}
+
+		src_stage = {.EARLY_FRAGMENT_TESTS}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+		src_access = {.SHADER_READ}
+		dst_access = {.DEPTH_STENCIL_ATTACHMENT_WRITE}
+
+		src_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+		dst_stage = {.EARLY_FRAGMENT_TESTS}
+	} else if old_layout == .UNDEFINED && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
+		src_access = {}
+		dst_access = {.COLOR_ATTACHMENT_WRITE}
+
+		src_stage = {.ALL_COMMANDS}
+		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
+	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .PRESENT_SRC_KHR {
+		src_access = {.COLOR_ATTACHMENT_WRITE}
+		dst_access = {}
+
+		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
+		dst_stage = {}
+	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.COLOR_ATTACHMENT_WRITE}
+		dst_access = {.MEMORY_READ}
+
+		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
+		src_access = {.MEMORY_READ}
+		dst_access = {.COLOR_ATTACHMENT_WRITE}
+
+		src_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
+	} else if old_layout == .TRANSFER_DST_OPTIMAL && new_layout == .TRANSFER_SRC_OPTIMAL {
+		src_access = {.TRANSFER_WRITE}
+		dst_access = {.TRANSFER_READ}
+
+		src_stage = {.TRANSFER}
+		dst_stage = {.TRANSFER}
+	} else if old_layout == .TRANSFER_SRC_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
+		src_access = {.TRANSFER_READ}
+		dst_access = {.SHADER_READ}
+
+		src_stage = {.TRANSFER}
+		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
+	} else {
+		log.panicf("unsuported layout transition!\nold_layout %v \nnew_layout: %v", old_layout, new_layout)
+	}
+
+	barrier := vk.ImageMemoryBarrier2 {
+		sType               = .IMAGE_MEMORY_BARRIER_2,
+		oldLayout           = old_layout,
+		newLayout           = new_layout,
+		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
+		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
+		image               = image,
+		subresourceRange    = subresource_range,
+		srcStageMask        = src_stage,
+		srcAccessMask       = src_access,
+		dstAccessMask       = dst_access,
+		dstStageMask        = dst_stage,
+	}
+
+	dependency_info := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &barrier,
+		dependencyFlags         = {},
+	}
+
+	vk.CmdPipelineBarrier2(cmd, &dependency_info)
+}
+
 // Mesh
 
 create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location) -> Mesh {
@@ -824,7 +1070,7 @@ _push_constants_to_data :: proc(consts: Push_Constants, loc := #caller_location)
 			return b.buffer_h.index if has_buffer_h(b.buffer_h) else INVALID_HANDLE
 		case Buffer_Handle:
 			return h.index if has_buffer_h(h) else INVALID_HANDLE
-		case Texture_Handle:
+		case Texture:
 			return h.index if has_texture_h(h) else INVALID_HANDLE
 		}
 		return INVALID_HANDLE
@@ -939,7 +1185,7 @@ _swapchain_new :: proc(sample_count: Sample_Count_Flag) -> ^Swapchain {
 
 	swapchain := new(Swapchain)
 	swapchain.swapchain = vk_swapchain
-	swapchain.color_format = surface_format
+	swapchain.color_format = _vk_to_format(surface_format.format)
 	swapchain.width = cast(int)extent.width
 	swapchain.height = cast(int)extent.height
 	swapchain.sample_count = sample_count
@@ -1012,23 +1258,23 @@ _get_swapchaint_capabilites :: proc() -> (capabilities: vk.SurfaceCapabilitiesKH
 
 @(private = "file")
 _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
-	color_format := swapchain.color_format.format
+	color_format := swapchain.color_format
 
-	image, allocation, allocation_info := _create_image(
+	image, allocation, allocation_info := _create_vk_image(
 		cast(u32)swapchain.width,
 		cast(u32)swapchain.height,
 		1,
 		swapchain.sample_count,
-		color_format,
+		_format_to_vk(color_format),
 		vk.ImageTiling.OPTIMAL,
 		vk.ImageUsageFlags{.TRANSIENT_ATTACHMENT, .COLOR_ATTACHMENT},
 		vma.MemoryUsage.AUTO_PREFER_DEVICE,
 		vma.AllocationCreateFlags{},
 	)
 
-	view := _create_image_view(image, color_format, {.COLOR}, 1)
+	view := _create_vk_image_view(image, _format_to_vk(color_format), {.COLOR}, 1)
 
-	texture := Texture {
+	texture := Texture_Data {
 		id              = image,
 		// debug_name      = "swapchain_msaa_color_texture", // FIXME:
 		format          = color_format,
@@ -1048,19 +1294,19 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 _swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer, stencil: bool) {
 	assert(.Depth in ctx.info.gfx.attachments)
 
-	format: vk.Format
+	format: Format
 	if stencil {
 		format = ctx.gfx.swapchain_cfg.depth_stencil_format
 	} else {
 		format = ctx.gfx.swapchain_cfg.depth_format
 	}
 
-	image, allocation, allocation_info := _create_image(
+	image, allocation, allocation_info := _create_vk_image(
 		cast(u32)swapchain.width,
 		cast(u32)swapchain.height,
 		1,
 		swapchain.sample_count,
-		format,
+		_format_to_vk(format),
 		vk.ImageTiling.OPTIMAL,
 		vk.ImageUsageFlags{.DEPTH_STENCIL_ATTACHMENT},
 		vma.MemoryUsage.AUTO_PREFER_DEVICE,
@@ -1076,8 +1322,8 @@ _swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: v
 		vk.ImageSubresourceRange{aspectMask = aspect, levelCount = 1, layerCount = 1},
 	)
 
-	view := _create_image_view(image, format, aspect, 1)
-	swapchain.depth_image = Texture {
+	view := _create_vk_image_view(image, _format_to_vk(format), aspect, 1)
+	swapchain.depth_image = Texture_Data {
 		id              = image,
 		format          = format,
 		view            = view,
@@ -1099,7 +1345,7 @@ _swapchain_setup_images :: proc(swapchain: ^Swapchain) {
 
 	for image, i in swapchain.images {
 		_vk_set_debug_object_name(image, .IMAGE, fmt.tprintf("swapchain image: %d", i))
-		swapchain.image_views[i] = _create_image_view(image, swapchain.color_format.format, {.COLOR}, 1)
+		swapchain.image_views[i] = _create_vk_image_view(image, _format_to_vk(swapchain.color_format), {.COLOR}, 1)
 	}
 }
 
@@ -1563,9 +1809,9 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 		case Buffer_Handle:
 			b, ok := acquire_buffer_h(resource)
 			if ok do destroy_buffer(&b)
-		case Texture:
+		case Texture_Data:
 			destroy_texture(&resource)
-		case Texture_Handle:
+		case Texture:
 			t, ok := acquire_texture_h(resource)
 			if ok do destroy_texture(&t)
 		}

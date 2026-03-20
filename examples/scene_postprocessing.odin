@@ -10,7 +10,7 @@ import "core:time"
 
 @(buffer)
 Postprocessing :: struct {
-	texture: ve.Texture_Handle,
+	texture: ve.Texture,
 	width:   f32,
 	height:  f32,
 }
@@ -19,7 +19,7 @@ Postprocessing_Scene_Data :: struct {
 	model:               ve.Mesh,
 	square:              ve.Mesh,
 	base_ubo:            ve.Uniform_Buffer_Handle,
-	texture_h:           ve.Texture_Handle,
+	texture_h:           ve.Texture,
 	pipeline_h:          ve.Graphics_Pipeline,
 	transform:           ve.Gfx_Transform,
 	camera:              ve.Camera,

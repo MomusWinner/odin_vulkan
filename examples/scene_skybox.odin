@@ -8,7 +8,7 @@ import "core:math/rand"
 import "core:time"
 
 Skybox_Scene_Data :: struct {
-	cubemap_h:          ve.Texture_Handle,
+	cubemap_h:          ve.Texture,
 	skybox_pipeline_h:  ve.Graphics_Pipeline,
 	reflect_pipeline_h: ve.Graphics_Pipeline,
 	cube:               ve.Mesh,

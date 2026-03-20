@@ -72,8 +72,8 @@ Pipeline_Manager :: struct {
 
 Pipeline_Surface_Info :: struct {
 	sample_count:  Sample_Count_Flag,
-	depth_format:  vk.Format,
-	color_formats: sm.Small_Array(MAX_COLOR_ATTACHMENTS, vk.Format),
+	depth_format:  Format,
+	color_formats: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
 }
 
 _get_render_pipeline :: proc(handle: Graphics_Pipeline, loc := #caller_location) -> ^Render_Pipeline_Data {
@@ -282,10 +282,10 @@ _reload_pipeline_variant :: proc(pipeline: ^Pipeline_Variant, create_info: Creat
 
 	pipeline_rendering_info := vk.PipelineRenderingCreateInfo {
 		sType                   = .PIPELINE_RENDERING_CREATE_INFO,
-		stencilAttachmentFormat = pipeline.surface_info.depth_format if _has_stencil_component(pipeline.surface_info.depth_format) else .UNDEFINED,
-		depthAttachmentFormat   = pipeline.surface_info.depth_format,
+		stencilAttachmentFormat = _format_to_vk(pipeline.surface_info.depth_format) if _has_stencil_component(pipeline.surface_info.depth_format) else .UNDEFINED,
+		depthAttachmentFormat   = _format_to_vk(pipeline.surface_info.depth_format),
 		colorAttachmentCount    = cast(u32)pipeline.surface_info.color_formats.len,
-		pColorAttachmentFormats = raw_data(sm.slice(&pipeline.surface_info.color_formats)),
+		pColorAttachmentFormats = transmute([^]vk.Format)raw_data(sm.slice(&pipeline.surface_info.color_formats)),
 	}
 
 	vertex_input_sate: vk.PipelineVertexInputStateCreateInfo
@@ -389,10 +389,10 @@ _create_pipeline_variant :: proc(
 
 	pipeline_rendering_info := vk.PipelineRenderingCreateInfo {
 		sType                   = .PIPELINE_RENDERING_CREATE_INFO,
-		stencilAttachmentFormat = surface_info.depth_format if _has_stencil_component(surface_info.depth_format) else .UNDEFINED,
-		depthAttachmentFormat   = surface_info.depth_format,
+		stencilAttachmentFormat = _format_to_vk(surface_info.depth_format) if _has_stencil_component(surface_info.depth_format) else .UNDEFINED,
+		depthAttachmentFormat   = _format_to_vk(surface_info.depth_format),
 		colorAttachmentCount    = cast(u32)surface_info.color_formats.len,
-		pColorAttachmentFormats = raw_data(sm.slice(&surface_info.color_formats)),
+		pColorAttachmentFormats = transmute([^]vk.Format)raw_data(sm.slice(&surface_info.color_formats)),
 	}
 
 	vertex_input_sate: vk.PipelineVertexInputStateCreateInfo

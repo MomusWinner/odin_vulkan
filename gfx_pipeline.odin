@@ -214,7 +214,7 @@ Vertex_Input_Rate :: enum {
 
 Vertex_Input_Attribute_Description :: struct {
 	location: u32,
-	format:   Pixel_Format,
+	format:   Format,
 	offset:   u32,
 }
 

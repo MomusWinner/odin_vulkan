@@ -8,7 +8,7 @@ import "core:math/rand"
 import "core:time"
 
 Model_Scene_Data :: struct {
-	texture_h:      ve.Texture_Handle,
+	texture_h:      ve.Texture,
 	model:          ve.Mesh,
 	ubo:            ve.Uniform_Buffer_Handle,
 	pipeline_h:     ve.Graphics_Pipeline,

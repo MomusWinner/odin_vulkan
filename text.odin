@@ -11,7 +11,7 @@ import vk "vendor:vulkan"
 Font :: struct {
 	name:                    string,
 	size:                    f32,
-	texture_h:               Texture_Handle,
+	texture_h:               Texture,
 	packed_chars:            []tt.packedchar,
 	aligned_quads:           []tt.aligned_quad,
 	codepoint_to_char_index: map[int]int,
@@ -32,7 +32,7 @@ Text :: struct {
 	vertices:   []FontVertex,
 	transform:  Gfx_Transform,
 	ubo_h:      Uniform_Buffer_Handle,
-	pipeline_h: Render_Pipeline_Handle,
+	pipeline_h: Graphics_Pipeline,
 }
 
 CharacterRegion :: struct {
@@ -153,8 +153,8 @@ load_font :: proc(create_info: Create_Font_Info, loc := #caller_location) -> Fon
 	// )
 
 	image := Image {
-		width    = cast(u32)create_info.atlas_width,
-		height   = cast(u32)create_info.atlas_height,
+		width    = cast(int)create_info.atlas_width,
+		height   = cast(int)create_info.atlas_height,
 		data     = raw_data(font_atlas_bitmap),
 		channels = 1,
 	}
@@ -250,12 +250,10 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 
 	cmd_bind_vertex_buffer(text.vbo, 0)
 
-	pipeline, p_ok := get_render_pipeline(text.pipeline_h)
-	assert(p_ok, loc = loc)
-	g_pipeline := cmd_bind_render_pipeline(pipeline)
+	layout := cmd_bind_render_pipeline(text.pipeline_h)
 
 	const := _push_constants_to_data({camera = camera, trf = &text.transform, h0 = text.ubo_h})
-	cmd_push_constants(g_pipeline, &const)
+	cmd_push_constants(layout, &const)
 
 	cmd_draw(cast(u32)len(text.vertices))
 }
@@ -292,7 +290,7 @@ _text_shader_attribute :: proc() -> Vertex_Input_Description {
 }
 
 @(private)
-_text_default_pipeline :: proc() -> Render_Pipeline_Handle {
+_text_default_pipeline :: proc() -> Graphics_Pipeline {
 	vert_descriptions: Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, _text_shader_attribute())
 

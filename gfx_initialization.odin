@@ -576,6 +576,7 @@ _get_required_physical_device_features :: proc(features: ^Physical_Device_Featur
 	features.features.pNext = &features.features12
 	features.features.features.geometryShader = true
 	features.features.features.samplerAnisotropy = true
+	features.features.features.depthBiasClamp = true
 	features.features.features.fragmentStoresAndAtomics = true
 	features.features.features.vertexPipelineStoresAndAtomics = true
 	features.features.features.shaderInt64 = true
@@ -632,8 +633,7 @@ _choose_swapchain_surface_format :: proc(formats: []vk.SurfaceFormatKHR) -> vk.S
 		}
 	}
 
-	// Fallback non optimal.
-	return formats[0]
+	log.panic("Failed to find supported swapchain surface format!")
 }
 
 @(private = "file")
@@ -652,22 +652,19 @@ _choose_swapchain_present_mode :: proc(modes: []vk.PresentModeKHR) -> vk.Present
 }
 
 @(private)
-_find_depth_format :: proc(physical_device: vk.PhysicalDevice, support_stencil: bool) -> vk.Format {
+_find_depth_format :: proc(physical_device: vk.PhysicalDevice, support_stencil: bool) -> Format {
 	if support_stencil {
-		return _find_supported_format(
-			physical_device,
-			{.D32_SFLOAT_S8_UINT, .D24_UNORM_S8_UINT},
-			.OPTIMAL,
-			{.DEPTH_STENCIL_ATTACHMENT},
+		return _vk_to_format(
+			_find_supported_format(physical_device, {.D32_SFLOAT_S8_UINT}, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT}),
 		)
 	}
 
-	return _find_supported_format(physical_device, {.D32_SFLOAT}, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT})
+	return _vk_to_format(_find_supported_format(physical_device, {.D32_SFLOAT}, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT}))
 }
 
 @(private)
-_has_stencil_component :: proc(format: vk.Format) -> bool {
-	return format == .D32_SFLOAT_S8_UINT || format == .D24_UNORM_S8_UINT
+_has_stencil_component :: proc(format: Format) -> bool {
+	return format == .D_f32_S_u8
 }
 
 @(private)
@@ -709,7 +706,7 @@ _find_supported_format :: proc(
 		}
 	}
 
-	panic("failed to find supported format!")
+	log.panic("Failed to find supported format!")
 }
 
 @(private)
