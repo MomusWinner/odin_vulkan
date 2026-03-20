@@ -44,6 +44,19 @@ Ve :: struct {
 		delta_time:     f32,
 		total_time:     f64,
 	},
+	input:        struct {
+		keyboard: struct {
+			states:          [KEYBOARD_MAX_KEY]i32,
+			previous_states: [KEYBOARD_MAX_KEY]i32,
+		},
+		mouse:    struct {
+			states:             [glfw.MOUSE_BUTTON_LAST]i32,
+			previous_states:    [glfw.MOUSE_BUTTON_LAST]i32,
+			position:           vec2,
+			previouse_position: vec2,
+			scroll:             vec2,
+		},
+	},
 }
 
 Ve_Info :: struct {

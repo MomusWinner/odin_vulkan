@@ -155,59 +155,44 @@ MouseButton :: enum {
 	Button_8 = 7,
 }
 
-@(private = "file")
-input: struct {
-	keyboard: struct {
-		states:          [KEYBOARD_MAX_KEY]i32,
-		previous_states: [KEYBOARD_MAX_KEY]i32,
-	},
-	mouse:    struct {
-		states:             [glfw.MOUSE_BUTTON_LAST]i32,
-		previous_states:    [glfw.MOUSE_BUTTON_LAST]i32,
-		position:           vec2,
-		previouse_position: vec2,
-		scroll:             vec2,
-	},
-}
-
 is_key_pressed :: proc(key: Key) -> bool {
-	return input.keyboard.states[key] == glfw.PRESS && input.keyboard.previous_states[key] == glfw.RELEASE
+	return ctx.input.keyboard.states[key] == glfw.PRESS && ctx.input.keyboard.previous_states[key] == glfw.RELEASE
 }
 
 is_key_released :: proc(key: Key) -> bool {
-	return input.keyboard.states[key] == glfw.RELEASE && input.keyboard.previous_states[key] == glfw.PRESS
+	return ctx.input.keyboard.states[key] == glfw.RELEASE && ctx.input.keyboard.previous_states[key] == glfw.PRESS
 }
 
 is_key_down :: proc(key: Key) -> bool {
-	return input.keyboard.states[key] == glfw.PRESS
+	return ctx.input.keyboard.states[key] == glfw.PRESS
 }
 
 is_key_up :: proc(key: Key) -> bool {
-	return input.keyboard.states[key] == glfw.RELEASE
+	return ctx.input.keyboard.states[key] == glfw.RELEASE
 }
 
 get_mouse_position :: proc() -> vec2 {
-	return input.mouse.position
+	return ctx.input.mouse.position
 }
 
 get_mouse_delta :: proc() -> vec2 {
-	return input.mouse.position - input.mouse.previouse_position
+	return ctx.input.mouse.position - ctx.input.mouse.previouse_position
 }
 
 is_mouse_button_pressed :: proc(button: MouseButton) -> bool {
-	return input.mouse.states[button] == glfw.PRESS && input.mouse.previous_states[button] == glfw.RELEASE
+	return ctx.input.mouse.states[button] == glfw.PRESS && ctx.input.mouse.previous_states[button] == glfw.RELEASE
 }
 
 is_mouse_button_released :: proc(button: MouseButton) -> bool {
-	return input.mouse.states[button] == glfw.RELEASE && input.mouse.previous_states[button] == glfw.PRESS
+	return ctx.input.mouse.states[button] == glfw.RELEASE && ctx.input.mouse.previous_states[button] == glfw.PRESS
 }
 
 is_mouse_button_down :: proc(button: MouseButton) -> bool {
-	return input.mouse.states[button] == glfw.PRESS
+	return ctx.input.mouse.states[button] == glfw.PRESS
 }
 
 is_mouse_button_up :: proc(button: MouseButton) -> bool {
-	return input.mouse.states[button] == glfw.RELEASE
+	return ctx.input.mouse.states[button] == glfw.RELEASE
 }
 
 cursor_disable :: proc() {
@@ -219,45 +204,45 @@ cursor_enable :: proc() {
 }
 
 get_scroll_vec2 :: proc() -> vec2 {
-	return input.mouse.scroll
+	return ctx.input.mouse.scroll
 }
 
 get_scroll_f32 :: proc() -> f32 {
 	return(
-		input.mouse.scroll.x if math.abs(input.mouse.scroll.x) > math.abs(input.mouse.scroll.y) else input.mouse.scroll.y \
+		ctx.input.mouse.scroll.x if math.abs(ctx.input.mouse.scroll.x) > math.abs(ctx.input.mouse.scroll.y) else ctx.input.mouse.scroll.y \
 	)
 }
 
 @(private)
 _init_input :: proc() {
 	glfw.SetScrollCallback(ctx.window.id, _scroll_callback)
-	input.mouse.previouse_position = vec2{cast(f32)get_screen_width(), cast(f32)get_screen_height()} / 2
+	ctx.input.mouse.previouse_position = vec2{cast(f32)get_screen_width(), cast(f32)get_screen_height()} / 2
 }
 
 @(private)
 _update_input :: proc() {
-	input.mouse.scroll = 0
+	ctx.input.mouse.scroll = 0
 	glfw.PollEvents()
 
 	// Keyboard
-	input.keyboard.previous_states = input.keyboard.states
+	ctx.input.keyboard.previous_states = ctx.input.keyboard.states
 	for key in glfw.KEY_SPACE ..< KEYBOARD_MAX_KEY {
 		state := glfw.GetKey(ctx.window.id, cast(i32)key)
 
-		input.keyboard.states[key] = state
+		ctx.input.keyboard.states[key] = state
 	}
 
 	// Mouse
-	input.mouse.previous_states = input.mouse.states
+	ctx.input.mouse.previous_states = ctx.input.mouse.states
 	for key in glfw.MOUSE_BUTTON_1 ..< glfw.MOUSE_BUTTON_LAST {
-		input.mouse.states[key] = glfw.GetMouseButton(ctx.window.id, cast(i32)key)
+		ctx.input.mouse.states[key] = glfw.GetMouseButton(ctx.window.id, cast(i32)key)
 	}
 
-	input.mouse.previouse_position = input.mouse.position
+	ctx.input.mouse.previouse_position = ctx.input.mouse.position
 	mouse_pos_x, mouse_pos_y := glfw.GetCursorPos(ctx.window.id)
-	input.mouse.position = {cast(f32)mouse_pos_x, cast(f32)mouse_pos_y}
+	ctx.input.mouse.position = {cast(f32)mouse_pos_x, cast(f32)mouse_pos_y}
 }
 
 _scroll_callback :: proc "c" (window: glfw.WindowHandle, xoffset, yoffset: f64) {
-	input.mouse.scroll = vec2{cast(f32)xoffset, cast(f32)yoffset}
+	ctx.input.mouse.scroll = vec2{cast(f32)xoffset, cast(f32)yoffset}
 }
