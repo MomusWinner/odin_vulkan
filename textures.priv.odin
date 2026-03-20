@@ -1,6 +1,7 @@
 #+private
 package ve
 
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:reflect"
@@ -39,6 +40,109 @@ Buffer_Image_Copy :: struct {
 		base_array_layer: u32,
 	},
 	image_extent:      vk.Extent3D,
+}
+
+_create_texture :: proc(
+	image: Image,
+	mip_levels: u32 = 1,
+	encoding: Texture_Encoding = .sRGB,
+	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	loc := #caller_location,
+) -> (
+	texture: Texture_Data,
+) {
+	desired_channels: int = image.channels
+	image_size := cast(vk.DeviceSize)(image.width * image.height * desired_channels)
+
+	sc := begin_single_cmd()
+
+	// Staging Buffer
+	staging_buffer := _create_buffer({.Transfer, .Host_Write}, image_size, image.data)
+	defer _destroy_buffer(&staging_buffer)
+
+	format: Format = _channels_and_encoding_to_format(image.channels, encoding)
+
+	// Image
+	vk_image, allocation, allocation_info := _create_vk_image(
+		cast(u32)image.width,
+		cast(u32)image.height,
+		mip_levels,
+		._1,
+		_format_to_vk(format),
+		.OPTIMAL,
+		{.TRANSFER_SRC, .TRANSFER_DST, .SAMPLED},
+		vma.MemoryUsage.AUTO_PREFER_DEVICE,
+		vma.AllocationCreateFlags{},
+	)
+
+	_cmd_image_transition_layout(
+		sc.cmd,
+		vk_image,
+		.UNDEFINED,
+		.TRANSFER_DST_OPTIMAL,
+		vk.ImageSubresourceRange{aspectMask = {.COLOR}, layerCount = 1, levelCount = mip_levels},
+	)
+	_cmd_copy_buffer_to_image(
+		sc.cmd,
+		staging_buffer.id,
+		vk_image,
+		[]vk.BufferImageCopy {
+			vk.BufferImageCopy {
+				bufferOffset = 0,
+				bufferRowLength = 0,
+				bufferImageHeight = 0,
+				imageSubresource = vk.ImageSubresourceLayers {
+					aspectMask = {.COLOR},
+					mipLevel = 0,
+					baseArrayLayer = 0,
+					layerCount = 1,
+				},
+				imageOffset = {0, 0, 0},
+				imageExtent = vk.Extent3D{cast(u32)image.width, cast(u32)image.height, 1},
+			},
+		},
+	)
+
+	if mip_levels > 1 {
+		_generate_mipmaps(
+			sc.cmd,
+			vk_image,
+			_format_to_vk(format),
+			cast(i32)image.width,
+			cast(i32)image.height,
+			mip_levels,
+		)
+	}
+
+	end_single_cmd(sc)
+
+	image_view := _create_vk_image_view(vk_image, _format_to_vk(format), {.COLOR}, mip_levels)
+	sampler: vk.Sampler = _create_sampler(sampler_info)
+
+	texture.id = vk_image
+	texture.width, texture.height = image.width, image.height
+	texture.view = image_view
+	texture.format = format
+	texture.sampler = sampler
+	texture.allocation = allocation
+	texture.allocation_info = allocation_info
+
+	_vk_set_debug_texture_name(texture, fmt.tprintf("%s %s", image.path, _location_to_string(loc)))
+
+	return
+}
+
+_destroy_texture :: proc(texture: ^Texture_Data, loc := #caller_location) {
+	assert_not_nil(texture, loc)
+
+	_destroy_sampler(texture.sampler)
+	vk.DestroyImageView(ctx.gfx.vk_state.device, texture.view, nil)
+	vma.DestroyImage(ctx.gfx.vk_state.allocator, texture.id, texture.allocation)
+
+	texture.sampler = 0
+	texture.view = 0
+	texture.id = 0
+	texture.allocation_info = {}
 }
 
 _create_sampler :: proc(info: Sampler_Info, loc := #caller_location) -> Sampler {

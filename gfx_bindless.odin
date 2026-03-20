@@ -28,7 +28,7 @@ update_texture_h :: proc(texture: Texture, loc := #caller_location) {
 }
 
 @(require_results)
-acquire_texture_h :: proc(texture_h: Texture) -> (Texture_Data, bool) {
+acquire_texture_h :: proc(texture_h: Texture) -> Texture_Data {
 	return _bindless_remove_texture(ctx.gfx.bindless, texture_h)
 }
 
@@ -45,7 +45,7 @@ acquire_buffer_h :: proc(buffer_h: Buffer) -> Buffer_Data {
 @(require_results)
 get_buffer_h :: proc(buffer_h: Buffer, loc := #caller_location) -> ^Buffer_Data {
 	result, ok := hm.get(&ctx.gfx.bindless.buffers, buffer_h)
-	assert(ok, "Invalid buffer handle", loc = loc)
+	assert_buffer(ok, loc)
 	return result
 }
 
@@ -83,7 +83,7 @@ get_bindless_pipeline_set_info :: proc() -> Pipeline_Set_Layout_Info {
 @(require_results)
 get_texture_h :: proc(texture_h: Texture, loc := #caller_location) -> ^Texture_Data {
 	t, ok := hm.get(&ctx.gfx.bindless.textures, texture_h)
-	assert(ok, "Invalid texture handle", loc = loc)
+	assert_texture(ok, loc)
 	return t
 }
 
@@ -169,7 +169,7 @@ _bindless_destroy :: proc(bindless: ^Bindless, loc := #caller_location) {
 	vk.DestroyDescriptorSetLayout(ctx.gfx.vk_state.device, bindless.set_layout, nil)
 
 	for &texture in bindless.textures.values {
-		destroy_texture(&texture)
+		_destroy_texture(&texture)
 	}
 	hm.destroy(&bindless.textures)
 
@@ -251,7 +251,7 @@ _bindless_replace_texture :: proc(
 	assert_not_nil(bindless, loc)
 
 	texture, ok := hm.get(&bindless.textures, texture_h)
-	destroy_texture(texture)
+	_destroy_texture(texture)
 	assert(ok, loc = loc)
 	texture^ = new_texture
 
@@ -274,17 +274,11 @@ _bindless_replace_texture :: proc(
 }
 
 @(private = "file")
-_bindless_remove_texture :: proc(
-	bindless: ^Bindless,
-	texture_h: Texture,
-	loc := #caller_location,
-) -> (
-	Texture_Data,
-	bool,
-) {
+_bindless_remove_texture :: proc(bindless: ^Bindless, texture_h: Texture, loc := #caller_location) -> Texture_Data {
 	assert_not_nil(bindless, loc)
-
-	return hm.remove(&bindless.textures, texture_h)
+	t, ok := hm.remove(&bindless.textures, texture_h)
+	assert_texture(ok, loc)
+	return t
 }
 
 @(private = "file")
@@ -330,6 +324,16 @@ _bindless_store_buffer :: proc(bindless: ^Bindless, buffer: Buffer_Data, loc := 
 _bindless_remove_buffer :: proc(bindless: ^Bindless, buffer_h: Buffer, loc := #caller_location) -> Buffer_Data {
 	assert_not_nil(bindless, loc)
 	b, ok := hm.remove(&bindless.buffers, buffer_h)
-	assert(ok, "Invalid buffer handle", loc = loc)
+	assert_buffer(ok, loc)
 	return b
+}
+
+@(private = "file")
+assert_texture :: #force_inline proc(ok: bool, loc := #caller_location) {
+	assert(ok, "Invalid texture handle", loc = loc)
+}
+
+@(private = "file")
+assert_buffer :: #force_inline proc(ok: bool, loc := #caller_location) {
+	assert(ok, "Invalid buffer handle", loc = loc)
 }

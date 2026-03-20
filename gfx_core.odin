@@ -1184,11 +1184,11 @@ _swapchain_recreate :: proc(swapchain: ^Swapchain) {
 _swapchain_destroy :: proc(swapchain: ^Swapchain) {
 	msaa_color_texture, has_color_texture := swapchain.msaa_color_texture.?
 	if has_color_texture {
-		destroy_texture(&msaa_color_texture)
+		_destroy_texture(&msaa_color_texture)
 	}
 
 	if .Depth in ctx.info.gfx.attachments {
-		destroy_texture(&swapchain.depth_image)
+		_destroy_texture(&swapchain.depth_image)
 	}
 
 	for sem in swapchain.render_finished_semaphores {
@@ -1385,10 +1385,10 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 		case Buffer:
 			destroy_buffer(resource)
 		case Texture_Data:
-			destroy_texture(&resource)
+			_destroy_texture(&resource)
 		case Texture:
-			t, ok := acquire_texture_h(resource)
-			if ok do destroy_texture(&t)
+			t := acquire_texture_h(resource)
+			_destroy_texture(&t)
 		}
 	}
 	d.next_index = 0

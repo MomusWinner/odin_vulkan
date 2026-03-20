@@ -158,7 +158,7 @@ load_font :: proc(create_info: Create_Font_Info, loc := #caller_location) -> Fon
 		channels = 1,
 	}
 
-	texture_h := store_texture(create_texture(image, 1))
+	texture_h := create_texture(image, 1)
 
 	return Font {
 		name = create_info.path,
