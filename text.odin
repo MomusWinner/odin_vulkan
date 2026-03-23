@@ -240,7 +240,7 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 
 	cmd_bind_vertex_buffer(text.vbo, 0)
 
-	layout := cmd_bind_render_pipeline(text.pipeline_h)
+	layout := cmd_bind_graphics_pipeline(text.pipeline_h)
 
 	const := _get_push_constants_data(&text.transform, {h0 = text.ubo_h})
 	cmd_push_constants(layout, &const)
@@ -308,7 +308,7 @@ _text_default_pipeline :: proc() -> Graphics_Pipeline {
 		stencil = {enable = false},
 	}
 
-	return create_render_pipeline(create_info)
+	return create_graphics_pipeline(create_info)
 }
 
 @(private = "file")

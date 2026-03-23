@@ -135,7 +135,7 @@ create_outline_model_pipeline :: proc() -> ve.Graphics_Pipeline {
 		back   = stencil_state,
 	}
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_outline_pipeline :: proc() -> ve.Graphics_Pipeline {
@@ -164,5 +164,5 @@ create_outline_pipeline :: proc() -> ve.Graphics_Pipeline {
 		back   = stencil_state,
 	}
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }

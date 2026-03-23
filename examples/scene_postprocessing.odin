@@ -133,5 +133,5 @@ create_postprocessing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }

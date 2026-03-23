@@ -167,7 +167,7 @@ create_particle_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info.rasterizer.cull_mode = {}
 	create_info.depth.enable = false
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_compute_pipeline :: proc(x_invocations: i32) -> ve.Compute_Pipeline {

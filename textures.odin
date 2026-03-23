@@ -106,30 +106,30 @@ create_texture :: proc(
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
 ) -> Texture {
-	return store_texture(_create_texture(image, mip_levels, encoding, sampler_info, loc), loc)
+	return _store_texture(_create_texture(image, mip_levels, encoding, sampler_info, loc), loc)
 }
 
 destroy_texture :: proc(texture: Texture, loc := #caller_location) {
-	t := acquire_texture_h(texture)
+	t := _acquire_texture_h(texture)
 	_destroy_texture(&t)
 }
 
 texture_get_size :: proc(texture: Texture) -> (w: int, h: int) {
-	t := get_texture_h(texture)
+	t := _get_texture_h(texture)
 	return t.width, t.height
 }
 
 texture_get_format :: proc(texture: Texture) -> Format {
-	t := get_texture_h(texture)
+	t := _get_texture_h(texture)
 	return t.format
 }
 
 texture_set_sampler :: proc(texture: Texture, info: Sampler_Info) {
-	t := get_texture_h(texture)
+	t := _get_texture_h(texture)
 	_destroy_sampler(t.sampler)
 	new_sampler := _create_sampler(info)
 	t.sampler = new_sampler
-	update_texture_h(texture)
+	_update_texture_h(texture)
 }
 
 CUBEMAP_LAYERS_COUNT :: 6
@@ -158,7 +158,7 @@ load_cubemap_texture :: proc(paths: [CUBEMAP_LAYERS_COUNT]string, mip_levels: u3
 		destroy_image(image)
 	}
 
-	return store_texture(texture)
+	return _store_texture(texture)
 }
 
 // Creates a cubemap texture from 6 face images.

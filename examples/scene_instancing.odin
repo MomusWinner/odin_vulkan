@@ -132,7 +132,7 @@ create_instancing_pipeline :: proc() -> ve.Graphics_Pipeline {
 		depth = {enable = true, write_enable = true, compare_op = .Less},
 	}
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 @(private = "file")

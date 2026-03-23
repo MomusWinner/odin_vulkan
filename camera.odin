@@ -39,16 +39,16 @@ Camera :: struct {
 	fov:      f32,
 	near:     f32,
 	far:      f32,
-	buffer_h: Buffer, // Camera_UBO
+	buffer:   Buffer, // Camera_UBO
 }
 
 set_camera_ex :: proc(camera: Camera, aspect: f32) {
-	ctx.gfx.frame.camera = _camera_get_buffer(camera, aspect)
+	ctx.gfx.frame.camera = camera_get_buffer(camera, aspect)
 }
 
 set_camera :: proc(camera: Camera) {
 	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
-	ctx.gfx.frame.camera = _camera_get_buffer(camera, aspect)
+	ctx.gfx.frame.camera = camera_get_buffer(camera, aspect)
 }
 
 // Use the buffer filled by the Camera_UBO data for rendering
@@ -67,7 +67,7 @@ camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective
 
 	buffer := _create_buffer({.Uniform, .Host_Write}, size_of(Camera_UBO))
 
-	camera.buffer_h = store_buffer(buffer, loc)
+	camera.buffer = _store_buffer(buffer, loc)
 }
 
 camera_get_up :: proc(camera: Camera, loc := #caller_location) -> vec3 {
@@ -164,19 +164,19 @@ camera_get_projection :: proc(camera: Camera, aspect: f32, loc := #caller_locati
 }
 
 @(private)
-_camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) -> Buffer {
+camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) -> Buffer {
 	view := camera_get_view(camera)
 	projection := camera_get_projection(camera, aspect)
 
-	buffer := get_buffer_h(camera.buffer_h)
+	buffer := _get_buffer_h(camera.buffer)
 	camera_ubo := Camera_UBO {
 		view       = view,
 		projection = projection,
 		position   = camera.position,
 	}
-	_buffer_fill(buffer, &camera_ubo, size_of(Camera_UBO))
+	buffer_fill(camera.buffer, &camera_ubo, size_of(Camera_UBO))
 
-	return camera.buffer_h
+	return camera.buffer
 }
 
 camera_update_simple_controller :: proc(

@@ -98,7 +98,7 @@ light_scene_init :: proc(s: ^Scene) {
 	ubo_light_set_ambient(data.light_ubo, 0.1)
 
 	data.light_data = create_ubo_light_data()
-	ubo_light_data_set_camera(data.light_data, data.l_camera.buffer_h)
+	ubo_light_data_set_camera(data.light_data, data.l_camera.buffer)
 	ubo_light_data_set_direction(data.light_data, {0, -1, 0})
 	ubo_light_data_set_shadow(data.light_data, data.shadow_map_texture)
 	ubo_light_data_set_color(data.light_data, 1)
@@ -218,7 +218,7 @@ create_light_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
@@ -240,5 +240,5 @@ create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
 		slope_factor    = 4.75,
 	}
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }

@@ -57,6 +57,7 @@ layout( push_constant ) uniform constants {
 
 #define getModel() PushConstants.model
 
+#define HCamera() PushConstants.camera
 #define H0() PushConstants.handle0
 #define H1() PushConstants.handle1
 #define H2() PushConstants.handle2
@@ -78,7 +79,7 @@ RegisterUniform(Camera, {
 
 #define getCameraByHandle(index) GetResource(Camera, index)
 
-#define getCamera() getCameraByHandle(PushConstants.camera)
+#define getCamera() getCameraByHandle(HCamera())
 
 // HELPERS
 const uint INVALID_RESOURCE_HANDLE = ~0u;

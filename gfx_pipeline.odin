@@ -273,18 +273,18 @@ create_default_vertex_description :: proc() -> Vertex_Input_Description {
 }
 
 @(require_results)
-create_render_pipeline :: proc(
+create_graphics_pipeline :: proc(
 	create_pipeline_info: Create_Pipeline_Info,
 	loc := #caller_location,
 ) -> Graphics_Pipeline {
-	return _pipeline_manager_add_render_pipeline(
+	return _pipeline_manager_add_graphics_pipeline(
 		ctx.gfx.pipeline_manager,
-		Render_Pipeline_Data{create_info = create_pipeline_info},
+		Graphics_Pipeline_Data{create_info = create_pipeline_info},
 	)
 }
 
-destroy_render_pipeline :: proc(pipeline: Graphics_Pipeline) -> bool {
-	return _destroy_render_pipeline_h(pipeline)
+destroy_graphics_pipeline :: proc(pipeline: Graphics_Pipeline) -> bool {
+	return _destroy_graphics_pipeline_h(pipeline)
 }
 
 @(require_results)

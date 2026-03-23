@@ -37,7 +37,7 @@ Pipeline :: struct {
 	layout: Pipeline_Layout_Info,
 }
 
-Render_Pipeline_Data :: struct {
+Graphics_Pipeline_Data :: struct {
 	variants:    map[Pipeline_Surface_Info]Pipeline_Variant,
 	create_info: Create_Pipeline_Info,
 }
@@ -63,7 +63,7 @@ Push_Constants_Data :: struct {
 }
 
 Pipeline_Manager :: struct {
-	render_pipelines:   hm.Handle_Map(Render_Pipeline_Data, Graphics_Pipeline),
+	graphics_pipelines: hm.Handle_Map(Graphics_Pipeline_Data, Graphics_Pipeline),
 	compute_pipelines:  hm.Handle_Map(Compute_Pipeline_Data, Compute_Pipeline),
 	compiler:           shaderc.compilerT,
 	compiler_options:   shaderc.compileOptionsT,
@@ -76,8 +76,8 @@ Pipeline_Surface_Info :: struct {
 	color_formats: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
 }
 
-_get_render_pipeline :: proc(handle: Graphics_Pipeline, loc := #caller_location) -> ^Render_Pipeline_Data {
-	return _pipeline_manager_get_render_pipeline(ctx.gfx.pipeline_manager, handle, loc)
+_get_graphics_pipeline :: proc(handle: Graphics_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline_Data {
+	return _pipeline_manager_get_graphics_pipeline(ctx.gfx.pipeline_manager, handle, loc)
 }
 
 _get_compute_pipeline :: proc(handle: Compute_Pipeline, loc := #caller_location) -> ^Compute_Pipeline_Data {
@@ -92,13 +92,13 @@ _init_pipeline_manager :: proc(enable_compilation: bool) {
 
 _destroy_pipeline_manager :: proc() {
 	pm := ctx.gfx.pipeline_manager
-	for &pipeline in pm.render_pipelines.values {
-		_destroy_render_pipeline(&pipeline)
+	for &pipeline in pm.graphics_pipelines.values {
+		_destroy_graphics_pipeline(&pipeline)
 	}
 	for &pipeline in pm.compute_pipelines.values {
 		_destroy_compute_pipeline(&pipeline)
 	}
-	hm.destroy(&pm.render_pipelines)
+	hm.destroy(&pm.graphics_pipelines)
 	hm.destroy(&pm.compute_pipelines)
 	when GFX_DEBUG {
 		shaderc.compile_options_release(pm.compiler_options)
@@ -119,11 +119,11 @@ _pipeline_manager_init :: proc(pm: ^Pipeline_Manager, enable_compilation: bool) 
 	}
 }
 
-_pipeline_manager_add_render_pipeline :: proc(
+_pipeline_manager_add_graphics_pipeline :: proc(
 	pm: ^Pipeline_Manager,
-	pipeline: Render_Pipeline_Data,
+	pipeline: Graphics_Pipeline_Data,
 ) -> Graphics_Pipeline {
-	return hm.insert(&pm.render_pipelines, pipeline)
+	return hm.insert(&pm.graphics_pipelines, pipeline)
 }
 
 _pipeline_manager_registe_compute_pipeline :: proc(
@@ -134,13 +134,13 @@ _pipeline_manager_registe_compute_pipeline :: proc(
 }
 
 @(private = "file")
-_pipeline_manager_get_render_pipeline :: proc(
+_pipeline_manager_get_graphics_pipeline :: proc(
 	pm: ^Pipeline_Manager,
 	handle: Graphics_Pipeline,
 	loc := #caller_location,
-) -> ^Render_Pipeline_Data {
-	p, ok := hm.get(&pm.render_pipelines, handle)
-	assert(ok, "Invalid render pipeline handle ", loc)
+) -> ^Graphics_Pipeline_Data {
+	p, ok := hm.get(&pm.graphics_pipelines, handle)
+	assert(ok, "Invalid graphics pipeline handle ", loc)
 	return p
 }
 
@@ -151,7 +151,7 @@ _pipeline_manager_get_compute_pipeline :: proc(
 	loc := #caller_location,
 ) -> ^Compute_Pipeline_Data {
 	p, ok := hm.get(&pm.compute_pipelines, handle)
-	assert(ok, "Invalid render pipeline handle ", loc)
+	assert(ok, "Invalid compute pipeline handle ", loc)
 	return p
 }
 
@@ -162,8 +162,8 @@ _pipeline_manager_hot_reload :: proc() {
 	vk.WaitForFences(ctx.gfx.vk_state.device, 1, &fence, true, max(u64))
 
 	log.debug("--- RELOADING SHADERS ---")
-	for &pipeline in ctx.gfx.pipeline_manager.render_pipelines.values {
-		_reload_render_pipelines(&pipeline)
+	for &pipeline in ctx.gfx.pipeline_manager.graphics_pipelines.values {
+		_reload_graphics_pipelines(&pipeline)
 	}
 }
 
@@ -228,7 +228,10 @@ _shader_result_releaser :: proc "system" (userData: rawptr, includeResult: ^shad
 }
 
 // Looks up a pipeline in cache using surface settings. If not found, creates a new one.
-_render_pipeline_get_variant :: proc(pipeline: ^Render_Pipeline_Data, loc := #caller_location) -> ^Pipeline_Variant {
+_graphics_pipeline_get_variant :: proc(
+	pipeline: ^Graphics_Pipeline_Data,
+	loc := #caller_location,
+) -> ^Pipeline_Variant {
 	pipeline_surface := _surface_info_to_pipeline_surface_info(ctx.gfx.frame.surface_info)
 	variant, ok := pipeline.variants[pipeline_surface]
 	if ok do return &pipeline.variants[pipeline_surface]
@@ -239,14 +242,14 @@ _render_pipeline_get_variant :: proc(pipeline: ^Render_Pipeline_Data, loc := #ca
 	return &pipeline.variants[pipeline_surface]
 }
 
-_destroy_render_pipeline_h :: proc(pipeline: Graphics_Pipeline) -> bool {
-	p, ok := hm.remove(&ctx.gfx.pipeline_manager.render_pipelines, pipeline)
+_destroy_graphics_pipeline_h :: proc(pipeline: Graphics_Pipeline) -> bool {
+	p, ok := hm.remove(&ctx.gfx.pipeline_manager.graphics_pipelines, pipeline)
 	if !ok do return false
-	_destroy_render_pipeline(&p)
+	_destroy_graphics_pipeline(&p)
 	return true
 }
 
-_destroy_render_pipeline :: proc(pipeline: ^Render_Pipeline_Data) {
+_destroy_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline_Data) {
 	for key, &pipeline in pipeline.variants {
 		_destroy_pipeline_variant(&pipeline)
 	}
@@ -264,7 +267,7 @@ _destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline_Data) {
 	_destroy_pipline(pipeline)
 }
 
-_reload_render_pipelines :: proc(pipeline: ^Render_Pipeline_Data) {
+_reload_graphics_pipelines :: proc(pipeline: ^Graphics_Pipeline_Data) {
 	for _, &variant in pipeline.variants {
 		_reload_pipeline_variant(&variant, pipeline.create_info)
 	}
@@ -381,7 +384,7 @@ _create_pipeline_variant :: proc(
 			size       = size_of(Push_Constants_Data),
 			stageFlags = vk.ShaderStageFlags_ALL_GRAPHICS,
 		}
-		sm.append(&create_info.descriptor_set_infos, get_bindless_pipeline_set_info())
+		sm.append(&create_info.descriptor_set_infos, _get_bindless_pipeline_set_info())
 		pipeline_layout_info.layout_infos = create_info.descriptor_set_infos
 	}
 
@@ -496,7 +499,7 @@ _create_compute_pipeline :: proc(
 			size       = size_of(Push_Constants_Data),
 			stageFlags = {.COMPUTE},
 		}
-		sm.append(&create_info.descriptor_set_infos, get_bindless_pipeline_set_info())
+		sm.append(&create_info.descriptor_set_infos, _get_bindless_pipeline_set_info())
 		pipeline_layout_info.layout_infos = create_info.descriptor_set_infos
 	}
 

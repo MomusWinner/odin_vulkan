@@ -73,7 +73,7 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 	depth_attachment, has_depth_attachment := render_target.depth_attachment.?
 
 	for ca in sm.slice(&render_target.color_attachments) {
-		t := acquire_texture_h(ca.texture_h)
+		t := _acquire_texture_h(ca.texture_h)
 		_destroy_texture(&t)
 		msaa, has_msaa := ca.msaa_texture.?
 		if has_msaa do _destroy_texture(&msaa)
@@ -84,7 +84,7 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 		case Render_Target_Common_Depth_Attachment:
 			_destroy_texture(&attachment.resource)
 		case Render_Target_Readable_Depth_Attachment:
-			t := acquire_texture_h(attachment.texture_h)
+			t := _acquire_texture_h(attachment.texture_h)
 			_destroy_texture(&t)
 
 			msaa, has_msaa := attachment.msaa_texture.?
@@ -109,7 +109,7 @@ render_target_add_color_attachment :: proc(
 	if surface.sample_count == ._1 {
 		color_res := _create_render_target_color_resolve_resource(w, h, format, sampler_info)
 
-		color_attachment.texture_h = store_texture(color_res, loc)
+		color_attachment.texture_h = _store_texture(color_res, loc)
 
 		color_attachment.info = {
 			sType = .RENDERING_ATTACHMENT_INFO,
@@ -125,7 +125,7 @@ render_target_add_color_attachment :: proc(
 		msaa := _create_render_target_color_resource(w, h, format, surface.sample_count)
 		resolve := _create_render_target_color_resolve_resource(w, h, format, sampler_info)
 
-		color_attachment.texture_h = store_texture(resolve)
+		color_attachment.texture_h = _store_texture(resolve)
 		color_attachment.msaa_texture = msaa
 
 		color_attachment.info = {
@@ -197,7 +197,7 @@ render_target_add_readable_depth_attachment :: proc(
 
 	sc := begin_single_cmd()
 	depth_resource := _create_render_target_depth_resource_sampled(w, h, sc.cmd, sampler_info, loc)
-	depth_attachment.texture_h = store_texture(depth_resource)
+	depth_attachment.texture_h = _store_texture(depth_resource)
 
 	if surface.sample_count == ._1 {
 		depth_attachment.info = {
@@ -271,7 +271,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 
 	for ca, i in sm.slice(&src_color_attachments) {
 		msaa, has_msaa := ca.msaa_texture.?
-		texture := get_texture_h(ca.texture_h, loc)
+		texture := _get_texture_h(ca.texture_h, loc)
 
 		target := &msaa if has_msaa else texture
 		_cmd_image_transition_layout(cmd, target.id, .UNDEFINED, .COLOR_ATTACHMENT_OPTIMAL)
@@ -289,7 +289,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 			p_depth_attachment = &attachment.info
 			msaa, has_msaa := attachment.msaa_texture.?
 
-			texture := get_texture_h(attachment.texture_h)
+			texture := _get_texture_h(attachment.texture_h)
 			depth_format = texture.format
 			target: ^Texture_Data = &msaa if has_msaa else texture
 
@@ -326,7 +326,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 
 	if (has_color_attachments) {
 		for ca in sm.slice(&src_color_attachments) {
-			texture := get_texture_h(ca.texture_h)
+			texture := _get_texture_h(ca.texture_h)
 			sm.push(&surface_info.color_formats, texture.format)
 		}
 	}
@@ -347,7 +347,7 @@ end_render_target :: proc(surface: ^Render_Target, loc := #caller_location) {
 			continue
 		}
 		msaa, has_msaa := ca.msaa_texture.?
-		texture := get_texture_h(ca.texture_h, loc)
+		texture := _get_texture_h(ca.texture_h, loc)
 
 		target := &msaa if has_msaa else texture
 		_cmd_image_transition_layout(_get_cmd(), target.id, .COLOR_ATTACHMENT_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
@@ -357,7 +357,7 @@ end_render_target :: proc(surface: ^Render_Target, loc := #caller_location) {
 		switch attachment in depth_attachment {
 		case Render_Target_Common_Depth_Attachment:
 		case Render_Target_Readable_Depth_Attachment:
-			texture := get_texture_h(attachment.texture_h)
+			texture := _get_texture_h(attachment.texture_h)
 			msaa, has_msaa := attachment.msaa_texture.?
 
 			sc := begin_single_cmd()
@@ -592,7 +592,7 @@ _render_target_resize_color_attachments :: proc(
 		w, h := cast(u32)width, cast(u32)height
 
 		resolve := _create_render_target_color_resolve_resource(w, h, texture_get_format(ca.texture_h), ca.sampler_info)
-		replace_texture_h(ca.texture_h, resolve)
+		_replace_texture_h(ca.texture_h, resolve)
 		ca.info.imageView = resolve.view
 
 		if has_msaa {
@@ -630,7 +630,7 @@ _render_target_resize_readable_depth_attachment :: proc(
 	sc := begin_single_cmd()
 
 	resolve := _create_render_target_depth_resource_sampled(w, h, sc.cmd, attachment.sampler_info, loc)
-	replace_texture_h(attachment.texture_h, resolve)
+	_replace_texture_h(attachment.texture_h, resolve)
 	attachment.info.imageView = resolve.view
 
 	if has_msaa {

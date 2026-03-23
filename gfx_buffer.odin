@@ -44,21 +44,21 @@ create_buffer :: proc(
 	loc := #caller_location,
 ) -> Buffer {
 	data := _create_buffer(usage, size, data, loc)
-	return store_buffer(data)
+	return _store_buffer(data)
 }
 
 destroy_buffer :: proc(b: Buffer, loc := #caller_location) {
-	b_data := acquire_buffer_h(b)
+	b_data := _acquire_buffer_h(b)
 	_destroy_buffer(&b_data, loc)
 }
 
 buffer_fill :: proc(b: Buffer, data: rawptr, size: Device_Size, offset: Device_Size = 0, loc := #caller_location) {
-	b_data := get_buffer_h(b)
+	b_data := _get_buffer_h(b)
 	_buffer_fill(b_data, data, size, offset, loc)
 }
 
 buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: Device_Size) {
-	b_data := get_buffer_h(b)
+	b_data := _get_buffer_h(b)
 	return _buffer_read(b_data, loc)
 }
 
@@ -81,7 +81,7 @@ has_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 detstroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	if !ok do return false
-	b := acquire_buffer_h(uniform_buffer.buffer_h)
+	b := _acquire_buffer_h(uniform_buffer.buffer_h)
 	_destroy_buffer(&b)
 	return true
 }
@@ -103,7 +103,7 @@ get_storage_buffer :: proc(handle: Storage_Buffer, loc := #caller_location) -> ^
 detstroy_storage_buffer :: proc(handle: Storage_Buffer) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	if !ok do return false
-	b := acquire_buffer_h(storage_buffer.buffer_h)
+	b := _acquire_buffer_h(storage_buffer.buffer_h)
 	_destroy_buffer(&b)
 	return true
 }

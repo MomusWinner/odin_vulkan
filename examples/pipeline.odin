@@ -71,7 +71,7 @@ create_default_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
@@ -93,7 +93,7 @@ create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
 		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {.Front}, front_face = .Counter_Clockwise},
 	}
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_reflect_pipeline :: proc() -> ve.Graphics_Pipeline {
@@ -116,7 +116,7 @@ create_reflect_pipeline :: proc() -> ve.Graphics_Pipeline {
 		front_face   = .Counter_Clockwise,
 	}
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_hdr_pipeline :: proc() -> ve.Graphics_Pipeline {
@@ -130,7 +130,7 @@ create_hdr_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 
@@ -145,7 +145,7 @@ create_multilight_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Graphics_Pipeline {
@@ -162,7 +162,7 @@ create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }
 
 create_light_box_pipeline :: proc() -> ve.Graphics_Pipeline {
@@ -176,5 +176,5 @@ create_light_box_pipeline :: proc() -> ve.Graphics_Pipeline {
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
 
-	return ve.create_render_pipeline(create_info)
+	return ve.create_graphics_pipeline(create_info)
 }

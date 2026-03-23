@@ -653,7 +653,7 @@ print_field_to_data_field :: proc(
 	if (field.type == .Texture) {
 		fmt.fprintfln(
 			f,
-			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}has_texture_h({2:s}.{0:s}) else max(u32)",
+			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}texture_is_valid({2:s}.{0:s}) else max(u32)",
 			field.name,
 			gfx_pref,
 			src_name,
@@ -662,7 +662,7 @@ print_field_to_data_field :: proc(
 	} else if (field.type == .Buffer) {
 		fmt.fprintfln(
 			f,
-			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}has_buffer_h({2:s}.{0:s}) else max(u32)",
+			"	{3:s}.{0:s} = {2:s}.{0:s}.index if {1:s}buffer_is_valid({2:s}.{0:s}) else max(u32)",
 			field.name,
 			gfx_pref,
 			src_name,

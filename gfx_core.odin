@@ -646,7 +646,7 @@ cmd_set_scissor :: proc(width, height: int, offset: ivec2 = 0, loc := #caller_lo
 }
 
 cmd_bind_vertex_buffer :: proc(buffer: Buffer, binding: u32, offset := vk.DeviceSize{}, loc := #caller_location) {
-	b := get_buffer_h(buffer)
+	b := _get_buffer_h(buffer)
 	assert(.Vertex in b.usage, loc = loc)
 
 	offset := offset
@@ -661,7 +661,7 @@ cmd_bind_index_buffer :: proc(
 	index_type := vk.IndexType.UINT16,
 	loc := #caller_location,
 ) {
-	b := get_buffer_h(buffer, loc)
+	b := _get_buffer_h(buffer, loc)
 	assert(.Index in b.usage, loc = loc)
 
 	offset := offset
@@ -682,10 +682,10 @@ cmd_draw_indexed :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #cal
 	vk.CmdDrawIndexed(_get_cmd(), vertex_count, instance_count, 0, 0, 0)
 }
 
-cmd_bind_render_pipeline :: proc(pipeline: Graphics_Pipeline, loc := #caller_location) -> Pipeline_Layout {
-	graphics_pipeline := _render_pipeline_get_variant(_get_render_pipeline(pipeline, loc), loc)
+cmd_bind_graphics_pipeline :: proc(pipeline: Graphics_Pipeline, loc := #caller_location) -> Pipeline_Layout {
+	graphics_pipeline := _graphics_pipeline_get_variant(_get_graphics_pipeline(pipeline, loc), loc)
 	vk.CmdBindPipeline(_get_cmd(), .GRAPHICS, graphics_pipeline.id)
-	cmd_bind_descriptor_set_graphics(graphics_pipeline, get_descriptor_set_bindless())
+	cmd_bind_descriptor_set_graphics(graphics_pipeline, _get_descriptor_set_bindless())
 	return _get_pipeline_layout(graphics_pipeline.layout)
 }
 
@@ -746,11 +746,11 @@ cmd_dispatch :: proc(
 	consts_data := _get_push_constants_data(trf, handles)
 	cmd_push_constants(layout, &consts_data, {.COMPUTE})
 
-	bindless_descriptor_set := get_descriptor_set_bindless()
+	bindless_descriptor_set := _get_descriptor_set_bindless()
 	vk.CmdBindDescriptorSets(ctx.gfx.cmd, .COMPUTE, layout, 0, 1, &bindless_descriptor_set, 0, nil)
 	vk.CmdDispatch(_get_cmd(), group_count.x, group_count.y, group_count.z)
 
-	b := get_buffer_h(buffer)
+	b := _get_buffer_h(buffer)
 	_, dst_access, dst_stage := _buffer_get_usage_and_dst_access_stage_mask(b.usage)
 	_cmd_buffer_barrier(_get_cmd(), b.id, {.SHADER_WRITE, .SHADER_READ}, dst_access, {.COMPUTE_SHADER}, dst_stage)
 }
@@ -1005,7 +1005,7 @@ draw_mesh :: proc(
 		cmd_bind_index_buffer(ebo, loc = loc)
 	}
 
-	layout := cmd_bind_render_pipeline(pipeline, loc)
+	layout := cmd_bind_graphics_pipeline(pipeline, loc)
 
 	consts := _get_push_constants_data(trf, handles)
 	cmd_push_constants(layout, &consts)
@@ -1035,14 +1035,14 @@ _get_push_constants_data :: proc(
 		switch h in r {
 		case Uniform_Buffer:
 			b := ubo_get_buffer(h)
-			return b.index if has_buffer_h(b) else INVALID_HANDLE
+			return b.index if _has_buffer_h(b) else INVALID_HANDLE
 		case Storage_Buffer:
 			b := sbo_get_buffer(h)
-			return b.index if has_buffer_h(b) else INVALID_HANDLE
+			return b.index if _has_buffer_h(b) else INVALID_HANDLE
 		case Buffer:
-			return h.index if has_buffer_h(h) else INVALID_HANDLE
+			return h.index if _has_buffer_h(h) else INVALID_HANDLE
 		case Texture:
-			return h.index if has_texture_h(h) else INVALID_HANDLE
+			return h.index if _has_texture_h(h) else INVALID_HANDLE
 		}
 		return INVALID_HANDLE
 	}
@@ -1398,7 +1398,7 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 		case Texture_Data:
 			_destroy_texture(&resource)
 		case Texture:
-			t := acquire_texture_h(resource)
+			t := _acquire_texture_h(resource)
 			_destroy_texture(&t)
 		}
 	}
@@ -1592,7 +1592,7 @@ create_primitive_pipeline :: proc() -> Graphics_Pipeline {
 		depth = {enable = true, write_enable = true, compare_op = .Less},
 	}
 
-	return create_render_pipeline(create_info)
+	return create_graphics_pipeline(create_info)
 }
 
 create_primitive_square :: proc(size: f32 = 1) -> Mesh {
