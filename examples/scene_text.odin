@@ -33,10 +33,10 @@ text_scene_init :: proc(s: ^Scene) {
 
 	data.time_delta = 2
 
-	ve.camera_init(&data.camera)
 	data.camera.position = {0, 0, 2}
 	data.camera.target = {0, 0, 0}
 	data.camera.up = {0, 1, 0}
+	ve.camera_init(&data.camera)
 
 	data.font = ve.load_font(
 		ve.Create_Font_Info {
@@ -86,6 +86,8 @@ text_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 	ve.begin_draw()
+
+	ve.set_camera(data.camera)
 
 	ve.draw_text(&data.text, &data.camera)
 

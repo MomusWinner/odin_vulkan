@@ -24,14 +24,14 @@ FontVertex :: struct {
 }
 
 Text :: struct {
-	font:       ^Font,
-	text:       string,
-	size:       f32,
-	vbo:        Buffer,
-	vertices:   []FontVertex,
-	transform:  Gfx_Transform,
-	ubo_h:      Uniform_Buffer,
-	pipeline_h: Graphics_Pipeline,
+	font:      ^Font,
+	text:      string,
+	size:      f32,
+	vbo:       Buffer,
+	vertices:  []FontVertex,
+	transform: Gfx_Transform,
+	ubo:       Uniform_Buffer,
+	pipeline:  Graphics_Pipeline,
 }
 
 CharacterRegion :: struct {
@@ -199,12 +199,12 @@ create_text :: proc(
 	ubo_base_set_color(ubo_h, color)
 
 	text := Text {
-		text       = text,
-		font       = font,
-		ubo_h      = ubo_h,
-		pipeline_h = ctx.gfx.buildin.pipeline.text_h,
-		transform  = trf,
-		size       = size,
+		text      = text,
+		font      = font,
+		ubo       = ubo_h,
+		pipeline  = ctx.gfx.buildin.pipeline.text_h,
+		transform = trf,
+		size      = size,
 	}
 
 	vbo, vertices := _generate_text_mesh(&text)
@@ -226,7 +226,7 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 text_set_color :: proc(text: ^Text, color: vec4, loc := #caller_location) {
 	assert_not_nil(text, loc)
 
-	ubo_base_set_color(text.ubo_h, color)
+	ubo_base_set_color(text.ubo, color)
 }
 
 text_set_position :: proc(text: ^Text, position: vec3, loc := #caller_location) {
@@ -240,9 +240,9 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 
 	cmd_bind_vertex_buffer(text.vbo, 0)
 
-	layout := cmd_bind_graphics_pipeline(text.pipeline_h)
+	layout := cmd_bind_graphics_pipeline(text.pipeline)
 
-	const := _get_push_constants_data(&text.transform, {h0 = text.ubo_h})
+	const := _get_push_constants_data(&text.transform, {h0 = text.ubo})
 	cmd_push_constants(layout, &const)
 
 	cmd_draw(cast(u32)len(text.vertices))
