@@ -242,7 +242,7 @@ draw_text :: proc(text: ^Text, camera: ^Camera, loc := #caller_location) {
 
 	layout := cmd_bind_render_pipeline(text.pipeline_h)
 
-	const := _push_constants_to_data({camera = camera, trf = &text.transform, h0 = text.ubo_h})
+	const := _get_push_constants_data(&text.transform, {h0 = text.ubo_h})
 	cmd_push_constants(layout, &const)
 
 	cmd_draw(cast(u32)len(text.vertices))

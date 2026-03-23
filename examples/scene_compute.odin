@@ -90,7 +90,7 @@ compute_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.cmd_dispatch(data.comp_pipeline_h, b, {GROUP_COUNT, 1, 1}, {h0 = data.sbo_h, h1 = data.time_ubo_h})
+	ve.cmd_dispatch(data.comp_pipeline_h, b, {GROUP_COUNT, 1, 1}, handles = {h0 = data.sbo_h, h1 = data.time_ubo_h})
 
 	ve.begin_draw()
 	{

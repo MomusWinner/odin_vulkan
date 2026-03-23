@@ -37,7 +37,6 @@ text_scene_init :: proc(s: ^Scene) {
 	data.camera.position = {0, 0, 2}
 	data.camera.target = {0, 0, 0}
 	data.camera.up = {0, 1, 0}
-	data.camera.dirty = true
 
 	data.font = ve.load_font(
 		ve.Create_Font_Info {

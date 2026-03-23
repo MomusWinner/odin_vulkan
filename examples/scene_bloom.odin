@@ -187,34 +187,31 @@ hdr_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
+	ve.set_camera(data.camera)
 	ve.begin_render_target(&data.hdr_rt)
 	for &t in data.positions {
-		ve.draw_mesh(
-			&data.cube,
-			data.multilight_pipeline_h,
-			{camera = &data.camera, trf = &t, h0 = data.multilight_ubo_h},
-		)
+		ve.draw_mesh(&data.cube, data.multilight_pipeline_h, &t, {h0 = data.multilight_ubo_h})
 	}
 	for &l in data.light_boxes {
-		ve.draw_mesh(&data.cube, data.light_box_pipeline_h, {camera = &data.camera, trf = &l.trans, h0 = l.box_ubo})
+		ve.draw_mesh(&data.cube, data.light_box_pipeline_h, &l.trans, {h0 = l.box_ubo})
 	}
 	ve.end_render_target(&data.hdr_rt)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
 		ve.begin_render_target(&data.hdr_rt, {1})
-		ve.draw_mesh(&data.square, data.blur_hor_pipeline_h, {camera = &data.camera, h0 = data.blur_ubo_h})
+		ve.draw_mesh(&data.square, data.blur_hor_pipeline_h, handles = {h0 = data.blur_ubo_h})
 		ve.end_render_target(&data.hdr_rt)
 
 		// Vertical gaussian blur
 		ve.begin_render_target(&data.hdr_rt, {1})
-		ve.draw_mesh(&data.square, data.blur_ver_pipeline_h, {camera = &data.camera, h0 = data.blur_ubo_h})
+		ve.draw_mesh(&data.square, data.blur_ver_pipeline_h, handles = {h0 = data.blur_ubo_h})
 		ve.end_render_target(&data.hdr_rt)
 	}
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, data.hdr_pipeline_h, {h0 = data.hdr_ubo_h})
+		ve.draw_mesh(&data.square, data.hdr_pipeline_h, handles = {h0 = data.hdr_ubo_h})
 	}
 	ve.end_draw()
 

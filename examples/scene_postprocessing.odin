@@ -93,15 +93,17 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
 
+	ve.set_camera(data.camera)
+
 	ve.begin_render_target(&data.rt)
 	{
-		ve.draw_mesh(&data.model, data.pipeline_h, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, &data.transform, {h0 = data.base_ubo})
 	}
 	ve.end_render_target(&data.rt)
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, data.postproc_pipeline_h, {camera = &data.camera, h0 = data.postproc_ubo_h})
+		ve.draw_mesh(&data.square, data.postproc_pipeline_h, handles = {h0 = data.postproc_ubo_h})
 	}
 	ve.end_draw()
 

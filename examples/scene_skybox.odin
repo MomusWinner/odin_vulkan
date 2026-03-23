@@ -77,15 +77,13 @@ skybox_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_draw()
 	{
+
+		ve.set_camera(data.camera)
 		// Skybox
-		ve.draw_mesh(&data.cube, data.skybox_pipeline_h, {camera = &data.camera, h0 = data.cubemap_h})
+		ve.draw_mesh(&data.cube, data.skybox_pipeline_h, handles = {h0 = data.cubemap_h})
 
 		// Diamond
-		ve.draw_mesh(
-			&data.cube,
-			data.reflect_pipeline_h,
-			{camera = &data.camera, trf = &data.transform, h0 = data.cubemap_h},
-		)
+		ve.draw_mesh(&data.cube, data.reflect_pipeline_h, &data.transform, {h0 = data.cubemap_h})
 	}
 	ve.end_draw()
 

@@ -92,12 +92,8 @@ instancing_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw(clear_color = {.1, .1, .1, 1})
 	{
 		ve.cmd_bind_vertex_buffer(data.instance_vertex_buffer, 1)
-		ve.draw_mesh(
-			&data.cube,
-			data.pipeline_h,
-			{camera = &data.camera, trf = &data.transform},
-			instance_count = INSTANCE_COUNT,
-		)
+		ve.set_camera(data.camera)
+		ve.draw_mesh(&data.cube, data.pipeline_h, &data.transform, instance_count = INSTANCE_COUNT)
 	}
 	ve.end_draw()
 

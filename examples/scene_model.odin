@@ -70,7 +70,8 @@ model_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.model, data.pipeline_h, {trf = &data.transform, camera = &data.camera, h0 = data.ubo})
+		ve.set_camera(data.camera)
+		ve.draw_mesh(&data.model, data.pipeline_h, &data.transform, {h0 = data.ubo})
 	}
 	ve.end_draw()
 

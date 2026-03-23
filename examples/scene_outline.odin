@@ -87,20 +87,12 @@ outline_scene_draw :: proc(s: ^Scene) {
 	ve.begin_render()
 	// Begin ve.
 	// --------------------------------------------------------------------------------------------------------------------
+	ve.set_camera(data.camera)
 
 	ve.begin_draw()
 	{
-		consts := ve.Push_Constants {
-			camera = &data.camera,
-			trf    = &data.transform,
-			h0     = data.outline_ubo,
-		}
-		ve.draw_mesh(&data.model, data.pipeline_h, {camera = &data.camera, trf = &data.transform, h0 = data.base_ubo})
-		ve.draw_mesh(
-			&data.model,
-			data.outline_pipeline_h,
-			{camera = &data.camera, trf = &data.transform, h0 = data.outline_ubo},
-		)
+		ve.draw_mesh(&data.model, data.pipeline_h, &data.transform, {h0 = data.base_ubo})
+		ve.draw_mesh(&data.model, data.outline_pipeline_h, &data.transform, {h0 = data.outline_ubo})
 	}
 	ve.end_draw()
 

@@ -18,134 +18,102 @@ Camera_UBO :: struct {
 	position:   vec3,
 }
 
+Camera_Data :: struct {
+	view:       mat4,
+	projection: mat4,
+	position:   vec3,
+	_pad0:      f32,
+}
+
 Camera_Projection_Type :: enum {
 	Perspective,
 	Orthographic,
-	Custom,
 }
-
-Camera_Custom_Projection_Proc :: #type proc "c" (user_data: rawptr, camera: ^Camera, aspect: f32) -> mat4
 
 Camera :: struct {
-	type:        Camera_Projection_Type,
-	position:    vec3,
-	zoom:        vec3,
-	target:      vec3,
-	up:          vec3,
-	fov:         f32,
-	near:        f32,
-	far:         f32,
-	dirty:       bool,
-	last_aspect: f32,
-	custom:      struct {
-		projection: Camera_Custom_Projection_Proc,
-		user_data:  rawptr,
-	},
-	buffer_h:    Buffer, // Camera_UBO
+	type:     Camera_Projection_Type,
+	position: vec3,
+	zoom:     vec3,
+	target:   vec3,
+	up:       vec3,
+	fov:      f32,
+	near:     f32,
+	far:      f32,
+	buffer_h: Buffer, // Camera_UBO
 }
 
-// Sets a custom projection for the camera.
-// NOTE: The caller is responsible for cleaning up user_data.
-camera_init_custom :: proc(
-	camera: ^Camera,
-	user_data: rawptr,
-	projection: Camera_Custom_Projection_Proc,
-	loc := #caller_location,
-) {
-	assert_not_nil(camera, loc)
-	assert(projection != nil, loc = loc)
+set_camera_ex :: proc(camera: Camera, aspect: f32) {
+	ctx.gfx.frame.camera = _camera_get_buffer(camera, aspect)
+}
 
-	camera.fov = DEFAULT_FOV
-	camera.near = DEFAULT_NEAR
-	camera.far = DEFAULT_FAR
-	camera.zoom = 1
-	camera.type = .Custom
-	camera.dirty = true
+set_camera :: proc(camera: Camera) {
+	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
+	ctx.gfx.frame.camera = _camera_get_buffer(camera, aspect)
+}
 
-	camera.custom.projection = projection
-	camera.custom.user_data = user_data
+// Use the buffer filled by the Camera_UBO data for rendering
+set_camera_buffer :: proc(buffer: Buffer) {
+	ctx.gfx.frame.camera = buffer
 }
 
 camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective, loc := #caller_location) {
 	assert_not_nil(camera, loc)
-	assert(
-		type != .Custom,
-		"Cannot use camera_init for custom projection cameras. Use camera_init_custom instead.",
-		loc,
-	)
 
 	camera.fov = DEFAULT_FOV
 	camera.near = DEFAULT_NEAR
 	camera.far = DEFAULT_FAR
 	camera.zoom = 1
 	camera.type = type
-	camera.dirty = true
 
 	buffer := _create_buffer({.Uniform, .Host_Write}, size_of(Camera_UBO))
 
 	camera.buffer_h = store_buffer(buffer, loc)
 }
 
-camera_get_up :: proc(camera: ^Camera, loc := #caller_location) -> vec3 {
-	assert_not_nil(camera, loc)
-
+camera_get_up :: proc(camera: Camera, loc := #caller_location) -> vec3 {
 	return lin.normalize_vec3(camera.up)
 }
 
-camera_get_forward :: proc(camera: ^Camera, loc := #caller_location) -> vec3 {
-	assert_not_nil(camera, loc)
-
+camera_get_forward :: proc(camera: Camera, loc := #caller_location) -> vec3 {
 	return lin.normalize_vec3(camera.target - camera.position)
 }
 
-camera_get_right :: proc(camera: ^Camera, loc := #caller_location) -> vec3 {
-	assert_not_nil(camera, loc)
-
+camera_get_right :: proc(camera: Camera, loc := #caller_location) -> vec3 {
 	return lin.normalize(lin.cross(camera_get_forward(camera), camera_get_up(camera)))
 }
 
-camera_get_left :: proc(camera: ^Camera, loc := #caller_location) -> vec3 {
-	assert_not_nil(camera, loc)
-
+camera_get_left :: proc(camera: Camera, loc := #caller_location) -> vec3 {
 	return -camera_get_right(camera)
 }
 
 camera_move :: proc(camera: ^Camera, translation: vec3) {
 	camera.position += translation
 	camera.target += translation
-
-	camera.dirty = true
 }
 
-camera_set_position :: proc(camera: ^Camera, position: vec3) {
-	forward := camera_get_forward(camera)
+camera_set_position :: proc(camera: ^Camera, position: vec3, loc := #caller_location) {
+	assert_not_nil(camera, loc)
+
+	forward := camera_get_forward(camera^)
 	camera.position = position
 	camera.target = camera.position + forward
-
-	camera.dirty = true
 }
 
 camera_set_position_only :: proc(camera: ^Camera, position: vec3) {
 	camera.position = position
-
-	camera.dirty = true
 }
 
 camera_set_target_only :: proc(camera: ^Camera, position: vec3) {
 	camera.target = position
-
-	camera.dirty = true
 }
 
 camera_set_yaw :: proc(camera: ^Camera, angle: f32, loc := #caller_location) {
 	assert_not_nil(camera, loc)
 
 	target_position := camera.target - camera.position
-	trans := lin.mat4Rotate(camera_get_up(camera), angle)
+	trans := lin.mat4Rotate(camera_get_up(camera^), angle)
 	target := trans * vec4{target_position.x, target_position.y, target_position.z, 0}
 	camera.target = target.xyz
-
-	camera.dirty = true
 }
 
 // Rotates the camera around its right vector
@@ -153,43 +121,34 @@ camera_set_pitch :: proc(camera: ^Camera, angle: f32, loc := #caller_location) {
 	assert_not_nil(camera, loc)
 
 	target_position := camera.target - camera.position
-	trans := lin.mat4Rotate(camera_get_right(camera), angle)
+	trans := lin.mat4Rotate(camera_get_right(camera^), angle)
 	target := trans * vec4{target_position.x, target_position.y, target_position.z, 0}
 	camera.target = target.xyz
-
-	camera.dirty = true
 }
 
 camera_set_roll :: proc(camera: ^Camera, angle: f32, loc := #caller_location) {
 	assert_not_nil(camera, loc)
 
 	target_position := camera.target - camera.position
-	trans := lin.mat4Rotate(camera_get_forward(camera), angle)
+	trans := lin.mat4Rotate(camera_get_forward(camera^), angle)
 	target := trans * vec4{target_position.x, target_position.y, target_position.z, 0}
 	camera.target = target.xyz
-
-	camera.dirty = true
 }
 
 camera_set_zoom :: proc(camera: ^Camera, zoom: vec3, loc := #caller_location) {
 	assert_not_nil(camera, loc)
 
 	camera.zoom = zoom
-
-	camera.dirty = true
 }
 
-camera_get_view :: proc(camera: ^Camera, loc := #caller_location) -> mat4 {
-	assert_not_nil(camera, loc)
-
+camera_get_view :: proc(camera: Camera, loc := #caller_location) -> mat4 {
 	return(
 		lin.mat4LookAt(camera.position, camera.position + camera_get_forward(camera), camera_get_up(camera)) *
 		lin.mat4Scale(camera.zoom) \
 	)
 }
 
-camera_get_projection :: proc(camera: ^Camera, aspect: f32, loc := #caller_location) -> mat4 {
-	assert_not_nil(camera, loc)
+camera_get_projection :: proc(camera: Camera, aspect: f32, loc := #caller_location) -> mat4 {
 	projection: mat4
 
 	switch camera.type {
@@ -199,24 +158,13 @@ camera_get_projection :: proc(camera: ^Camera, aspect: f32, loc := #caller_locat
 		top := camera.fov / 2.0
 		right := top * aspect
 		projection = vemath.ortho(-right, right, -top, top, camera.near, camera.far)
-	case .Custom:
-		assert(camera.custom.projection != nil)
-		projection = camera.custom.projection(camera.custom.user_data, camera, aspect)
 	}
 
 	return projection
 }
 
 @(private)
-_camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location) -> Buffer {
-	assert_not_nil(camera, loc)
-
-	if !camera.dirty && aspect == camera.last_aspect {
-		return camera.buffer_h
-	}
-
-	camera.last_aspect = aspect
-
+_camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) -> Buffer {
 	view := camera_get_view(camera)
 	projection := camera_get_projection(camera, aspect)
 
@@ -227,7 +175,6 @@ _camera_get_buffer :: proc(camera: ^Camera, aspect: f32, loc := #caller_location
 		position   = camera.position,
 	}
 	_buffer_fill(buffer, &camera_ubo, size_of(Camera_UBO))
-	camera.dirty = false
 
 	return camera.buffer_h
 }
@@ -243,8 +190,8 @@ camera_update_simple_controller :: proc(
 
 	m_delta := get_mouse_delta()
 	if lin.length_vec2(m_delta) > 0.0001 {
-		up := camera_get_up(camera)
-		forward := camera_get_forward(camera)
+		up := camera_get_up(camera^)
+		forward := camera_get_forward(camera^)
 
 		{ 	// set camera pitch
 			angle: f32 = -m_delta.y * get_delta_time() * mouse_sens
@@ -274,15 +221,15 @@ camera_update_simple_controller :: proc(
 	}
 
 	if is_key_down(.W) {
-		camera_move(camera, camera_get_forward(camera) * speed)
+		camera_move(camera, camera_get_forward(camera^) * speed)
 	}
 	if is_key_down(.S) {
-		camera_move(camera, -camera_get_forward(camera) * speed)
+		camera_move(camera, -camera_get_forward(camera^) * speed)
 	}
 	if is_key_down(.A) {
-		camera_move(camera, camera_get_left(camera) * speed)
+		camera_move(camera, camera_get_left(camera^) * speed)
 	}
 	if is_key_down(.D) {
-		camera_move(camera, camera_get_right(camera) * speed)
+		camera_move(camera, camera_get_right(camera^) * speed)
 	}
 }

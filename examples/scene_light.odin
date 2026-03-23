@@ -145,7 +145,6 @@ light_scene_update :: proc(s: ^Scene) {
 	if ve.is_key_down(.Right) {
 		camera.position.x -= ve.get_delta_time() * speed
 	}
-	camera.dirty = true
 
 	ve.cursor_disable()
 	ve.camera_update_simple_controller(&data.camera)
@@ -174,22 +173,21 @@ light_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render_target(&data.shadow_map_rt)
 	{
-		ve.draw_mesh(&data.model, data.depth_only_pipeline, {camera = &data.l_camera, trf = &data.transform})
-		ve.draw_mesh(&data.ground, data.depth_only_pipeline, {camera = &data.l_camera, trf = &data.ground_transform})
+		ve.set_camera(data.l_camera)
+		ve.draw_mesh(&data.model, data.depth_only_pipeline, &data.transform)
+		ve.draw_mesh(&data.ground, data.depth_only_pipeline, &data.ground_transform)
 	}
 	ve.end_render_target(&data.shadow_map_rt)
 
 	ve.begin_draw({0.933, 0.525, 0.899, 1})
 	{
-		consts := ve.Push_Constants {
-			camera = &data.camera,
-			trf    = &data.transform,
-			h0     = data.light_ubo,
-			h1     = data.light_data,
+		ve.set_camera(data.camera)
+		handles := ve.Handles {
+			h0 = data.light_ubo,
+			h1 = data.light_data,
 		}
-		ve.draw_mesh(&data.model, data.light_pipeline_h, consts)
-		consts.trf = &data.ground_transform
-		ve.draw_mesh(&data.ground, data.light_pipeline_h, consts)
+		ve.draw_mesh(&data.model, data.light_pipeline_h, &data.transform, handles)
+		ve.draw_mesh(&data.ground, data.light_pipeline_h, &data.ground_transform, handles)
 	}
 	ve.end_draw()
 

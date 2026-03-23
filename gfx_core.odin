@@ -197,7 +197,7 @@ Surface_Info :: struct {
 Frame_Data :: struct {
 	status:            Frame_Status,
 	surface_info:      Surface_Info,
-	camera:            Camera,
+	camera:            Buffer,
 	swapchain_resized: bool,
 }
 
@@ -734,10 +734,16 @@ _cmd_bind_descriptor_set :: proc(
 	)
 }
 
-cmd_dispatch :: proc(pipeline: Compute_Pipeline, buffer: Buffer, group_count: uvec3, consts: Push_Constants) {
+cmd_dispatch :: proc(
+	pipeline: Compute_Pipeline,
+	buffer: Buffer,
+	group_count: uvec3,
+	trf: ^Gfx_Transform = nil,
+	handles: Handles = {},
+) {
 	layout := cmd_bind_compute_pipeline(pipeline)
 
-	consts_data := _push_constants_to_data(consts)
+	consts_data := _get_push_constants_data(trf, handles)
 	cmd_push_constants(layout, &consts_data, {.COMPUTE})
 
 	bindless_descriptor_set := get_descriptor_set_bindless()
@@ -985,7 +991,8 @@ destroy_mesh :: proc(mesh: ^Mesh, loc := #caller_location) {
 draw_mesh :: proc(
 	mesh: ^Mesh,
 	pipeline: Graphics_Pipeline,
-	consts: Push_Constants,
+	trf: ^Gfx_Transform = nil,
+	handles: Handles = {},
 	instance_count: u32 = 1,
 	loc := #caller_location,
 ) {
@@ -1000,7 +1007,7 @@ draw_mesh :: proc(
 
 	layout := cmd_bind_render_pipeline(pipeline, loc)
 
-	consts := _push_constants_to_data(consts)
+	consts := _get_push_constants_data(trf, handles)
 	cmd_push_constants(layout, &consts)
 
 	if has_ebo {
@@ -1011,13 +1018,17 @@ draw_mesh :: proc(
 }
 
 @(private)
-_push_constants_to_data :: proc(consts: Push_Constants, loc := #caller_location) -> Push_Constants_Data {
+_get_push_constants_data :: proc(
+	trf: ^Gfx_Transform,
+	handles: Handles,
+	loc := #caller_location,
+) -> Push_Constants_Data {
 	INVALID_HANDLE :: max(u32)
 
 	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
 	consts_data := Push_Constants_Data {
-		model  = trf_get_matrix(consts.trf) if consts.trf != nil else 1,
-		camera = _camera_get_buffer(consts.camera, aspect).index if consts.camera != nil else INVALID_TEXTURE_HANDLE.index,
+		model  = trf_get_matrix(trf) if trf != nil else 1,
+		camera = ctx.gfx.frame.camera.index,
 	}
 
 	resource_to_index :: proc(r: Resource_Handle) -> u32 {
@@ -1036,16 +1047,16 @@ _push_constants_to_data :: proc(consts: Push_Constants, loc := #caller_location)
 		return INVALID_HANDLE
 	}
 
-	consts_data.handles[0] = resource_to_index(consts.h0)
-	consts_data.handles[1] = resource_to_index(consts.h1)
-	consts_data.handles[2] = resource_to_index(consts.h2)
-	consts_data.handles[3] = resource_to_index(consts.h3)
-	consts_data.handles[4] = resource_to_index(consts.h4)
-	consts_data.handles[5] = resource_to_index(consts.h5)
-	consts_data.handles[6] = resource_to_index(consts.h6)
-	consts_data.handles[7] = resource_to_index(consts.h7)
-	consts_data.handles[8] = resource_to_index(consts.h8)
-	consts_data.handles[9] = resource_to_index(consts.h9)
+	consts_data.handles[0] = resource_to_index(handles.h0)
+	consts_data.handles[1] = resource_to_index(handles.h1)
+	consts_data.handles[2] = resource_to_index(handles.h2)
+	consts_data.handles[3] = resource_to_index(handles.h3)
+	consts_data.handles[4] = resource_to_index(handles.h4)
+	consts_data.handles[5] = resource_to_index(handles.h5)
+	consts_data.handles[6] = resource_to_index(handles.h6)
+	consts_data.handles[7] = resource_to_index(handles.h7)
+	consts_data.handles[8] = resource_to_index(handles.h8)
+	consts_data.handles[9] = resource_to_index(handles.h9)
 
 	return consts_data
 }

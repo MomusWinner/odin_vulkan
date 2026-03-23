@@ -192,19 +192,17 @@ Blending_Info :: struct {
 
 Blending_Infos :: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Blending_Info)
 
-Push_Constants :: struct {
-	trf:    ^Gfx_Transform,
-	camera: ^Camera,
-	h0:     Resource_Handle,
-	h1:     Resource_Handle,
-	h2:     Resource_Handle,
-	h3:     Resource_Handle,
-	h4:     Resource_Handle,
-	h5:     Resource_Handle,
-	h6:     Resource_Handle,
-	h7:     Resource_Handle,
-	h8:     Resource_Handle,
-	h9:     Resource_Handle,
+Handles :: struct {
+	h0: Resource_Handle,
+	h1: Resource_Handle,
+	h2: Resource_Handle,
+	h3: Resource_Handle,
+	h4: Resource_Handle,
+	h5: Resource_Handle,
+	h6: Resource_Handle,
+	h7: Resource_Handle,
+	h8: Resource_Handle,
+	h9: Resource_Handle,
 }
 
 Vertex_Input_Rate :: enum {
