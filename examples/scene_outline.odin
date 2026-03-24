@@ -54,8 +54,8 @@ outline_scene_init :: proc(s: ^Scene) {
 	ubo_outline_set_color(data.outline_ubo, {1, 0, 0, 1})
 	ubo_outline_set_outline_width(data.outline_ubo, 0.025)
 
-	data.base_ubo = ve.create_ubo_base()
-	ve.ubo_base_set_color(data.base_ubo, {1, 1, 1, 1})
+	data.base_ubo = create_ubo_base()
+	ubo_base_set_color(data.base_ubo, {1, 1, 1, 1})
 
 	// Setup Transform
 	ve.init_trf(&data.transform)

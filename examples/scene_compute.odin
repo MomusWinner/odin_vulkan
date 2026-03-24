@@ -61,7 +61,7 @@ compute_scene_init :: proc(s: ^Scene) {
 
 	data.sbo_h = create_sbo_particle({.Storage, .Vertex, .Host_Read, .Host_Write})
 	sbo_particle_set_particles(data.sbo_h, particles[:])
-	vbo := sbo_get_buffer(data.sbo_h)
+	vbo := ve.sbo_get_buffer(data.sbo_h)
 
 	data.mesh = ve.Mesh {
 		vbo          = vbo,
@@ -84,7 +84,7 @@ compute_scene_update :: proc(s: ^Scene) {
 compute_scene_draw :: proc(s: ^Scene) {
 	data := cast(^Compute_Scene_Data)s.data
 
-	b := sbo_get_buffer(data.sbo_h)
+	b := ve.sbo_get_buffer(data.sbo_h)
 
 	ve.begin_render()
 	// Begin ve.

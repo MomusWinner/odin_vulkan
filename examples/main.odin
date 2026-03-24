@@ -6,9 +6,32 @@ import "core:log"
 import "core:mem"
 import "core:time"
 
-current_scene: Scene
+vec2 :: ve.vec2
+vec3 :: ve.vec3
+vec4 :: ve.vec4
+ivec2 :: ve.ivec2
+ivec3 :: ve.ivec3
+ivec4 :: ve.ivec4
+mat4 :: ve.mat4
+
+
+@(buffer)
+Base_UBO :: struct {
+	color:   vec4,
+	texture: ve.Texture,
+}
+
+Scene :: struct {
+	data:    rawptr,
+	init:    proc(s: ^Scene),
+	update:  proc(s: ^Scene),
+	draw:    proc(s: ^Scene),
+	destroy: proc(s: ^Scene),
+}
 
 TARGET_FPS :: 120
+
+current_scene: Scene
 
 main :: proc() {
 	when ODIN_DEBUG {

@@ -45,13 +45,6 @@ gen:
 		-src-dir:./examples \
 		-ve-import:"ve .." \
 
-.PHONY: init-ve
-gen-ve:
-	@echo "Generating..."
-	odin run ./tools/shadertypegen/ -- \
-		-outpute-glsl-dir:buildin/shaders/ \
-		-src-dir:./
-
 .PHONY: clean
 clean:
 	rm -rf $(BIN_DIR)

@@ -55,8 +55,8 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	data.pipeline_h = create_default_pipeline()
 
 	// Setup Material
-	data.base_ubo = ve.create_ubo_base()
-	ve.ubo_base_set_texture(data.base_ubo, data.texture_h)
+	data.base_ubo = create_ubo_base()
+	ubo_base_set_texture(data.base_ubo, data.texture_h)
 
 	// Setup Transform
 	ve.init_trf(&data.transform)

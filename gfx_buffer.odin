@@ -64,6 +64,11 @@ buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: 
 
 // used for generated uniform and storage object structs
 
+ubo_get_buffer :: proc(h: Uniform_Buffer) -> Buffer {
+	b := get_uniform_buffer(h)
+	return b.buffer_h
+}
+
 store_uniform_buffer :: proc(ubo: Uniform_Buffer_Data) -> Uniform_Buffer {
 	return hm.insert(&ctx.gfx.buffer_manager.uniform_buffers, ubo)
 }
@@ -84,6 +89,11 @@ detstroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 	b := _acquire_buffer_h(uniform_buffer.buffer_h)
 	_destroy_buffer(&b)
 	return true
+}
+
+sbo_get_buffer :: proc(h: Storage_Buffer) -> Buffer {
+	b := get_storage_buffer(h)
+	return b.buffer_h
 }
 
 store_storage_buffer :: proc(sbo: Storage_Buffer_Data) -> Storage_Buffer {

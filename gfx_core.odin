@@ -159,12 +159,6 @@ Mesh :: struct {
 	index_count:  int,
 }
 
-@(buffer)
-Base_UBO :: struct {
-	color:   vec4,
-	texture: Texture,
-}
-
 Gfx_Transform :: struct {
 	using base: Transform,
 }

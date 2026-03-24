@@ -77,7 +77,6 @@ Pipeline_Surface_Info :: struct {
 }
 
 BINDLESS_HEADER_FILE :: #load("./buildin/shaders/bindless.h")
-GEN_TYPES_HEADER_FILE :: #load("./buildin/shaders/gen_types.h")
 
 _get_graphics_pipeline :: proc(handle: Graphics_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline_Data {
 	return _pipeline_manager_get_graphics_pipeline(ctx.gfx.pipeline_manager, handle, loc)
@@ -210,8 +209,6 @@ _shader_resolve_include :: proc "system" (
 		switch source[len(BUILDIN):] {
 		case "bindless.h":
 			data = BINDLESS_HEADER_FILE
-		case "gen_types.h":
-			data = GEN_TYPES_HEADER_FILE
 		case:
 			log.panicf("Couldn't find buildin include file \"%s\" in \"%s\"", file, requestingSource)
 		}
