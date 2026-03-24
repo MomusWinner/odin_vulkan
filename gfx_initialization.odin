@@ -39,13 +39,11 @@ _init_gfx :: proc(init_info: Graphics_Init_Info) {
 	_init_deffered_destructor()
 	_init_buffer_manager()
 	_init_bindless()
-	_init_buildin_resources()
 }
 
 @(private)
 _destroy_gfx :: proc() {
 	wait_render_completion()
-	_destroy_buildin()
 	_destroy_bindless()
 	_destroy_buffer_manager()
 	_destroy_deffered_destructor()
@@ -580,21 +578,6 @@ _get_required_physical_device_features :: proc(features: ^Physical_Device_Featur
 	features.features.features.fragmentStoresAndAtomics = true
 	features.features.features.vertexPipelineStoresAndAtomics = true
 	features.features.features.shaderInt64 = true
-}
-
-@(private = "file")
-_init_buildin_resources :: proc() {
-	ctx.gfx.buildin = new(Buildin_Resource)
-	ctx.gfx.buildin.unit_square = create_primitive_square()
-}
-
-@(private = "file")
-_destroy_buildin :: proc() {
-	// delete(ctx.gfx.buildin.square.materials)
-	// ctx.gfx.buildin.square.materials = {} // FIXME:
-	// destroy_model(&ctx.gfx.buildin.square)
-	destroy_mesh(&ctx.gfx.buildin.unit_square)
-	free(ctx.gfx.buildin)
 }
 
 _init_swapchaint_cfg :: proc() {

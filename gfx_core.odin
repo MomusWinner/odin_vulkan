@@ -25,14 +25,6 @@ Command_Buffer :: vk.CommandBuffer
 Pipeline_Stage_Flags :: vk.PipelineStageFlags
 Descriptor_Set :: vk.DescriptorSet
 
-Buildin_Resource :: struct {
-	pipeline:    struct {
-		// FIX:
-		default_h: Graphics_Pipeline,
-	},
-	unit_square: Mesh,
-}
-
 Vulkan_State :: struct {
 	enabled_layer_names:      [dynamic]cstring,
 	instance:                 vk.Instance,
@@ -88,7 +80,6 @@ Graphics :: struct {
 	descriptor_layout_manager: Descriptor_Layout_Manager,
 	bindless:                  ^Bindless,
 	deffered_destructor:       ^Deferred_Destructor,
-	buildin:                   ^Buildin_Resource,
 }
 
 Resource :: union {
