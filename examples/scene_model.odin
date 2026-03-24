@@ -12,7 +12,7 @@ Model_Scene_Data :: struct {
 	model:          ve.Mesh,
 	ubo:            ve.Uniform_Buffer,
 	pipeline_h:     ve.Graphics_Pipeline,
-	transform:      ve.Gfx_Transform,
+	transform:      ve.Transform,
 	camera:         ve.Camera,
 	model_rotation: f32,
 }
@@ -71,7 +71,7 @@ model_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw()
 	{
 		ve.set_camera(data.camera)
-		ve.draw_mesh(&data.model, data.pipeline_h, &data.transform, {h0 = data.ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.ubo})
 	}
 	ve.end_draw()
 

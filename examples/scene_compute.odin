@@ -32,7 +32,7 @@ Delta_Time_UBO :: struct {
 Compute_Scene_Data :: struct {
 	mesh:            ve.Mesh,
 	time_ubo_h:      ve.Uniform_Buffer,
-	transform:       ve.Gfx_Transform,
+	transform:       ve.Transform,
 	pipeline_h:      ve.Graphics_Pipeline,
 	sbo_h:           ve.Storage_Buffer,
 	comp_pipeline_h: ve.Compute_Pipeline,

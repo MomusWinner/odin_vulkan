@@ -19,7 +19,7 @@ Rock_Instance :: struct {
 Instancing_Scene_Data :: struct {
 	cube:                   ve.Mesh,
 	pipeline_h:             ve.Graphics_Pipeline,
-	transform:              ve.Gfx_Transform,
+	transform:              ve.Transform,
 	instance_vertex_buffer: ve.Buffer,
 	camera:                 ve.Camera,
 	model_rotation:         f32,
@@ -93,7 +93,7 @@ instancing_scene_draw :: proc(s: ^Scene) {
 	{
 		ve.cmd_bind_vertex_buffer(data.instance_vertex_buffer, 1)
 		ve.set_camera(data.camera)
-		ve.draw_mesh(&data.cube, data.pipeline_h, &data.transform, instance_count = INSTANCE_COUNT)
+		ve.draw_mesh(&data.cube, data.pipeline_h, ve.trf_get_matrix(data.transform), instance_count = INSTANCE_COUNT)
 	}
 	ve.end_draw()
 

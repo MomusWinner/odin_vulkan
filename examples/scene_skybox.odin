@@ -12,7 +12,7 @@ Skybox_Scene_Data :: struct {
 	skybox_pipeline_h:  ve.Graphics_Pipeline,
 	reflect_pipeline_h: ve.Graphics_Pipeline,
 	cube:               ve.Mesh,
-	transform:          ve.Gfx_Transform,
+	transform:          ve.Transform,
 	camera:             ve.Camera,
 }
 
@@ -83,7 +83,7 @@ skybox_scene_draw :: proc(s: ^Scene) {
 		ve.draw_mesh(&data.cube, data.skybox_pipeline_h, handles = {h0 = data.cubemap_h})
 
 		// Diamond
-		ve.draw_mesh(&data.cube, data.reflect_pipeline_h, &data.transform, {h0 = data.cubemap_h})
+		ve.draw_mesh(&data.cube, data.reflect_pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.cubemap_h})
 	}
 	ve.end_draw()
 

@@ -29,14 +29,14 @@ Light_UBO :: struct {
 Lighting_Scene_Data :: struct {
 	model:                ve.Mesh,
 	ground:               ve.Mesh,
-	transform:            ve.Gfx_Transform,
-	ground_transform:     ve.Gfx_Transform,
+	transform:            ve.Transform,
+	ground_transform:     ve.Transform,
 	camera:               ve.Camera,
 	l_camera:             ve.Camera,
 	shadow_map_rt:        ve.Render_Target,
 	shadow_map_view_mesh: ve.Mesh,
 	shadow_map_texture:   ve.Texture,
-	square_trf:           ve.Gfx_Transform,
+	square_trf:           ve.Transform,
 	light_pipeline_h:     ve.Graphics_Pipeline,
 	light_ubo:            ve.Uniform_Buffer,
 	surf_draw_ubo:        ve.Uniform_Buffer,
@@ -174,8 +174,8 @@ light_scene_draw :: proc(s: ^Scene) {
 	ve.begin_render_target(&data.shadow_map_rt)
 	{
 		ve.set_camera(data.l_camera)
-		ve.draw_mesh(&data.model, data.depth_only_pipeline, &data.transform)
-		ve.draw_mesh(&data.ground, data.depth_only_pipeline, &data.ground_transform)
+		ve.draw_mesh(&data.model, data.depth_only_pipeline, ve.trf_get_matrix(data.transform))
+		ve.draw_mesh(&data.ground, data.depth_only_pipeline, ve.trf_get_matrix(data.transform))
 	}
 	ve.end_render_target(&data.shadow_map_rt)
 
@@ -186,8 +186,8 @@ light_scene_draw :: proc(s: ^Scene) {
 			h0 = data.light_ubo,
 			h1 = data.light_data,
 		}
-		ve.draw_mesh(&data.model, data.light_pipeline_h, &data.transform, handles)
-		ve.draw_mesh(&data.ground, data.light_pipeline_h, &data.ground_transform, handles)
+		ve.draw_mesh(&data.model, data.light_pipeline_h, ve.trf_get_matrix(data.transform), handles)
+		ve.draw_mesh(&data.ground, data.light_pipeline_h, ve.trf_get_matrix(data.ground_transform), handles)
 	}
 	ve.end_draw()
 

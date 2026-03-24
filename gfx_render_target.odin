@@ -43,7 +43,7 @@ Render_Target_Readable_Depth_Attachment :: struct {
 
 Render_Target :: struct {
 	width, height:     int,
-	transform:         Gfx_Transform,
+	transform:         Transform,
 	color_attachments: Render_Target_Color_Attachments,
 	depth_attachment:  Maybe(Render_Target_Depth_Attachment),
 	sample_count:      Sample_Count_Flag,

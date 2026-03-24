@@ -41,7 +41,7 @@ Light_Box_UBO :: struct {
 }
 
 Light_Box :: struct {
-	trans:   ve.Gfx_Transform,
+	trf:     ve.Transform,
 	box_ubo: ve.Uniform_Buffer,
 }
 
@@ -61,11 +61,11 @@ HDR_Scene_Data :: struct {
 	hdr_pipeline_h:        ve.Graphics_Pipeline,
 	light_box_pipeline_h:  ve.Graphics_Pipeline,
 	//
-	transform:             ve.Gfx_Transform,
+	transform:             ve.Transform,
 	camera:                ve.Camera,
 	hdr_rt:                ve.Render_Target,
 	model_rotation:        f32,
-	positions:             [16]ve.Gfx_Transform,
+	positions:             [16]ve.Transform,
 	light_boxes:           [4]Light_Box,
 }
 
@@ -148,9 +148,9 @@ hdr_scene_init :: proc(s: ^Scene) {
 	data.light_box_pipeline_h = create_light_box_pipeline()
 	for i in 0 ..< 4 {
 		light: Light_Box
-		ve.init_trf(&light.trans)
-		ve.trf_set_position(&light.trans, lights[i].position)
-		ve.trf_set_scale(&light.trans, 0.3)
+		ve.init_trf(&light.trf)
+		ve.trf_set_position(&light.trf, lights[i].position)
+		ve.trf_set_scale(&light.trf, 0.3)
 		light.box_ubo = create_ubo_light_box()
 		ubo_light_box_set_color(light.box_ubo, lights[i].color)
 		data.light_boxes[i] = light
@@ -190,10 +190,15 @@ hdr_scene_draw :: proc(s: ^Scene) {
 	ve.set_camera(data.camera)
 	ve.begin_render_target(&data.hdr_rt)
 	for &t in data.positions {
-		ve.draw_mesh(&data.cube, data.multilight_pipeline_h, &t, {h0 = data.multilight_ubo_h})
+		ve.draw_mesh(
+			&data.cube,
+			data.multilight_pipeline_h,
+			ve.trf_get_matrix(data.transform),
+			{h0 = data.multilight_ubo_h},
+		)
 	}
 	for &l in data.light_boxes {
-		ve.draw_mesh(&data.cube, data.light_box_pipeline_h, &l.trans, {h0 = l.box_ubo})
+		ve.draw_mesh(&data.cube, data.light_box_pipeline_h, ve.trf_get_matrix(l.trf), {h0 = l.box_ubo})
 	}
 	ve.end_render_target(&data.hdr_rt)
 

@@ -30,7 +30,7 @@ Text :: struct {
 	size: f32,
 	text: string,
 	mesh: ve.Mesh,
-	trf:  ve.Gfx_Transform,
+	trf:  ve.Transform,
 	ubo:  ve.Uniform_Buffer,
 }
 
@@ -130,7 +130,7 @@ create_text :: proc(
 	size: f32,
 	loc := #caller_location,
 ) -> Text {
-	trf := ve.Gfx_Transform{}
+	trf := ve.Transform{}
 	ve.init_trf(&trf)
 	ve.trf_set_position(&trf, position)
 	ve.trf_set_scale(&trf, vec3{1, 1, 1})
@@ -171,7 +171,7 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 }
 
 text_draw :: proc(text: ^Text, pipeline: ve.Graphics_Pipeline) {
-	ve.draw_mesh(&text.mesh, pipeline, &text.trf, ve.Handles{h0 = text.ubo})
+	ve.draw_mesh(&text.mesh, pipeline, ve.trf_get_matrix(text.trf), ve.Handles{h0 = text.ubo})
 }
 
 text_shader_attribute :: proc() -> ve.Vertex_Input_Description {

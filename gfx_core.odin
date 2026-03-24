@@ -156,10 +156,6 @@ Mesh :: struct {
 	index_count:  int,
 }
 
-Gfx_Transform :: struct {
-	using base: Transform,
-}
-
 // FRAME
 
 Frame_Status :: enum {
@@ -727,7 +723,7 @@ cmd_dispatch :: proc(
 	pipeline: Compute_Pipeline,
 	buffer: Buffer,
 	group_count: uvec3,
-	trf: ^Gfx_Transform = nil,
+	trf: Maybe(mat4) = nil,
 	handles: Handles = {},
 ) {
 	layout := cmd_bind_compute_pipeline(pipeline)
@@ -980,7 +976,7 @@ destroy_mesh :: proc(mesh: ^Mesh, loc := #caller_location) {
 draw_mesh :: proc(
 	mesh: ^Mesh,
 	pipeline: Graphics_Pipeline,
-	trf: ^Gfx_Transform = nil,
+	trf: Maybe(mat4) = nil,
 	handles: Handles = {},
 	instance_count: u32 = 1,
 	loc := #caller_location,
@@ -1007,17 +1003,16 @@ draw_mesh :: proc(
 }
 
 @(private)
-_get_push_constants_data :: proc(
-	trf: ^Gfx_Transform,
-	handles: Handles,
-	loc := #caller_location,
-) -> Push_Constants_Data {
+_get_push_constants_data :: proc(trf: Maybe(mat4), handles: Handles, loc := #caller_location) -> Push_Constants_Data {
 	INVALID_HANDLE :: max(u32)
 
-	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
 	consts_data := Push_Constants_Data {
-		model  = trf_get_matrix(trf) if trf != nil else 1,
 		camera = ctx.gfx.frame.camera.index,
+	}
+
+	trf, has_trf := trf.?
+	if has_trf {
+		consts_data.model = trf
 	}
 
 	resource_to_index :: proc(r: Resource_Handle) -> u32 {

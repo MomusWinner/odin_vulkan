@@ -21,7 +21,7 @@ Postprocessing_Scene_Data :: struct {
 	base_ubo:            ve.Uniform_Buffer,
 	texture_h:           ve.Texture,
 	pipeline_h:          ve.Graphics_Pipeline,
-	transform:           ve.Gfx_Transform,
+	transform:           ve.Transform,
 	camera:              ve.Camera,
 	rt:                  ve.Render_Target,
 	postproc_ubo_h:      ve.Uniform_Buffer,
@@ -97,7 +97,7 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render_target(&data.rt)
 	{
-		ve.draw_mesh(&data.model, data.pipeline_h, &data.transform, {h0 = data.base_ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.base_ubo})
 	}
 	ve.end_render_target(&data.rt)
 

@@ -20,7 +20,7 @@ Outline_Scene_Data :: struct {
 	base_ubo:           ve.Uniform_Buffer,
 	pipeline_h:         ve.Graphics_Pipeline,
 	outline_pipeline_h: ve.Graphics_Pipeline,
-	transform:          ve.Gfx_Transform,
+	transform:          ve.Transform,
 	camera:             ve.Camera,
 	model_rotation:     f32,
 }
@@ -91,8 +91,8 @@ outline_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.model, data.pipeline_h, &data.transform, {h0 = data.base_ubo})
-		ve.draw_mesh(&data.model, data.outline_pipeline_h, &data.transform, {h0 = data.outline_ubo})
+		ve.draw_mesh(&data.model, data.pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.base_ubo})
+		ve.draw_mesh(&data.model, data.outline_pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.outline_ubo})
 	}
 	ve.end_draw()
 
