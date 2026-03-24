@@ -15,14 +15,13 @@ Outline_UBO :: struct {
 }
 
 Outline_Scene_Data :: struct {
-	model:              ve.Mesh,
-	outline_ubo:        ve.Uniform_Buffer,
-	base_ubo:           ve.Uniform_Buffer,
-	pipeline_h:         ve.Graphics_Pipeline,
-	outline_pipeline_h: ve.Graphics_Pipeline,
-	transform:          ve.Transform,
-	camera:             ve.Camera,
-	model_rotation:     f32,
+	camera:           ve.Camera,
+	mesh:             ve.Mesh,
+	model_ubo:        ve.Uniform_Buffer,
+	trf:              ve.Transform,
+	pipeline:         ve.Graphics_Pipeline,
+	outline_pipeline: ve.Graphics_Pipeline,
+	outline_ubo:      ve.Uniform_Buffer,
 }
 
 create_outline_scene :: proc() -> Scene {
@@ -35,134 +34,65 @@ create_outline_scene :: proc() -> Scene {
 }
 
 outline_scene_init :: proc(s: ^Scene) {
-	data := new(Outline_Scene_Data)
+	d := new(Outline_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera {
-		position = {0, 0, 2},
-		target   = {0, 0, 0},
-		up       = {0, 1, 0},
-	}
-	ve.camera_init(&data.camera)
+	ve.camera_init(&d.camera)
+	d.camera.position = {0, 0, 2}
 
-	data.model = ve.load_meshes("./examples/assets/Suzanne.obj", context.temp_allocator)[0]
+	d.mesh = ve.load_meshes("./examples/assets/Suzanne.obj", context.temp_allocator)[0]
 
-	data.pipeline_h = create_outline_model_pipeline()
-	data.outline_pipeline_h = create_outline_pipeline()
+	d.pipeline = create_outline_model_pipeline()
+	d.outline_pipeline = create_outline_pipeline()
 
-	data.outline_ubo = create_ubo_outline()
-	ubo_outline_set_color(data.outline_ubo, {1, 0, 0, 1})
-	ubo_outline_set_outline_width(data.outline_ubo, 0.025)
+	d.outline_ubo = create_ubo_outline()
+	ubo_outline_set_color(d.outline_ubo, {1, 0, 0, 1})
+	ubo_outline_set_outline_width(d.outline_ubo, 0.025)
 
-	data.base_ubo = create_ubo_base()
-	ubo_base_set_color(data.base_ubo, {1, 1, 1, 1})
+	d.model_ubo = create_ubo_base()
+	ubo_base_set_color(d.model_ubo, {1, 1, 1, 1})
 
-	// Setup Transform
-	ve.init_trf(&data.transform)
-	ve.trf_set_position(&data.transform, {0, 0, -1})
-	ve.trf_set_scale(&data.transform, 0.5)
+	ve.init_trf(&d.trf)
+	ve.trf_set_position(&d.trf, {0, 0, -1})
+	ve.trf_set_scale(&d.trf, 0.5)
 
-	s.data = data
+	s.data = d
 }
 
 outline_scene_update :: proc(s: ^Scene) {
-	data := cast(^Outline_Scene_Data)s.data
+	d := cast(^Outline_Scene_Data)s.data
 
-	width := ubo_outline_get_outline_width(data.outline_ubo)
+	width := ubo_outline_get_outline_width(d.outline_ubo)
 	speed: f32 = 0.1
 
 	if ve.is_key_down(.W) {
-		ubo_outline_set_outline_width(data.outline_ubo, width + speed * cast(f32)ve.get_delta_time())
+		ubo_outline_set_outline_width(d.outline_ubo, width + speed * cast(f32)ve.get_delta_time())
 	}
 	if ve.is_key_down(.S) {
 		new_width := width - speed * cast(f32)ve.get_delta_time()
 		if new_width < 0 do new_width = 0
-		ubo_outline_set_outline_width(data.outline_ubo, new_width)
+		ubo_outline_set_outline_width(d.outline_ubo, new_width)
 	}
 }
 
 outline_scene_draw :: proc(s: ^Scene) {
-	data := cast(^Outline_Scene_Data)s.data
+	d := cast(^Outline_Scene_Data)s.data
 
 	ve.begin_render()
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
-	ve.set_camera(data.camera)
+
+	ve.set_camera(d.camera)
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.model, data.pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.base_ubo})
-		ve.draw_mesh(&data.model, data.outline_pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.outline_ubo})
+		ve.draw_mesh(&d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.model_ubo})
+		ve.draw_mesh(&d.mesh, d.outline_pipeline, ve.trf_get_matrix(d.trf), {h0 = d.outline_ubo})
 	}
 	ve.end_draw()
 
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
 	ve.end_render()
 }
 
 outline_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^Outline_Scene_Data)s.data
-
-	ve.destroy_mesh(&data.model)
-
-	free(data)
-}
-
-create_outline_model_pipeline :: proc() -> ve.Graphics_Pipeline {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/default.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/default.frag"},
-	)
-
-	stencil_state := ve.Stencil_Op_State {
-		failOp      = .Replace,
-		passOp      = .Replace,
-		depthFailOp = .Replace,
-		compareOp   = .Always,
-		compareMask = 0xff,
-		writeMask   = 0xff,
-		reference   = 1,
-	}
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-	create_info.stencil = {
-		enable = true,
-		front  = stencil_state,
-		back   = stencil_state,
-	}
-
-	return ve.create_graphics_pipeline(create_info)
-}
-
-create_outline_pipeline :: proc() -> ve.Graphics_Pipeline {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/outline.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/outline.frag"},
-	)
-
-	stencil_state := ve.Stencil_Op_State {
-		failOp      = .Keep,
-		passOp      = .Replace,
-		depthFailOp = .Keep,
-		compareOp   = .Not_Equal,
-		compareMask = 0xff,
-		writeMask   = 0xff,
-		reference   = 1,
-	}
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-	create_info.stencil = {
-		enable = true,
-		front  = stencil_state,
-		back   = stencil_state,
-	}
-
-	return ve.create_graphics_pipeline(create_info)
+	d := cast(^Outline_Scene_Data)s.data
+	ve.destroy_mesh(&d.mesh)
+	free(d)
 }

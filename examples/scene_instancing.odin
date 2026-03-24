@@ -17,12 +17,12 @@ Rock_Instance :: struct {
 }
 
 Instancing_Scene_Data :: struct {
-	cube:                   ve.Mesh,
-	pipeline_h:             ve.Graphics_Pipeline,
-	transform:              ve.Transform,
-	instance_vertex_buffer: ve.Buffer,
-	camera:                 ve.Camera,
-	model_rotation:         f32,
+	camera:       ve.Camera,
+	cube:         ve.Mesh,
+	trf:          ve.Transform,
+	pipeline:     ve.Graphics_Pipeline,
+	instance_vbo: ve.Buffer,
+	rotation:     f32,
 }
 
 create_instancing_scene :: proc() -> Scene {
@@ -35,26 +35,21 @@ create_instancing_scene :: proc() -> Scene {
 }
 
 instancing_scene_init :: proc(s: ^Scene) {
-	data := new(Instancing_Scene_Data)
+	d := new(Instancing_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera {
-		position = {0, 0, 2},
-		target   = {0, 0, 0},
-		up       = {0, 1, 0},
-	}
-	ve.camera_init(&data.camera)
+	ve.set_cursor_mode(.Disabled)
 
-	data.cube = ve.create_primitive_cube()
-	data.pipeline_h = create_instancing_pipeline()
+	ve.camera_init(&d.camera)
+	d.camera.position = {0, 0, 2}
 
-	// Setup Transform
-	ve.init_trf(&data.transform)
-	ve.trf_set_position(&data.transform, {0, -5, -5})
-	ve.trf_set_scale(&data.transform, {0.2, 0.2, 0.2})
+	d.cube = ve.create_primitive_cube()
+	d.pipeline = create_instancing_pipeline()
 
-	rocks := make([]Rock_Instance, INSTANCE_COUNT)
-	defer delete(rocks)
+	ve.init_trf(&d.trf)
+	ve.trf_set_position(&d.trf, {0, -5, -5})
+	ve.trf_set_scale(&d.trf, {0.2, 0.2, 0.2})
+
+	rocks := make([]Rock_Instance, INSTANCE_COUNT, context.temp_allocator)
 	for i in 0 ..< INSTANCE_COUNT {
 		rho := rand.float32_range(30, 200)
 		theta := 2 * math.PI * rand.float32()
@@ -68,99 +63,40 @@ instancing_scene_init :: proc(s: ^Scene) {
 		}
 	}
 
-	data.instance_vertex_buffer = ve.create_buffer({.Vertex}, size_of(Rock_Instance) * INSTANCE_COUNT, raw_data(rocks))
+	d.instance_vbo = ve.create_buffer({.Vertex}, size_of(Rock_Instance) * INSTANCE_COUNT, raw_data(rocks))
 
-	ve.cursor_disable()
-
-	s.data = data
+	s.data = d
 }
 
 instancing_scene_update :: proc(s: ^Scene) {
-	data := cast(^Instancing_Scene_Data)s.data
-	data.model_rotation += ve.get_delta_time() * 0.1
-	ve.trf_rotate(&data.transform, {0, 1, 0}, data.model_rotation)
-	ve.camera_update_simple_controller(&data.camera)
+	d := cast(^Instancing_Scene_Data)s.data
+	d.rotation += ve.get_delta_time() * 0.1
+	ve.trf_rotate(&d.trf, {0, 1, 0}, d.rotation)
+	ve.camera_update_simple_controller(&d.camera)
 }
 
 instancing_scene_draw :: proc(s: ^Scene) {
-	data := cast(^Instancing_Scene_Data)s.data
+	d := cast(^Instancing_Scene_Data)s.data
 
 	ve.begin_render()
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
+
+	ve.set_camera(d.camera)
 
 	ve.begin_draw(clear_color = {.1, .1, .1, 1})
 	{
-		ve.cmd_bind_vertex_buffer(data.instance_vertex_buffer, 1)
-		ve.set_camera(data.camera)
-		ve.draw_mesh(&data.cube, data.pipeline_h, ve.trf_get_matrix(data.transform), instance_count = INSTANCE_COUNT)
+		ve.cmd_bind_vertex_buffer(d.instance_vbo, 1)
+		ve.draw_mesh(&d.cube, d.pipeline, ve.trf_get_matrix(d.trf), instance_count = INSTANCE_COUNT)
 	}
 	ve.end_draw()
 
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
 	ve.end_render()
 }
 
 instancing_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^Instancing_Scene_Data)s.data
+	d := cast(^Instancing_Scene_Data)s.data
 
-	ve.destroy_buffer(data.instance_vertex_buffer)
-	ve.destroy_mesh(&data.cube)
+	ve.destroy_buffer(d.instance_vbo)
+	ve.destroy_mesh(&d.cube)
 
-	free(data)
-}
-
-create_instancing_pipeline :: proc() -> ve.Graphics_Pipeline {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, ve.create_vertex_input_description())
-	sm.append(&vert_descriptions, _create_instance_vertex_description())
-
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/instancing.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/instancing.frag"},
-	)
-
-	create_info := ve.Create_Pipeline_Info {
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		topology = .Triangle_List,
-		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {.Back}, front_face = .Counter_Clockwise},
-		depth = {enable = true, write_enable = true, compare_op = .Less},
-	}
-
-	return ve.create_graphics_pipeline(create_info)
-}
-
-@(private = "file")
-_create_instance_vertex_description :: proc() -> ve.Vertex_Input_Description {
-	attribute_descriptions := ve.Vertex_Input_Attribute_Descriptions{}
-	sm.push_back_elems(
-		&attribute_descriptions,
-		ve.Vertex_Input_Attribute_Description {
-			location = 4,
-			format = .RGB_f32,
-			offset = cast(u32)offset_of(Rock_Instance, position),
-		},
-		ve.Vertex_Input_Attribute_Description {
-			location = 5,
-			format = .RGB_f32,
-			offset = cast(u32)offset_of(Rock_Instance, color),
-		},
-		ve.Vertex_Input_Attribute_Description {
-			location = 6,
-			format = .R_f32,
-			offset = cast(u32)offset_of(Rock_Instance, scale),
-		},
-	)
-
-	return ve.Vertex_Input_Description {
-		binding = 1,
-		stride = size_of(Rock_Instance),
-		input_rate = .Instance,
-		attributes = attribute_descriptions,
-	}
+	free(d)
 }

@@ -7,10 +7,8 @@ import "core:math"
 import "core:math/rand"
 import "core:time"
 
-// This example implment tone mapping.
-// Record color to HDR(hight dynamic range) and convewret it in LDR(low dynamic range).
-// floating point framebuffer
-// Additional information: https://learnopengl.com/Advanced-Lighting/HDR
+CUBE_COUNT :: 16
+LIGHT_COUNT :: 4
 
 Light :: struct {
 	color:    vec3,
@@ -19,7 +17,7 @@ Light :: struct {
 
 @(buffer)
 Multilight_UBO :: struct {
-	lights: [4]Light,
+	lights: [LIGHT_COUNT]Light,
 	color:  vec3,
 }
 
@@ -36,201 +34,172 @@ Gaussian_Blur_UBO :: struct {
 }
 
 @(buffer)
-Light_Box_UBO :: struct {
+Light_Source_UBO :: struct {
 	color: vec3,
 }
 
-Light_Box :: struct {
+Light_Source :: struct {
 	trf:     ve.Transform,
 	box_ubo: ve.Uniform_Buffer,
 }
 
-HDR_Scene_Data :: struct {
-	texture_h:             ve.Texture,
+Bloom_Scene_Data :: struct {
+	camera:                ve.Camera,
 	square:                ve.Mesh,
 	cube:                  ve.Mesh,
+	cube_trfs:             [CUBE_COUNT]ve.Transform,
+	light_sources:         [LIGHT_COUNT]Light_Source,
+	rt:                    ve.Render_Target,
 	// Buffers
-	light_box_ubo_h:       ve.Uniform_Buffer,
-	multilight_ubo_h:      ve.Uniform_Buffer,
-	hdr_ubo_h:             ve.Uniform_Buffer,
-	blur_ubo_h:            ve.Uniform_Buffer,
+	light_box_ubo:         ve.Uniform_Buffer,
+	multilight_ubo:        ve.Uniform_Buffer,
+	hdr_ubo:               ve.Uniform_Buffer,
+	blur_ubo:              ve.Uniform_Buffer,
 	// Pipelines
-	blur_hor_pipeline_h:   ve.Graphics_Pipeline,
-	blur_ver_pipeline_h:   ve.Graphics_Pipeline,
-	multilight_pipeline_h: ve.Graphics_Pipeline,
-	hdr_pipeline_h:        ve.Graphics_Pipeline,
-	light_box_pipeline_h:  ve.Graphics_Pipeline,
-	//
-	transform:             ve.Transform,
-	camera:                ve.Camera,
-	hdr_rt:                ve.Render_Target,
-	model_rotation:        f32,
-	positions:             [16]ve.Transform,
-	light_boxes:           [4]Light_Box,
+	blur_hor_pipeline:     ve.Graphics_Pipeline,
+	blur_ver_pipeline:     ve.Graphics_Pipeline,
+	multilight_pipeline:   ve.Graphics_Pipeline,
+	hdr_pipeline:          ve.Graphics_Pipeline,
+	light_source_pipeline: ve.Graphics_Pipeline,
 }
 
-create_hdr_scene :: proc() -> Scene {
-	return Scene{init = hdr_scene_init, update = hdr_scene_update, draw = hdr_scene_draw, destroy = hdr_scene_destroy}
+create_bloom_scene :: proc() -> Scene {
+	return Scene {
+		init = bloom_scene_init,
+		update = bloom_scene_update,
+		draw = bloom_scene_draw,
+		destroy = bloom_scene_destroy,
+	}
 }
 
-hdr_scene_init :: proc(s: ^Scene) {
-	data := new(HDR_Scene_Data)
+bloom_scene_init :: proc(s: ^Scene) {
+	d := new(Bloom_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera {
-		position = {0, 0, 2},
-		target   = {0, 0, 0},
-		up       = {0, 1, 0},
+	ve.set_cursor_mode(.Disabled)
+
+	ve.camera_init(&d.camera)
+	d.camera.position = {0, 0, 2}
+
+	ve.init_render_target(&d.rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
+	hdr_color_attachmetn := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
+	bright_color_attachmetn := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
+	ve.render_target_add_depth_attachment(&d.rt)
+
+	d.square = ve.create_primitive_square()
+	d.cube = ve.create_primitive_cube()
+
+
+	d.hdr_pipeline = create_hdr_pipeline()
+	d.hdr_ubo = create_ubo_hdr()
+	ubo_hdr_set_scene(d.hdr_ubo, hdr_color_attachmetn)
+	ubo_hdr_set_bloom(d.hdr_ubo, bright_color_attachmetn)
+	ubo_hdr_set_exposure(d.hdr_ubo, 0.5)
+
+	d.blur_hor_pipeline = create_gaussian_blur_pipeline(true)
+	d.blur_ver_pipeline = create_gaussian_blur_pipeline(false)
+
+	d.blur_ubo = create_ubo_gaussian_blur()
+	ubo_gaussian_blur_set_blur(d.blur_ubo, bright_color_attachmetn)
+
+	d.multilight_pipeline = create_multilight_pipeline()
+	d.multilight_ubo = create_ubo_multilight()
+	ubo_multilight_set_color(d.multilight_ubo, {0.5, 0.5, 0.5})
+
+	Z :: -10
+	lights: [LIGHT_COUNT]Light = {
+		Light{position = {4.8, 0, Z}, color = ({1, 0, 0} * 5)},
+		Light{position = {1.6, 0, Z}, color = ({0, 1, 0} * 5)},
+		Light{position = {-1.6, 0, Z}, color = ({0, 0.2, 1} * 5)},
+		Light{position = {-4.8, 0, Z}, color = ({1, 1, 0} * 5)},
 	}
-	ve.camera_init(&data.camera)
+	ubo_multilight_set_lights(d.multilight_ubo, lights[:])
 
-	ve.init_render_target(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
-	hdr_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGBA_norm_u16)
-	bright_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGBA_norm_u16)
-	ve.render_target_add_depth_attachment(&data.hdr_rt)
-
-	// Load Model
-	data.square = ve.create_primitive_square()
-	data.cube = ve.create_primitive_cube()
-
-	data.hdr_pipeline_h = create_hdr_pipeline()
-
-	// Setup Material
-	data.hdr_ubo_h = create_ubo_hdr()
-	ubo_hdr_set_scene(data.hdr_ubo_h, hdr_color_attachmetn)
-	ubo_hdr_set_bloom(data.hdr_ubo_h, bright_color_attachmetn)
-	ubo_hdr_set_exposure(data.hdr_ubo_h, 0.5)
-
-	data.blur_hor_pipeline_h = create_gaussian_blur_pipeline(true)
-	data.blur_ver_pipeline_h = create_gaussian_blur_pipeline(false)
-
-	data.blur_ubo_h = create_ubo_gaussian_blur()
-	ubo_gaussian_blur_set_blur(data.blur_ubo_h, bright_color_attachmetn)
-
-	data.multilight_pipeline_h = create_multilight_pipeline()
-	data.multilight_ubo_h = create_ubo_multilight()
-
-	ubo_multilight_set_color(data.multilight_ubo_h, {0.5, 0.5, 0.5})
-	lights: [4]Light = {}
-	lights[0] = Light {
-		position = {0, 0, -3},
-		color    = ({1, 0, 0} * 5),
-	}
-	lights[1] = Light {
-		position = {0, 0, -6},
-		color    = ({0, 1, 0} * 2),
-	}
-	lights[2] = Light {
-		position = {0, 0, -9},
-		color    = ({0, 0.2, 1} * 5),
-	}
-	lights[3] = Light {
-		position = {0, 0, -12},
-		color    = ({1, 1, 0} * 5),
-	}
-	ubo_multilight_set_lights(data.multilight_ubo_h, lights[:])
-
-	// Setup Transform
-	ve.init_trf(&data.transform)
-	ve.trf_set_position(&data.transform, {0, -0.5, -1})
-	ve.trf_set_scale(&data.transform, {0.5, 0.5, 0.5})
-
-	for i in 0 ..< 16 {
-		ve.init_trf(&data.positions[i])
-		x := rand.float32_range(-1.5, 1.5)
+	for i in 0 ..< CUBE_COUNT {
+		ve.init_trf(&d.cube_trfs[i])
+		x: f32 = cast(f32)i - CUBE_COUNT / 2
 		y := rand.float32_range(-1.5, 1.5)
-		ve.trf_set_position(&data.positions[i], {x, y, -cast(f32)i})
-		ve.trf_set_scale(&data.positions[i], rand.float32_range(0.3, 0.5))
+		z := rand.float32_range(-1.5, 1.5) + Z
+		ve.trf_set_position(&d.cube_trfs[i], {x, y, z})
+		ve.trf_set_scale(&d.cube_trfs[i], rand.float32_range(0.3, 0.5))
 		axis: vec3 = {rand.float32(), rand.float32(), rand.float32()}
-		ve.trf_rotate(&data.positions[i], axis, rand.float32_range(-math.PI, math.PI))
+		ve.trf_rotate(&d.cube_trfs[i], axis, rand.float32_range(-math.PI, math.PI))
 	}
 
-	data.light_box_pipeline_h = create_light_box_pipeline()
-	for i in 0 ..< 4 {
-		light: Light_Box
+	d.light_source_pipeline = create_light_source_pipeline()
+	for i in 0 ..< LIGHT_COUNT {
+		light: Light_Source
 		ve.init_trf(&light.trf)
 		ve.trf_set_position(&light.trf, lights[i].position)
 		ve.trf_set_scale(&light.trf, 0.3)
-		light.box_ubo = create_ubo_light_box()
-		ubo_light_box_set_color(light.box_ubo, lights[i].color)
-		data.light_boxes[i] = light
+		light.box_ubo = create_ubo_light_source()
+		ubo_light_source_set_color(light.box_ubo, lights[i].color)
+		d.light_sources[i] = light
 	}
 
-	s.data = data
+	s.data = d
 }
 
-hdr_scene_update :: proc(s: ^Scene) {
-	data := cast(^HDR_Scene_Data)s.data
-	data.model_rotation += ve.get_delta_time()
-	ve.trf_rotate(&data.transform, {0, 1, 0}, data.model_rotation)
-	ve.cursor_disable()
-	ve.camera_update_simple_controller(&data.camera)
+bloom_scene_update :: proc(s: ^Scene) {
+	d := cast(^Bloom_Scene_Data)s.data
+	ve.camera_update_simple_controller(&d.camera)
 
-	exp := ubo_hdr_get_exposure(data.hdr_ubo_h)
+	exp := ubo_hdr_get_exposure(d.hdr_ubo)
 	speed: f32 = 1.0
 	if (ve.is_key_down(.Up)) {
-		ubo_hdr_set_exposure(data.hdr_ubo_h, exp + speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(d.hdr_ubo, exp + speed * ve.get_delta_time())
 	}
 	if (ve.is_key_down(.Down)) {
-		ubo_hdr_set_exposure(data.hdr_ubo_h, exp - speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(d.hdr_ubo, exp - speed * ve.get_delta_time())
 	}
 }
 
-hdr_scene_draw :: proc(s: ^Scene) {
-	data := cast(^HDR_Scene_Data)s.data
+bloom_scene_draw :: proc(s: ^Scene) {
+	d := cast(^Bloom_Scene_Data)s.data
 
 	if (ve.screen_resized()) {
-		ve.render_target_resize(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height())
+		ve.render_target_resize(&d.rt, ve.get_screen_width(), ve.get_screen_height())
 	}
 
 	ve.begin_render()
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
 
-	ve.set_camera(data.camera)
-	ve.begin_render_target(&data.hdr_rt)
-	for &t in data.positions {
-		ve.draw_mesh(
-			&data.cube,
-			data.multilight_pipeline_h,
-			ve.trf_get_matrix(data.transform),
-			{h0 = data.multilight_ubo_h},
-		)
+	ve.set_camera(d.camera)
+
+	ve.begin_render_target(&d.rt)
+	for &t in d.cube_trfs {
+		ve.draw_mesh(&d.cube, d.multilight_pipeline, ve.trf_get_matrix(t), {h0 = d.multilight_ubo})
 	}
-	for &l in data.light_boxes {
-		ve.draw_mesh(&data.cube, data.light_box_pipeline_h, ve.trf_get_matrix(l.trf), {h0 = l.box_ubo})
+	for &l in d.light_sources {
+		ve.draw_mesh(&d.cube, d.light_source_pipeline, ve.trf_get_matrix(l.trf), {h0 = l.box_ubo})
 	}
-	ve.end_render_target(&data.hdr_rt)
+	ve.end_render_target(&d.rt)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
-		ve.begin_render_target(&data.hdr_rt, {1})
-		ve.draw_mesh(&data.square, data.blur_hor_pipeline_h, handles = {h0 = data.blur_ubo_h})
-		ve.end_render_target(&data.hdr_rt)
+		ve.begin_render_target(&d.rt, {1})
+		ve.draw_mesh(&d.square, d.blur_hor_pipeline, handles = {h0 = d.blur_ubo})
+		ve.end_render_target(&d.rt)
 
 		// Vertical gaussian blur
-		ve.begin_render_target(&data.hdr_rt, {1})
-		ve.draw_mesh(&data.square, data.blur_ver_pipeline_h, handles = {h0 = data.blur_ubo_h})
-		ve.end_render_target(&data.hdr_rt)
+		ve.begin_render_target(&d.rt, {1})
+		ve.draw_mesh(&d.square, d.blur_ver_pipeline, handles = {h0 = d.blur_ubo})
+		ve.end_render_target(&d.rt)
 	}
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&data.square, data.hdr_pipeline_h, handles = {h0 = data.hdr_ubo_h})
+		ve.draw_mesh(&d.square, d.hdr_pipeline, handles = {h0 = d.hdr_ubo})
 	}
 	ve.end_draw()
 
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
 	ve.end_render()
 }
 
-hdr_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^HDR_Scene_Data)s.data
+bloom_scene_destroy :: proc(s: ^Scene) {
+	d := cast(^Bloom_Scene_Data)s.data
 
-	ve.destroy_render_target(&data.hdr_rt)
-	ve.destroy_mesh(&data.cube)
-	ve.destroy_mesh(&data.square)
+	ve.destroy_render_target(&d.rt)
+	ve.destroy_mesh(&d.cube)
+	ve.destroy_mesh(&d.square)
 
-	free(data)
+	free(d)
 }

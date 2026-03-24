@@ -44,16 +44,16 @@ create_text_scene :: proc() -> Scene {
 }
 
 text_scene_init :: proc(s: ^Scene) {
-	data := new(Text_Scene_Data)
+	d := new(Text_Scene_Data)
 
-	data.time_delta = 2
+	d.time_delta = 2
 
-	data.camera.position = {0, 0, 2}
-	data.camera.target = {0, 0, 0}
-	data.camera.up = {0, 1, 0}
-	ve.camera_init(&data.camera)
+	d.camera.position = {0, 0, 2}
+	d.camera.target = {0, 0, 0}
+	d.camera.up = {0, 1, 0}
+	ve.camera_init(&d.camera)
 
-	data.font = ve.load_font(
+	d.font = ve.load_font(
 		"examples/assets/fonts/RobotoMono.ttf",
 		ve.Create_Font_Info {
 			size = 64,
@@ -65,61 +65,60 @@ text_scene_init :: proc(s: ^Scene) {
 		},
 	)
 
-	data.text = create_text(
-		&data.font,
+	d.text = create_text(
+		&d.font,
 		"По берегу мы шли. Кипел поток,\nГде выли тени злы, полубиты,\nПоверженны в кровавый кипяток.",
 		vec3{-1, 0, 0},
 		1,
 		0.0025,
 	)
 
-	strings.builder_init_len(&data.builder, len(data.text.text))
-	strings.write_string(&data.builder, data.text.text)
+	strings.builder_init_len(&d.builder, len(d.text.text))
+	strings.write_string(&d.builder, d.text.text)
 
-	data.pipeline = create_text_pipeline()
+	d.pipeline = create_text_pipeline()
 
-	s.data = data
+	s.data = d
 }
 
 text_scene_update :: proc(s: ^Scene) {
-	data := cast(^Text_Scene_Data)s.data
-	data.color_value += ve.get_delta_time() * 5
-	result := (math.sin_f32(data.color_value) + 1) / 2
-	text_set_color(&data.text, vec3{1, result, 1})
+	d := cast(^Text_Scene_Data)s.data
+	d.color_value += ve.get_delta_time() * 5
+	green := (math.sin_f32(cast(f32)ve.get_total_time() * 5) + 1) / 2
+	text_set_color(&d.text, vec3{1, green, 1})
 
-	data.elapsed_time += cast(f64)ve.get_delta_time()
-	if data.elapsed_time > data.time_delta {
-		data.elapsed_time = 0
-		strings.write_string(&data.builder, "\n... ")
-		str := strings.to_string(data.builder)
-		text_set_string(&data.text, str)
+	d.elapsed_time += cast(f64)ve.get_delta_time()
+	if d.elapsed_time > d.time_delta {
+		d.elapsed_time = 0
+		strings.write_string(&d.builder, "\n... ")
+		str := strings.to_string(d.builder)
+		text_set_string(&d.text, str)
 	}
 }
 
 text_scene_draw :: proc(s: ^Scene) {
-	data := cast(^Text_Scene_Data)s.data
+	d := cast(^Text_Scene_Data)s.data
 
 	ve.begin_render()
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
+
+	ve.set_camera(d.camera)
+
 	ve.begin_draw()
-
-	ve.set_camera(data.camera)
-	text_draw(&data.text, data.pipeline)
-
+	{
+		text_draw(&d.text, d.pipeline)
+	}
 	ve.end_draw()
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
+
 	ve.end_render()
 }
 
 text_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^Text_Scene_Data)s.data
+	d := cast(^Text_Scene_Data)s.data
 
-	strings.builder_destroy(&data.builder)
-	ve.unload_font(&data.font)
+	strings.builder_destroy(&d.builder)
+	ve.unload_font(&d.font)
 
-	free(data)
+	free(d)
 }
 
 create_text :: proc(

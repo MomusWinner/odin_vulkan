@@ -8,11 +8,11 @@ import "core:math/rand"
 import "core:time"
 
 Model_Scene_Data :: struct {
-	texture_h:      ve.Texture,
-	model:          ve.Mesh,
+	texture:        ve.Texture,
+	mesh:           ve.Mesh,
 	ubo:            ve.Uniform_Buffer,
-	pipeline_h:     ve.Graphics_Pipeline,
-	transform:      ve.Transform,
+	pipeline:       ve.Graphics_Pipeline,
+	trf:            ve.Transform,
 	camera:         ve.Camera,
 	model_rotation: f32,
 }
@@ -27,63 +27,49 @@ create_model_scene :: proc() -> Scene {
 }
 
 model_scene_init :: proc(s: ^Scene) {
-	data := new(Model_Scene_Data)
+	d := new(Model_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera {
-		position = {0, 0, 2},
-		target   = {0, 0, 0},
-		up       = {0, 1, 0},
-	}
-	ve.camera_init(&data.camera)
+	ve.camera_init(&d.camera)
+	d.camera.position = {0, 0, 2}
 
-	// Load Model
-	data.texture_h = ve.load_texture("./examples/assets/room.png")
-	data.model = ve.load_meshes("./examples/assets/room.obj", context.temp_allocator)[0]
+	d.texture = ve.load_texture("./examples/assets/room.png")
+	d.mesh = ve.load_meshes("./examples/assets/room.obj", context.temp_allocator)[0]
 
-	data.pipeline_h = create_default_pipeline()
+	d.pipeline = create_default_pipeline()
 
-	// Setup Material
-	data.ubo = create_ubo_base()
-	ubo_base_set_texture(data.ubo, data.texture_h)
+	d.ubo = create_ubo_base()
+	ubo_base_set_texture(d.ubo, d.texture)
 
-	// Setup Transform
-	ve.init_trf(&data.transform)
-	ve.trf_set_position(&data.transform, {0, -0.5, -1})
-	ve.trf_set_scale(&data.transform, 0.8)
+	ve.init_trf(&d.trf)
+	ve.trf_set_position(&d.trf, {0, -0.5, -1})
+	ve.trf_set_scale(&d.trf, 0.8)
 
-	s.data = data
+	s.data = d
 }
 
 model_scene_update :: proc(s: ^Scene) {
-	data := cast(^Model_Scene_Data)s.data
-	data.model_rotation += ve.get_delta_time()
-	ve.trf_rotate(&data.transform, {0, 1, 0}, data.model_rotation)
+	d := cast(^Model_Scene_Data)s.data
+	d.model_rotation += ve.get_delta_time()
+	ve.trf_rotate(&d.trf, {0, 1, 0}, d.model_rotation)
 }
 
 model_scene_draw :: proc(s: ^Scene) {
-	data := cast(^Model_Scene_Data)s.data
+	d := cast(^Model_Scene_Data)s.data
 
 	ve.begin_render()
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
 
 	ve.begin_draw()
 	{
-		ve.set_camera(data.camera)
-		ve.draw_mesh(&data.model, data.pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.ubo})
+		ve.set_camera(d.camera)
+		ve.draw_mesh(&d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.ubo})
 	}
 	ve.end_draw()
 
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
 	ve.end_render()
 }
 
 model_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^Model_Scene_Data)s.data
-
-	ve.destroy_mesh(&data.model)
-
-	free(data)
+	d := cast(^Model_Scene_Data)s.data
+	ve.destroy_mesh(&d.mesh)
+	free(d)
 }

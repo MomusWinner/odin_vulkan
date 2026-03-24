@@ -27,24 +27,22 @@ Light_UBO :: struct {
 }
 
 Lighting_Scene_Data :: struct {
-	model:                ve.Mesh,
-	ground:               ve.Mesh,
-	transform:            ve.Transform,
-	ground_transform:     ve.Transform,
-	camera:               ve.Camera,
-	l_camera:             ve.Camera,
-	shadow_map_rt:        ve.Render_Target,
-	shadow_map_view_mesh: ve.Mesh,
-	shadow_map_texture:   ve.Texture,
-	square_trf:           ve.Transform,
-	light_pipeline_h:     ve.Graphics_Pipeline,
-	light_ubo:            ve.Uniform_Buffer,
-	surf_draw_ubo:        ve.Uniform_Buffer,
-	depth_only_pipeline:  ve.Graphics_Pipeline,
-	light_data:           ve.Uniform_Buffer,
+	suzanne_mesh:        ve.Mesh,
+	suzanne_trf:         ve.Transform,
+	ground_mesh:         ve.Mesh,
+	ground_trf:          ve.Transform,
+	camera:              ve.Camera,
+	light_camera:        ve.Camera,
+	rt:                  ve.Render_Target,
+	shadow_map_texture:  ve.Texture,
+	light_pipeline:      ve.Graphics_Pipeline,
+	light_ubo:           ve.Uniform_Buffer,
+	light_data_ubo:      ve.Uniform_Buffer,
+	surf_draw_ubo:       ve.Uniform_Buffer,
+	depth_only_pipeline: ve.Graphics_Pipeline,
 }
 
-DEPTH_SIZE :: 1024 * 2
+DEPTH_SIZE :: 2048
 
 create_light_scene :: proc() -> Scene {
 	return Scene {
@@ -56,32 +54,25 @@ create_light_scene :: proc() -> Scene {
 }
 
 light_scene_init :: proc(s: ^Scene) {
-	log.info(ve.get_limits())
-	data := new(Lighting_Scene_Data)
+	d := new(Lighting_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera{}
-	ve.camera_init(&data.camera)
-	data.camera.position = {0, 2, 8}
-	data.camera.target = {0, 0, 0}
-	data.camera.up = {0, 1, 0}
+	ve.set_cursor_mode(.Disabled)
 
-	data.l_camera = ve.Camera{}
-	ve.camera_init(&data.l_camera, .Orthographic)
-	data.l_camera.position = {0.0001, 7, 0.0}
-	data.l_camera.target = {0, 0, 0}
-	data.l_camera.up = {0, 1, 0}
-	data.l_camera.near = 1.0
-	data.l_camera.far = 40.5
-	data.l_camera.fov = 10
+	ve.camera_init(&d.camera)
+	d.camera.position = {0, 2, 8}
 
-	data.depth_only_pipeline = create_depth_only_pipeline()
+	ve.camera_init(&d.light_camera, .Orthographic)
+	d.light_camera.position = {0.0001, 7, 0.0}
+	d.light_camera.near = 1.0
+	d.light_camera.far = 40.5
+	d.light_camera.fov = 10
 
-	// Setup Shadow Map
-	ve.init_render_target(&data.shadow_map_rt, DEPTH_SIZE, DEPTH_SIZE, ._1)
+	d.depth_only_pipeline = create_depth_only_pipeline()
 
-	data.shadow_map_texture = ve.render_target_add_readable_depth_attachment(
-		&data.shadow_map_rt,
+	ve.init_render_target(&d.rt, DEPTH_SIZE, DEPTH_SIZE, ._1)
+
+	d.shadow_map_texture = ve.render_target_add_readable_depth_attachment(
+		&d.rt,
 		sampler_info = ve.Sampler_Info {
 			mag_filter = .Linear,
 			min_filter = .Linear,
@@ -91,47 +82,37 @@ light_scene_init :: proc(s: ^Scene) {
 		},
 	)
 
-	// Setup Material
-	data.light_pipeline_h = create_light_pipeline()
-	data.light_ubo = create_ubo_light()
-	ubo_light_set_diffuse(data.light_ubo, {0.29, 0.478, 0.588})
-	ubo_light_set_ambient(data.light_ubo, 0.1)
+	d.light_pipeline = create_light_pipeline()
+	d.light_ubo = create_ubo_light()
+	ubo_light_set_diffuse(d.light_ubo, {0.29, 0.478, 0.588})
+	ubo_light_set_ambient(d.light_ubo, 0.1)
 
-	data.light_data = create_ubo_light_data()
-	ubo_light_data_set_camera(data.light_data, data.l_camera.buffer)
-	ubo_light_data_set_direction(data.light_data, {0, -1, 0})
-	ubo_light_data_set_shadow(data.light_data, data.shadow_map_texture)
-	ubo_light_data_set_color(data.light_data, 1)
+	d.light_data_ubo = create_ubo_light_data()
+	ubo_light_data_set_camera(d.light_data_ubo, d.light_camera.buffer)
+	ubo_light_data_set_direction(d.light_data_ubo, {0, -1, 0})
+	ubo_light_data_set_shadow(d.light_data_ubo, d.shadow_map_texture)
+	ubo_light_data_set_color(d.light_data_ubo, 1)
 
-	// Load Model
-	data.model = ve.load_meshes("examples/assets/Suzanne.obj", context.temp_allocator)[0]
+	d.suzanne_mesh = ve.load_meshes("examples/assets/Suzanne.obj", context.temp_allocator)[0]
+	d.ground_mesh = ve.create_primitive_square()
 
-	data.ground = ve.create_primitive_square()
+	ve.init_trf(&d.suzanne_trf)
+	ve.trf_set_position(&d.suzanne_trf, {0, 1, 0})
 
-	// Setup Transform
-	ve.init_trf(&data.transform)
-	ve.trf_set_position(&data.transform, {0, 1, 0})
+	ve.init_trf(&d.ground_trf)
+	ve.trf_set_position(&d.ground_trf, {0, 0, 0})
+	ve.trf_set_scale(&d.ground_trf, 100)
+	ve.trf_rotate(&d.ground_trf, {1, 0, 0}, math.PI / 2)
 
-	ve.init_trf(&data.ground_transform)
-	ve.trf_set_position(&data.ground_transform, {0, 0, 0})
-	ve.trf_set_scale(&data.ground_transform, 100)
-	ve.trf_rotate(&data.ground_transform, {1, 0, 0}, 3.14 / 2)
-
-	ve.init_trf(&data.square_trf)
-	ve.trf_set_position(&data.square_trf, {-0.7, -0.7, 0})
-	ve.trf_set_scale(&data.square_trf, 0.3)
-
-	data.shadow_map_view_mesh = ve.create_primitive_square(0.5)
-
-	s.data = data
+	s.data = d
 }
 
 light_scene_update :: proc(s: ^Scene) {
-	data := cast(^Lighting_Scene_Data)s.data
+	d := cast(^Lighting_Scene_Data)s.data
 
 	speed: f32 = 2.0
 	camera: ^ve.Camera
-	camera = &data.l_camera
+	camera = &d.light_camera
 
 	if ve.is_key_down(.Up) {
 		camera.position.z += ve.get_delta_time() * speed
@@ -146,13 +127,12 @@ light_scene_update :: proc(s: ^Scene) {
 		camera.position.x -= ve.get_delta_time() * speed
 	}
 
-	ve.cursor_disable()
-	ve.camera_update_simple_controller(&data.camera)
+	ve.camera_update_simple_controller(&d.camera)
 
 	if ve.is_key_pressed(.T) {
 		ve.wait_render_completion()
 		ve.texture_set_sampler(
-			data.shadow_map_texture,
+			d.shadow_map_texture,
 			ve.Sampler_Info {
 				mag_filter = .Linear,
 				min_filter = .Linear,
@@ -164,81 +144,39 @@ light_scene_update :: proc(s: ^Scene) {
 }
 
 light_scene_draw :: proc(s: ^Scene) {
-	data := cast(^Lighting_Scene_Data)s.data
+	d := cast(^Lighting_Scene_Data)s.data
 
 	ve.begin_render()
 
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
-
-	ve.begin_render_target(&data.shadow_map_rt)
+	ve.begin_render_target(&d.rt)
 	{
-		ve.set_camera(data.l_camera)
-		ve.draw_mesh(&data.model, data.depth_only_pipeline, ve.trf_get_matrix(data.transform))
-		ve.draw_mesh(&data.ground, data.depth_only_pipeline, ve.trf_get_matrix(data.transform))
+		ve.set_camera(d.light_camera)
+		ve.draw_mesh(&d.suzanne_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.suzanne_trf))
+		ve.draw_mesh(&d.ground_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.ground_trf))
 	}
-	ve.end_render_target(&data.shadow_map_rt)
+	ve.end_render_target(&d.rt)
 
 	ve.begin_draw({0.933, 0.525, 0.899, 1})
 	{
-		ve.set_camera(data.camera)
+		ve.set_camera(d.camera)
 		handles := ve.Handles {
-			h0 = data.light_ubo,
-			h1 = data.light_data,
+			h0 = d.light_ubo,
+			h1 = d.light_data_ubo,
 		}
-		ve.draw_mesh(&data.model, data.light_pipeline_h, ve.trf_get_matrix(data.transform), handles)
-		ve.draw_mesh(&data.ground, data.light_pipeline_h, ve.trf_get_matrix(data.ground_transform), handles)
+		ve.draw_mesh(&d.suzanne_mesh, d.light_pipeline, ve.trf_get_matrix(d.suzanne_trf), handles)
+		ve.draw_mesh(&d.ground_mesh, d.light_pipeline, ve.trf_get_matrix(d.ground_trf), handles)
 	}
 	ve.end_draw()
 
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
 	ve.end_render()
 }
 
 light_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^Lighting_Scene_Data)s.data
+	d := cast(^Lighting_Scene_Data)s.data
 
-	ve.destroy_render_target(&data.shadow_map_rt)
-	ve.destroy_mesh(&data.model)
-	ve.destroy_mesh(&data.shadow_map_view_mesh)
-	ve.destroy_mesh(&data.ground)
+	ve.destroy_render_target(&d.rt)
+	ve.destroy_mesh(&d.suzanne_mesh)
+	ve.destroy_mesh(&d.ground_mesh)
 
-	free(data)
-}
-
-create_light_pipeline :: proc() -> ve.Graphics_Pipeline {
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/light.frag"},
-	)
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-
-	return ve.create_graphics_pipeline(create_info)
-}
-
-create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
-	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, ve.create_vertex_input_description())
-
-	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light.vert"},
-	)
-
-	create_info := get_base_create_pipeline_info()
-	create_info.stage_infos = stages
-	create_info.depth.bias = {
-		enable          = true,
-		clamp           = 1.25,
-		constant_factor = 0,
-		slope_factor    = 4.75,
-	}
-
-	return ve.create_graphics_pipeline(create_info)
+	free(d)
 }

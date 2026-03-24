@@ -62,6 +62,7 @@ camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective
 	camera.fov = DEFAULT_FOV
 	camera.near = DEFAULT_NEAR
 	camera.far = DEFAULT_FAR
+	camera.up = {0, 1, 0}
 	camera.zoom = 1
 	camera.type = type
 

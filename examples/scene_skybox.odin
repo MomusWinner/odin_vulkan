@@ -8,12 +8,12 @@ import "core:math/rand"
 import "core:time"
 
 Skybox_Scene_Data :: struct {
-	cubemap_h:          ve.Texture,
-	skybox_pipeline_h:  ve.Graphics_Pipeline,
-	reflect_pipeline_h: ve.Graphics_Pipeline,
-	cube:               ve.Mesh,
-	transform:          ve.Transform,
-	camera:             ve.Camera,
+	cubemap:          ve.Texture,
+	skybox_pipeline:  ve.Graphics_Pipeline,
+	reflect_pipeline: ve.Graphics_Pipeline,
+	cube:             ve.Mesh,
+	trf:              ve.Transform,
+	camera:           ve.Camera,
 }
 
 create_skybox_scene :: proc() -> Scene {
@@ -26,20 +26,15 @@ create_skybox_scene :: proc() -> Scene {
 }
 
 skybox_scene_init :: proc(s: ^Scene) {
-	data := new(Skybox_Scene_Data)
+	d := new(Skybox_Scene_Data)
 
-	// Init Camera
-	data.camera = ve.Camera {
-		position = {0, 0, 2},
-		target   = {0, 0, 0},
-		up       = {0, 1, 0},
-	}
-	ve.camera_init(&data.camera)
-	ve.cursor_disable()
+	ve.set_cursor_mode(.Disabled)
 
-	// Load Model
-	data.cube = ve.create_primitive_cube()
-	data.cubemap_h = ve.load_cubemap_texture(
+	ve.camera_init(&d.camera)
+	d.camera.position = {0, 0, 2}
+
+	d.cube = ve.create_primitive_cube()
+	d.cubemap = ve.load_cubemap_texture(
 		{
 			"examples/assets/skybox/posx.jpg",
 			"examples/assets/skybox/negx.jpg",
@@ -50,52 +45,41 @@ skybox_scene_init :: proc(s: ^Scene) {
 		},
 	)
 
-	data.skybox_pipeline_h = create_skybox_pipeline()
+	d.skybox_pipeline = create_skybox_pipeline()
+	d.reflect_pipeline = create_reflect_pipeline()
 
-	data.reflect_pipeline_h = create_reflect_pipeline()
+	ve.init_trf(&d.trf)
+	ve.trf_set_position(&d.trf, {0, -0.5, -1})
+	ve.trf_set_scale(&d.trf, {0.5, 0.5, 0.5})
 
-	// Setup Transform
-	ve.init_trf(&data.transform)
-	ve.trf_set_position(&data.transform, {0, -0.5, -1})
-	ve.trf_set_scale(&data.transform, {0.5, 0.5, 0.5})
-
-	s.data = data
+	s.data = d
 }
 
 skybox_scene_update :: proc(s: ^Scene) {
-	data := cast(^Skybox_Scene_Data)s.data
-
-	ve.camera_update_simple_controller(&data.camera)
+	d := cast(^Skybox_Scene_Data)s.data
+	ve.camera_update_simple_controller(&d.camera)
 }
 
 skybox_scene_draw :: proc(s: ^Scene) {
-	data := cast(^Skybox_Scene_Data)s.data
+	d := cast(^Skybox_Scene_Data)s.data
 
 	ve.begin_render()
-	// Begin ve.
-	// --------------------------------------------------------------------------------------------------------------------
 
 	ve.begin_draw()
 	{
-
-		ve.set_camera(data.camera)
+		ve.set_camera(d.camera)
 		// Skybox
-		ve.draw_mesh(&data.cube, data.skybox_pipeline_h, handles = {h0 = data.cubemap_h})
-
+		ve.draw_mesh(&d.cube, d.skybox_pipeline, handles = {h0 = d.cubemap})
 		// Diamond
-		ve.draw_mesh(&data.cube, data.reflect_pipeline_h, ve.trf_get_matrix(data.transform), {h0 = data.cubemap_h})
+		ve.draw_mesh(&d.cube, d.reflect_pipeline, ve.trf_get_matrix(d.trf), {h0 = d.cubemap})
 	}
 	ve.end_draw()
 
-	// --------------------------------------------------------------------------------------------------------------------
-	// End ve.
 	ve.end_render()
 }
 
 skybox_scene_destroy :: proc(s: ^Scene) {
-	data := cast(^Skybox_Scene_Data)s.data
-
-	ve.destroy_mesh(&data.cube)
-
-	free(data)
+	d := cast(^Skybox_Scene_Data)s.data
+	ve.destroy_mesh(&d.cube)
+	free(d)
 }

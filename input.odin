@@ -155,6 +155,13 @@ MouseButton :: enum {
 	Button_8 = 7,
 }
 
+Cursor_Mode :: enum {
+	Normal,
+	Hidden,
+	Disabled,
+	Captured,
+}
+
 is_key_pressed :: proc(key: Key) -> bool {
 	return ctx.input.keyboard.states[key] == glfw.PRESS && ctx.input.keyboard.previous_states[key] == glfw.RELEASE
 }
@@ -195,12 +202,17 @@ is_mouse_button_up :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.RELEASE
 }
 
-cursor_disable :: proc() {
-	glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_DISABLED)
-}
-
-cursor_enable :: proc() {
-	glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_NORMAL)
+set_cursor_mode :: proc(state: Cursor_Mode) {
+	switch state {
+	case .Normal:
+		glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_NORMAL)
+	case .Hidden:
+		glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_HIDDEN)
+	case .Disabled:
+		glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_DISABLED)
+	case .Captured:
+		glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_CAPTURED)
+	}
 }
 
 get_scroll_vec2 :: proc() -> vec2 {
@@ -208,9 +220,10 @@ get_scroll_vec2 :: proc() -> vec2 {
 }
 
 get_scroll_f32 :: proc() -> f32 {
-	return(
-		ctx.input.mouse.scroll.x if math.abs(ctx.input.mouse.scroll.x) > math.abs(ctx.input.mouse.scroll.y) else ctx.input.mouse.scroll.y \
-	)
+	if math.abs(ctx.input.mouse.scroll.x) > math.abs(ctx.input.mouse.scroll.y) {
+		return ctx.input.mouse.scroll.x
+	}
+	return ctx.input.mouse.scroll.y
 }
 
 @(private)
