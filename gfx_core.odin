@@ -143,6 +143,12 @@ Physical_Device_Features :: struct {
 
 // MODEL
 
+Vertex :: struct {
+	position:  vec3,
+	tex_coord: vec2,
+	normal:    vec3,
+}
+
 Mesh :: struct {
 	vbo:          Buffer,
 	ebo:          Maybe(Buffer),

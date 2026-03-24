@@ -14,7 +14,6 @@ ivec3 :: ve.ivec3
 ivec4 :: ve.ivec4
 mat4 :: ve.mat4
 
-
 @(buffer)
 Base_UBO :: struct {
 	color:   vec4,

@@ -14,7 +14,7 @@ layout(location = 6) in float inInstanceScale;
 layout(location = 0) out vec2 fragTexCoord;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec3 fragPos;
-layout(location = 3) out vec3 fragColorIn;
+layout(location = 3) out vec3 fragColor;
 
 
 void main() {
@@ -23,5 +23,5 @@ void main() {
 	fragTexCoord = inTexCoord;
 	fragNormal = mat3(transpose(inverse(getModel()))) * inNormal;
 	fragPos = vec3(getModel() * vec4(inPosition, 1.0f));
-	fragColorIn = inInstanceColor;
+	fragColor = inInstanceColor;
 }
