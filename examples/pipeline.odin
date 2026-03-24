@@ -6,43 +6,9 @@ import "core:log"
 import "core:mem/virtual"
 import vk "vendor:vulkan"
 
-create_default_vertex_description :: proc() -> ve.Vertex_Input_Description {
-	attribute_descriptions := ve.Vertex_Input_Attribute_Descriptions{}
-	sm.push_back_elems(
-		&attribute_descriptions,
-		ve.Vertex_Input_Attribute_Description {
-			location = 0,
-			format = .RGB_f32,
-			offset = cast(u32)offset_of(ve.Vertex, position),
-		},
-		ve.Vertex_Input_Attribute_Description {
-			location = 1,
-			format = .RG_f32,
-			offset = cast(u32)offset_of(ve.Vertex, tex_coord),
-		},
-		ve.Vertex_Input_Attribute_Description {
-			location = 2,
-			format = .RGB_f32,
-			offset = cast(u32)offset_of(ve.Vertex, normal),
-		},
-		ve.Vertex_Input_Attribute_Description {
-			location = 3,
-			format = .RGBA_f32,
-			offset = cast(u32)offset_of(ve.Vertex, color),
-		},
-	)
-
-	return ve.Vertex_Input_Description {
-		binding = 0,
-		stride = size_of(ve.Vertex),
-		input_rate = .Vertex,
-		attributes = attribute_descriptions,
-	}
-}
-
 get_base_create_pipeline_info :: proc() -> ve.Create_Pipeline_Info {
 	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
+	sm.append(&vert_descriptions, ve.create_vertex_input_description())
 
 	return ve.Create_Pipeline_Info {
 		bindless = true,
@@ -76,7 +42,7 @@ create_default_pipeline :: proc() -> ve.Graphics_Pipeline {
 
 create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
+	sm.append(&vert_descriptions, ve.create_vertex_input_description())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
@@ -98,7 +64,7 @@ create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
 
 create_reflect_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
+	sm.append(&vert_descriptions, ve.create_vertex_input_description())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(

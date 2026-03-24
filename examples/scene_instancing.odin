@@ -113,7 +113,7 @@ instancing_scene_destroy :: proc(s: ^Scene) {
 
 create_instancing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
+	sm.append(&vert_descriptions, ve.create_vertex_input_description())
 	sm.append(&vert_descriptions, _create_instance_vertex_description())
 
 	stages := ve.Stage_Infos{}

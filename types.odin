@@ -21,7 +21,6 @@ Vertex :: struct {
 	position:  vec3,
 	tex_coord: vec2,
 	normal:    vec3,
-	color:     vec4,
 }
 
 game_event_proc :: proc(user_data: rawptr)

@@ -223,7 +223,7 @@ create_light_pipeline :: proc() -> ve.Graphics_Pipeline {
 
 create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
+	sm.append(&vert_descriptions, ve.create_vertex_input_description())
 
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(

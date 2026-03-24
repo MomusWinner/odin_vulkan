@@ -3,6 +3,7 @@
 #include "./examples/assets/shaders/gen_types.h"
 
 layout(location = 0) in vec2 fragTexCoord;
+
 layout(location = 0) out vec4 outColor;
 
 vec4 blur13(sampler2D image, vec2 uv, vec2 resolution, vec2 direction) {

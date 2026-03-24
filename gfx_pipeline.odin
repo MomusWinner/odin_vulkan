@@ -238,7 +238,7 @@ hot_reload_shaders :: proc() {
 	_pipeline_manager_hot_reload()
 }
 
-create_default_vertex_description :: proc() -> Vertex_Input_Description {
+create_vertex_input_description :: proc() -> Vertex_Input_Description {
 	attribute_descriptions := Vertex_Input_Attribute_Descriptions{}
 	sm.push_back_elems(
 		&attribute_descriptions,
@@ -256,11 +256,6 @@ create_default_vertex_description :: proc() -> Vertex_Input_Description {
 			location = 2,
 			format = .RGB_f32,
 			offset = cast(u32)offset_of(Vertex, normal),
-		},
-		Vertex_Input_Attribute_Description {
-			location = 3,
-			format = .RGBA_f32,
-			offset = cast(u32)offset_of(Vertex, color),
 		},
 	)
 
