@@ -586,8 +586,6 @@ _get_required_physical_device_features :: proc(features: ^Physical_Device_Featur
 _init_buildin_resources :: proc() {
 	ctx.gfx.buildin = new(Buildin_Resource)
 	ctx.gfx.buildin.unit_square = create_primitive_square()
-	ctx.gfx.buildin.pipeline.text_h = _text_default_pipeline()
-	ctx.gfx.buildin.pipeline.primitive_h = create_primitive_pipeline()
 }
 
 @(private = "file")

@@ -49,7 +49,7 @@ create_buffer :: proc(
 
 destroy_buffer :: proc(b: Buffer, loc := #caller_location) {
 	b_data := _acquire_buffer_h(b)
-	_destroy_buffer(&b_data, loc)
+	_deffered_destructor_add(b_data)
 }
 
 buffer_fill :: proc(b: Buffer, data: rawptr, size: Device_Size, offset: Device_Size = 0, loc := #caller_location) {

@@ -49,8 +49,8 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	ve.camera_init(&data.camera)
 
 	// Load Model
-	data.texture_h = ve.load_texture("./assets/room.png")
-	data.model = ve.load_meshes("./assets/room.obj", context.temp_allocator)[0]
+	data.texture_h = ve.load_texture("examples/assets/room.png")
+	data.model = ve.load_meshes("examples/assets/room.obj", context.temp_allocator)[0]
 	data.square = ve.create_primitive_square()
 	data.pipeline_h = create_default_pipeline()
 
@@ -126,8 +126,8 @@ create_postprocessing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/postprocessing.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/postprocessing.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/postprocessing.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/postprocessing.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()

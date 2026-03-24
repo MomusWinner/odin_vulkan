@@ -104,7 +104,7 @@ light_scene_init :: proc(s: ^Scene) {
 	ubo_light_data_set_color(data.light_data, 1)
 
 	// Load Model
-	data.model = ve.load_meshes("./assets/Suzanne.obj", context.temp_allocator)[0]
+	data.model = ve.load_meshes("examples/assets/Suzanne.obj", context.temp_allocator)[0]
 
 	data.ground = ve.create_primitive_square()
 
@@ -211,8 +211,8 @@ create_light_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/light.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/light.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -225,11 +225,11 @@ create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
 	vert_descriptions: ve.Vertex_Input_Descriptions
 	sm.append(&vert_descriptions, create_default_vertex_description())
 
-	// set_infos := ve.Pipeline_Set_Layout_Infos{} // FIXME:
-	// sm.push_back(&set_infos, ve.get_bindless_pipeline_set_info())
-
 	stages := ve.Stage_Infos{}
-	sm.push_back_elems(&stages, ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light.vert"})
+	sm.push_back_elems(
+		&stages,
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light.vert"},
+	)
 
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages

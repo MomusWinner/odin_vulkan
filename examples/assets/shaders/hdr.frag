@@ -1,6 +1,6 @@
 #version 450
 
-#include "gen_types.h"
+#include "./examples/assets/shaders/gen_types.h"
 
 layout(location = 0) in vec2 fragTexCoord;
 

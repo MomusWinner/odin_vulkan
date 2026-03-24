@@ -153,8 +153,8 @@ create_particle_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/particle.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/particle.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/particle.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/particle.frag"},
 	)
 
 	vert_descriptions: ve.Vertex_Input_Descriptions
@@ -176,7 +176,7 @@ create_compute_pipeline :: proc(x_invocations: i32) -> ve.Compute_Pipeline {
 
 	info := ve.Create_Compute_Pipeline_Info {
 		bindless    = true,
-		shader_path = "assets/shaders/particle.comp",
+		shader_path = "examples/assets/shaders/particle.comp",
 		consts      = consts,
 	}
 	handle := ve.create_compute_pipeline(info)

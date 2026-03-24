@@ -1,6 +1,6 @@
 #version 450
 
-#include "buildin:gen_types.h"
+#include "buildin:bindless.h"
 
 layout(location = 0) in vec3 fragPos;
 

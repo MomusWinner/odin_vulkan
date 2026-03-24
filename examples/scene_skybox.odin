@@ -41,12 +41,12 @@ skybox_scene_init :: proc(s: ^Scene) {
 	data.cube = ve.create_primitive_cube()
 	data.cubemap_h = ve.load_cubemap_texture(
 		{
-			"assets/skybox/posx.jpg",
-			"assets/skybox/negx.jpg",
-			"assets/skybox/negy.jpg",
-			"assets/skybox/posy.jpg",
-			"assets/skybox/posz.jpg",
-			"assets/skybox/negz.jpg",
+			"examples/assets/skybox/posx.jpg",
+			"examples/assets/skybox/negx.jpg",
+			"examples/assets/skybox/negy.jpg",
+			"examples/assets/skybox/posy.jpg",
+			"examples/assets/skybox/posz.jpg",
+			"examples/assets/skybox/negz.jpg",
 		},
 	)
 

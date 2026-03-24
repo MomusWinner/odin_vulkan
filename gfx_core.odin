@@ -28,9 +28,7 @@ Descriptor_Set :: vk.DescriptorSet
 Buildin_Resource :: struct {
 	pipeline:    struct {
 		// FIX:
-		default_h:   Graphics_Pipeline,
-		primitive_h: Graphics_Pipeline,
-		text_h:      Graphics_Pipeline,
+		default_h: Graphics_Pipeline,
 	},
 	unit_square: Mesh,
 }
@@ -157,8 +155,8 @@ Physical_Device_Features :: struct {
 Mesh :: struct {
 	vbo:          Buffer,
 	ebo:          Maybe(Buffer),
-	vertex_count: u32,
-	index_count:  u32,
+	vertex_count: int,
+	index_count:  int,
 }
 
 @(buffer)
@@ -674,12 +672,12 @@ cmd_push_constants :: proc(layout: Pipeline_Layout, const: ^$T, stages := vk.Sha
 	vk.CmdPushConstants(_get_cmd(), layout, stages, 0, size_of(const^), const)
 }
 
-cmd_draw :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
-	vk.CmdDraw(_get_cmd(), vertex_count, instance_count, 0, 0)
+cmd_draw :: proc(vertex_count: int, instance_count: u32 = 1, loc := #caller_location) {
+	vk.CmdDraw(_get_cmd(), cast(u32)vertex_count, instance_count, 0, 0)
 }
 
-cmd_draw_indexed :: proc(vertex_count: u32, instance_count: u32 = 1, loc := #caller_location) {
-	vk.CmdDrawIndexed(_get_cmd(), vertex_count, instance_count, 0, 0, 0)
+cmd_draw_indexed :: proc(vertex_count: int, instance_count: u32 = 1, loc := #caller_location) {
+	vk.CmdDrawIndexed(_get_cmd(), cast(u32)vertex_count, instance_count, 0, 0, 0)
 }
 
 cmd_bind_graphics_pipeline :: proc(pipeline: Graphics_Pipeline, loc := #caller_location) -> Pipeline_Layout {
@@ -962,7 +960,7 @@ create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location)
 	vertex_buffer := create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
 
 	mesh := Mesh {
-		vertex_count = cast(u32)len(vertices),
+		vertex_count = len(vertices),
 		vbo          = vertex_buffer,
 	}
 
@@ -970,7 +968,7 @@ create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location)
 		indices_size := cast(vk.DeviceSize)(size_of(indices[0]) * len(indices))
 		index_buffer := create_buffer({.Index}, indices_size, raw_data(indices), loc)
 		mesh.ebo = index_buffer
-		mesh.index_count = cast(u32)len(indices)
+		mesh.index_count = len(indices)
 	} else {
 		mesh.ebo = nil
 	}
@@ -1571,29 +1569,6 @@ _destroy_descriptor_set_layout :: proc(descriptor_set_layout: vk.DescriptorSetLa
 // ██╔═══╝ ██╔══██╗██║██║╚██╔╝██║██║   ██║   ██║╚██╗ ██╔╝██╔══╝  
 // ██║     ██║  ██║██║██║ ╚═╝ ██║██║   ██║   ██║ ╚████╔╝ ███████╗
 // ╚═╝     ╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
-
-create_primitive_pipeline :: proc() -> Graphics_Pipeline {
-	vert_descriptions: Vertex_Input_Descriptions
-	sm.append(&vert_descriptions, create_default_vertex_description())
-
-	stages := Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/buildin/shaders/shape.vert"},
-		Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/buildin/shaders/shape.frag"},
-	)
-
-	create_info := Create_Pipeline_Info {
-		bindless = true,
-		vertex_input_descriptions = vert_descriptions,
-		stage_infos = stages,
-		topology = .Triangle_List,
-		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {}, front_face = .Counter_Clockwise},
-		depth = {enable = true, write_enable = true, compare_op = .Less},
-	}
-
-	return create_graphics_pipeline(create_info)
-}
 
 create_primitive_square :: proc(size: f32 = 1) -> Mesh {
 	vertices := [?]Vertex {

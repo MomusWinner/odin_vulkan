@@ -76,6 +76,9 @@ Pipeline_Surface_Info :: struct {
 	color_formats: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
 }
 
+BINDLESS_HEADER_FILE :: #load("./buildin/shaders/bindless.h")
+GEN_TYPES_HEADER_FILE :: #load("./buildin/shaders/gen_types.h")
+
 _get_graphics_pipeline :: proc(handle: Graphics_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline_Data {
 	return _pipeline_manager_get_graphics_pipeline(ctx.gfx.pipeline_manager, handle, loc)
 }
@@ -196,24 +199,37 @@ _shader_resolve_include :: proc "system" (
 	path_to_include: strings.Builder
 	strings.builder_init_none(&path_to_include, context.temp_allocator)
 
-	if strings.starts_with(source, BUILDIN) {
-		strings.write_string(&path_to_include, "./assets/buildin/shaders/")
-		strings.write_string(&path_to_include, source[len(BUILDIN):])
-	} else {
-		strings.write_string(&path_to_include, "./assets/shaders/")
-		strings.write_string(&path_to_include, source)
-	}
+	data: []byte
+	file: string
 
-	file := strings.to_string(path_to_include)
-	content, ok := read_file(file, context.temp_allocator)
-	if !ok {
-		log.error("Couldn't read include file", file)
+	if strings.starts_with(source, BUILDIN) {
+		strings.write_string(&path_to_include, "./buildin/shaders/")
+		strings.write_string(&path_to_include, source[len(BUILDIN):])
+		file = strings.to_string(path_to_include)
+
+		switch source[len(BUILDIN):] {
+		case "bindless.h":
+			data = BINDLESS_HEADER_FILE
+		case "gen_types.h":
+			data = GEN_TYPES_HEADER_FILE
+		case:
+			log.panicf("Couldn't find buildin include file \"%s\" in \"%s\"", file, requestingSource)
+		}
+	} else {
+		strings.write_string(&path_to_include, source)
+		file = strings.to_string(path_to_include)
+
+		ok: bool
+		data, ok = read_file(file, context.temp_allocator)
+		if !ok {
+			log.panicf("Couldn't read include file \"%s\" in \"%s\"", file, requestingSource)
+		}
 	}
 
 	result := new(shaderc.includeResult)
 	result.sourceName = strings.clone_to_cstring(file)
 	result.sourceNameLength = len(result.sourceName)
-	result.content = strings.clone_to_cstring(cast(string)content)
+	result.content = strings.clone_to_cstring(cast(string)data)
 	result.contentLength = len(result.content)
 
 	return result

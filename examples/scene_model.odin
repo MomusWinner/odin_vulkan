@@ -38,8 +38,8 @@ model_scene_init :: proc(s: ^Scene) {
 	ve.camera_init(&data.camera)
 
 	// Load Model
-	data.texture_h = ve.load_texture("./assets/room.png")
-	data.model = ve.load_meshes("./assets/room.obj", context.temp_allocator)[0]
+	data.texture_h = ve.load_texture("./examples/assets/room.png")
+	data.model = ve.load_meshes("./examples/assets/room.obj", context.temp_allocator)[0]
 
 	data.pipeline_h = create_default_pipeline()
 

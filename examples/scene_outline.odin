@@ -45,7 +45,7 @@ outline_scene_init :: proc(s: ^Scene) {
 	}
 	ve.camera_init(&data.camera)
 
-	data.model = ve.load_meshes("./assets/Suzanne.obj", context.temp_allocator)[0]
+	data.model = ve.load_meshes("./examples/assets/Suzanne.obj", context.temp_allocator)[0]
 
 	data.pipeline_h = create_outline_model_pipeline()
 	data.outline_pipeline_h = create_outline_pipeline()
@@ -113,8 +113,8 @@ create_outline_model_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/buildin/shaders/default.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/buildin/shaders/default.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/default.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/default.frag"},
 	)
 
 	stencil_state := ve.Stencil_Op_State {
@@ -142,8 +142,8 @@ create_outline_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/outline.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/outline.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/outline.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/outline.frag"},
 	)
 
 	stencil_state := ve.Stencil_Op_State {

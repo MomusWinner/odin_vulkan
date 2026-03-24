@@ -64,8 +64,8 @@ create_default_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/buildin/shaders/default.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/buildin/shaders/default.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/default.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/default.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -81,8 +81,8 @@ create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/skybox.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/skybox.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/skybox.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/skybox.frag"},
 	)
 
 	create_info := ve.Create_Pipeline_Info {
@@ -103,8 +103,8 @@ create_reflect_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/reflect.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/reflect.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/reflect.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/reflect.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -123,8 +123,8 @@ create_hdr_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/hdr.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/hdr.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/hdr.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/hdr.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -138,8 +138,8 @@ create_multilight_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/multilight.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/multilight.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/multilight.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/multilight.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -155,8 +155,12 @@ create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/gaussian_blur.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/gaussian_blur.frag", consts = consts},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/gaussian_blur.vert"},
+		ve.Pipeline_Stage_Info {
+			stage = .Fragment,
+			shader_path = "examples/assets/shaders/gaussian_blur.frag",
+			consts = consts,
+		},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -169,8 +173,8 @@ create_light_box_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "assets/shaders/light_box.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "assets/shaders/light_box.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light_box.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/light_box.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()

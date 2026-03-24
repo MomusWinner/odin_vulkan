@@ -85,8 +85,8 @@ hdr_scene_init :: proc(s: ^Scene) {
 	ve.camera_init(&data.camera)
 
 	ve.init_render_target(&data.hdr_rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
-	hdr_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGB_norm_u16)
-	bright_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGB_norm_u16)
+	hdr_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGBA_norm_u16)
+	bright_color_attachmetn := ve.render_target_add_color_attachment(&data.hdr_rt, format = .RGBA_norm_u16)
 	ve.render_target_add_depth_attachment(&data.hdr_rt)
 
 	// Load Model

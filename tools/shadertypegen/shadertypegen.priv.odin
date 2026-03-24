@@ -175,7 +175,7 @@ generate_glsl :: proc(store: Parse_Data, path: string, package_name: string, loc
 
 	fmt.fprintfln(f, "// %s\n", WARNING)
 	fmt.fprintfln(f, "#ifndef {0:s}\n#define {0:s}\n", fmt.aprintf("GEN_TYPES_%s_H", strings.to_upper(package_name)))
-	fmt.fprintln(f, "#include \"buildin:base/bindless.h\"\n")
+	fmt.fprintln(f, "#include \"buildin:bindless.h\"\n")
 
 	for name in store.ordered {
 		s := store.structures[name]

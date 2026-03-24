@@ -41,7 +41,7 @@ run-release: release
 gen:
 	@echo "Generating..."
 	odin run ./tools/shadertypegen/ -- \
-		-outpute-glsl-dir:assets/shaders/ \
+		-outpute-glsl-dir:examples/assets/shaders/ \
 		-src-dir:./examples \
 		-ve-import:"ve .." \
 
@@ -49,7 +49,7 @@ gen:
 gen-ve:
 	@echo "Generating..."
 	odin run ./tools/shadertypegen/ -- \
-		-outpute-glsl-dir:assets/buildin/shaders/ \
+		-outpute-glsl-dir:buildin/shaders/ \
 		-src-dir:./
 
 .PHONY: clean
