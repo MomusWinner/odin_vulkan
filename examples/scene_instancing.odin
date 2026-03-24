@@ -78,7 +78,7 @@ instancing_scene_update :: proc(s: ^Scene) {
 instancing_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Instancing_Scene_Data)s.data
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.set_camera(d.camera)
 
@@ -89,7 +89,7 @@ instancing_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 instancing_scene_destroy :: proc(s: ^Scene) {

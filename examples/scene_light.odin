@@ -146,7 +146,7 @@ light_scene_update :: proc(s: ^Scene) {
 light_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Lighting_Scene_Data)s.data
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.begin_render_target(&d.rt)
 	{
@@ -168,7 +168,7 @@ light_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 light_scene_destroy :: proc(s: ^Scene) {

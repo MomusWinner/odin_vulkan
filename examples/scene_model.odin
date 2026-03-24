@@ -56,7 +56,7 @@ model_scene_update :: proc(s: ^Scene) {
 model_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Model_Scene_Data)s.data
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.begin_draw()
 	{
@@ -65,7 +65,7 @@ model_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 model_scene_destroy :: proc(s: ^Scene) {

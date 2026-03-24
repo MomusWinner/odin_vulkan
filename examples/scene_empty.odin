@@ -23,15 +23,13 @@ empty_scene_init :: proc(s: ^Scene) {}
 empty_scene_update :: proc(s: ^Scene) {}
 
 empty_scene_draw :: proc(s: ^Scene) {
-	ve.begin_render()
-	// Begin gfx. ------------------------------
+	ve.begin_pass()
 
 	ve.begin_draw()
 
 	ve.end_draw()
 
-	// End gfx. ------------------------------
-	ve.end_render()
+	ve.end_pass()
 }
 
 empty_scene_destroy :: proc(s: ^Scene) {}

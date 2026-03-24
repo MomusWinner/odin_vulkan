@@ -160,7 +160,7 @@ bloom_scene_draw :: proc(s: ^Scene) {
 		ve.render_target_resize(&d.rt, ve.get_screen_width(), ve.get_screen_height())
 	}
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.set_camera(d.camera)
 
@@ -191,7 +191,7 @@ bloom_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 bloom_scene_destroy :: proc(s: ^Scene) {

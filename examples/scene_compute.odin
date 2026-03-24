@@ -78,7 +78,7 @@ compute_scene_draw :: proc(s: ^Scene) {
 
 	b := ve.sbo_get_buffer(d.sbo)
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.cmd_dispatch(d.compute_pipeline, b, {GROUP_COUNT, 1, 1}, handles = {h0 = d.sbo, h1 = d.time_ubo})
 
@@ -88,7 +88,7 @@ compute_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 compute_scene_destroy :: proc(s: ^Scene) {

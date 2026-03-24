@@ -77,7 +77,7 @@ outline_scene_update :: proc(s: ^Scene) {
 outline_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Outline_Scene_Data)s.data
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.set_camera(d.camera)
 
@@ -88,7 +88,7 @@ outline_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 outline_scene_destroy :: proc(s: ^Scene) {

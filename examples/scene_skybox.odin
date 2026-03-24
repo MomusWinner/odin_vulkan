@@ -63,7 +63,7 @@ skybox_scene_update :: proc(s: ^Scene) {
 skybox_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Skybox_Scene_Data)s.data
 
-	ve.begin_render()
+	ve.begin_pass()
 
 	ve.begin_draw()
 	{
@@ -75,7 +75,7 @@ skybox_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_draw()
 
-	ve.end_render()
+	ve.end_pass()
 }
 
 skybox_scene_destroy :: proc(s: ^Scene) {

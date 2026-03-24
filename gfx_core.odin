@@ -341,8 +341,8 @@ Format :: enum i32 {
 @(private)
 _get_cmd :: proc() -> Command_Buffer {return ctx.gfx.cmd}
 
-begin_render :: proc(loc := #caller_location) {
-	assert(!ctx.gfx.render_started, "Call end_render() after begin_render()", loc)
+begin_pass :: proc(loc := #caller_location) {
+	assert(!ctx.gfx.render_started, "Call end_pass() after begin_pass()", loc)
 
 	_update_buffers()
 
@@ -383,9 +383,9 @@ begin_render :: proc(loc := #caller_location) {
 	must(vk.BeginCommandBuffer(_get_cmd(), &begin_info))
 }
 
-end_render :: proc() {
+end_pass :: proc() {
 	if !ctx.gfx.render_started {
-		log.error("Call begin_render() before end_render()")
+		log.error("Call begin_pass() before end_pass()")
 	}
 	defer ctx.gfx.render_started = false
 
