@@ -51,7 +51,7 @@ load_font_from_file :: proc(
 	assert(path != "", loc = loc)
 
 	data, ok := read_file(path, context.temp_allocator)
-	assert(ok, fmt.tprint("Couldn't load font. %s", path), loc)
+	assert(ok, fmt.tprint("Couldn't load font.", path), loc)
 
 	return load_font_from_memory(data, create_info, sampler_info, loc)
 }

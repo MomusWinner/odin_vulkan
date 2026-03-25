@@ -165,7 +165,7 @@ get_glsl_struct_name :: proc(name: string) -> string {
 }
 
 generate_glsl :: proc(store: Parse_Data, path: string, package_name: string, loc := #caller_location) -> bool {
-	f, ok := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644)
+	f, ok := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, os.Permissions_Read_Write_All)
 	defer os.close(f)
 
 	if ok != nil {
@@ -281,7 +281,7 @@ generate_odin :: proc(
 	gfx_pkg_info: Ve_Package_Info,
 	loc := #caller_location,
 ) -> bool {
-	f, ok := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644)
+	f, ok := os.open(path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, os.Permissions_Read_Write_All)
 	defer os.close(f)
 
 	if ok != nil {
@@ -337,7 +337,7 @@ sbo_get_buffer :: proc(h: {0:s}Storage_Buffer) -> {0:s}Buffer{{
 	return true
 }
 
-generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
+generate_odin_common_struct :: proc(d: Parse_Data, f: ^os.File, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
 ///////////////////////////
 // %s
@@ -388,7 +388,7 @@ generate_odin_common_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_
 	}
 }
 
-generate_odin_material_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
+generate_odin_material_struct :: proc(d: Parse_Data, f: ^os.File, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
 ///////////////////////////
 // %s
@@ -442,7 +442,7 @@ create_mtrl_{0:s} :: proc(
 	generate_odin_apply_proc(f, s, gfx_pref)
 }
 
-generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
+generate_odin_get_set_proc :: proc(f: ^os.File, s: Struct, ve_pkg: string) {
 	for field in s.fields {
 		field := field
 		field.array.length = -1
@@ -499,7 +499,7 @@ generate_odin_get_set_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	}
 }
 
-generate_odin_apply_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
+generate_odin_apply_proc :: proc(f: ^os.File, s: Struct, ve_pkg: string) {
 	fmt.fprintf(
 		f,
 		`
@@ -540,7 +540,7 @@ generate_odin_apply_proc :: proc(f: os.Handle, s: Struct, ve_pkg: string) {
 	)
 }
 
-generate_odin_storage_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
+generate_odin_storage_buffer_struct :: proc(d: Parse_Data, f: ^os.File, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
 ///////////////////////////
 // %s
@@ -590,7 +590,7 @@ create_sbo_{0:s} :: proc(
 	generate_odin_apply_proc(f, s, gfx_pref)
 }
 
-generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: os.Handle, s: Struct, gfx_pref: string) {
+generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: ^os.File, s: Struct, gfx_pref: string) {
 	fmt.fprintfln(f, `
 ///////////////////////////
 // %s
@@ -643,7 +643,7 @@ create_ubo_{0:s} :: proc(
 }
 
 print_field_to_data_field :: proc(
-	f: os.Handle,
+	f: ^os.File,
 	src_name: string,
 	dst_name: string,
 	field: Field,

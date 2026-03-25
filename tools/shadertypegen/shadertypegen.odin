@@ -86,12 +86,11 @@ main :: proc() {
 
 	gfx_pkg_info := parse_package_info(opt.ve_import)
 
-	generate_shader_types(
-		filepath.clean(opt.src_dir, context.temp_allocator),
-		filepath.join({opt.outpute_glsl_dir, "gen_types.h"}, context.temp_allocator),
-		filepath.join({opt.src_dir, "gen_materials.odin"}, context.temp_allocator),
-		gfx_pkg_info,
-	)
+	src_dir, _ := filepath.clean(opt.src_dir, context.temp_allocator)
+	glsl_dir, _ := filepath.join({opt.outpute_glsl_dir, "gen_types.h"}, context.temp_allocator)
+	odin_dir, _ := filepath.join({opt.src_dir, "gen_materials.odin"}, context.temp_allocator)
+
+	generate_shader_types(src_dir, glsl_dir, odin_dir, gfx_pkg_info)
 }
 
 // All allocations are performed in temp_allocator
@@ -102,15 +101,15 @@ generate_shader_types :: proc(
 	gfx_package: Ve_Package_Info,
 	loc := #caller_location,
 ) -> bool {
-	if !os.is_dir_path(src_path) {
+	if !os.is_dir(src_path) {
 		log.errorf("Unable to find directory src-path: \"%s\"", src_path)
 	}
 
-	if !os.is_dir_path(filepath.dir(outpute_glsl_path, context.temp_allocator)) {
+	if !os.is_dir(filepath.dir(outpute_glsl_path, context.temp_allocator)) {
 		log.errorf("Unable to find outpute-glsl dir: \"%s\"", outpute_glsl_path)
 	}
 
-	if !os.is_dir_path(filepath.dir(outpute_odin_path, context.temp_allocator)) {
+	if !os.is_dir(filepath.dir(outpute_odin_path, context.temp_allocator)) {
 		log.errorf("Unable to find outpute-odin dir: \"%s\"", outpute_odin_path)
 	}
 

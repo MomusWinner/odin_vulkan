@@ -8,12 +8,12 @@ import "core:strings"
 import vk "vendor:vulkan"
 
 read_file :: proc(name: string, allocator := context.allocator) -> ([]byte, bool) {
-	data, ok := os.read_entire_file(name, allocator)
-	return data, ok
+	data, err := os.read_entire_file(name, allocator)
+	return data, err == nil
 }
 
 wirte_file :: proc(name: string, data: []byte) -> bool {
-	return os.write_entire_file(name, data)
+	return os.write_entire_file(name, data) == nil
 }
 
 assert_not_nil :: #force_inline proc(obj: ^$T, loc := #caller_location) {
