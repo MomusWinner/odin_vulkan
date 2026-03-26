@@ -53,7 +53,7 @@ compute_scene_init :: proc(s: ^Scene) {
 
 	particles := generate_particles(context.temp_allocator)
 
-	d.sbo = create_sbo_particle({.Storage, .Vertex, .Host_Read, .Host_Write})
+	d.sbo = create_sbo_particle({.Storage, .Vertex, .Host_Write})
 	sbo_particle_set_particles(d.sbo, particles[:])
 	vbo := ve.sbo_get_buffer(d.sbo)
 
