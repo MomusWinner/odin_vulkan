@@ -16,13 +16,10 @@ package shaderc
 
 import _c "core:c"
 
-when ODIN_OS == .Windows 
-{
-	@(extra_linker_flags = "/NODEFAULTLIB:libcmt")
-	foreign import libshaderc "./libs/shaderc_combined.lib"
+when ODIN_OS == .Windows {
+	foreign import libshaderc "external/shaderc_shared.lib"
 } else when ODIN_OS == .Linux {
 	foreign import libshaderc "external/libshaderc_shared.so"
-
 }
 
 @(default_calling_convention = "c")
