@@ -57,18 +57,21 @@ Sampler_Info :: struct {
 }
 
 Texture_Encoding :: enum {
-	Linear,
-	sRGB,
+	srgb,
+	norm_u8,
+	norm_i8,
+	u8,
+	i8,
 }
 
-load_image :: proc(path: string, desired_channels: i32 = 0, loc := #caller_location) -> (image: Image, ok: bool) {
+load_image :: proc(path: string, desired_channels: int = 0, loc := #caller_location) -> (image: Image, ok: bool) {
 	stb_image.set_flip_vertically_on_load(1)
 	width, height, channels: i32
 
 	cpath, alloc_err := strings.clone_to_cstring(path, context.temp_allocator)
 	if alloc_err != .None do log.panicf("Failed to allocate memory: %v", alloc_err, loc)
 
-	data := stb_image.load(cpath, &width, &height, &channels, desired_channels)
+	data := stb_image.load(cpath, &width, &height, &channels, cast(i32)desired_channels)
 
 	if channels == 0 {
 		return {}, false
@@ -89,20 +92,27 @@ destroy_image :: proc(image: Image) {
 }
 
 @(require_results)
-load_texture :: proc(path: string, mip_levels: u32 = 1, anisotropy: f32 = 1) -> Texture {
-	image, ok := load_image(path)
+load_texture :: proc(
+	path: string,
+	mip_levels: u32 = 1,
+	desired_channels: int = 4,
+	encoding: Texture_Encoding = .srgb,
+	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	loc := #caller_location,
+) -> Texture {
+	image, ok := load_image(path, desired_channels, loc = loc)
 	defer destroy_image(image)
 	if !ok {
 		log.error("Couldn't load texture by path: ", path)
 		return {}
 	}
-	return create_texture(image, mip_levels)
+	return create_texture(image, mip_levels, encoding, sampler_info, loc)
 }
 
 create_texture :: proc(
 	image: Image,
 	mip_levels: u32 = 1,
-	encoding: Texture_Encoding = .sRGB,
+	encoding: Texture_Encoding = .srgb,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
 ) -> Texture {
@@ -169,7 +179,7 @@ load_cubemap_texture :: proc(paths: [CUBEMAP_LAYERS_COUNT]string, mip_levels: u3
 create_texture_cubemap :: proc(
 	faces: [CUBEMAP_LAYERS_COUNT]Image,
 	mip_levels: u32 = 1,
-	encoding: Texture_Encoding = .sRGB,
+	encoding: Texture_Encoding = .srgb,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
 ) -> (
@@ -209,7 +219,7 @@ create_texture_cubemap :: proc(
 
 	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 
-	format := _channels_and_encoding_to_format(image.channels, encoding)
+	format := channels_encoding_to_format(image.channels, encoding)
 
 	// Image
 	vk_image, allocation, allocation_info := _create_vk_image(
@@ -287,4 +297,64 @@ create_texture_cubemap :: proc(
 	_vk_set_debug_texture_name(cubemap, fmt.tprintf("%s %s", image.path, _location_to_string(loc)))
 
 	return
+}
+
+channels_encoding_to_format :: proc(channels: int, encoding: Texture_Encoding, loc := #caller_location) -> Format {
+	assert(channels != 0 || channels <= 4, loc = loc)
+
+	switch channels {
+	case 1:
+		switch encoding {
+		case .srgb:
+			log.panic("SRGB is not supported for 1 channel.", loc)
+		case .norm_u8:
+			return .R_norm_u8
+		case .norm_i8:
+			return .R_norm_i8
+		case .i8:
+			return .R_i8
+		case .u8:
+			return .R_u8
+		}
+	case 2:
+		switch encoding {
+		case .srgb:
+			log.panic("SRGB is not supported for 2 channel.", loc)
+		case .norm_u8:
+			return .RG_norm_u8
+		case .norm_i8:
+			return .RG_norm_i8
+		case .i8:
+			return .RG_i8
+		case .u8:
+			return .RG_u8
+		}
+	case 3:
+		switch encoding {
+		case .srgb:
+			log.panic("SRGB is not supported for 3 channel.", loc)
+		case .norm_u8:
+			return .RGB_norm_u8
+		case .norm_i8:
+			return .RGB_norm_i8
+		case .i8:
+			return .RGB_i8
+		case .u8:
+			return .RGB_u8
+		}
+	case 4:
+		switch encoding {
+		case .srgb:
+			return .RGBA_srgb_u8
+		case .norm_u8:
+			return .RGB_norm_u8
+		case .norm_i8:
+			return .RGB_norm_i8
+		case .i8:
+			return .RGB_i8
+		case .u8:
+			return .RGB_u8
+		}
+	}
+	log.panic(location = loc)
 }

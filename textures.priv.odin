@@ -45,7 +45,7 @@ Buffer_Image_Copy :: struct {
 _create_texture :: proc(
 	image: Image,
 	mip_levels: u32 = 1,
-	encoding: Texture_Encoding = .sRGB,
+	encoding: Texture_Encoding = .srgb,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
 ) -> (
@@ -60,7 +60,7 @@ _create_texture :: proc(
 	staging_buffer := _create_buffer({.Transfer, .Host_Write}, image_size, image.data)
 	defer _destroy_buffer(&staging_buffer)
 
-	format: Format = _channels_and_encoding_to_format(image.channels, encoding)
+	format: Format = channels_encoding_to_format(image.channels, encoding)
 
 	// Image
 	vk_image, allocation, allocation_info := _create_vk_image(
@@ -371,22 +371,6 @@ _generate_mipmaps :: proc(
 
 	subresource.baseMipLevel = mip_levels - 1
 	_cmd_image_transition_layout(cmd, image, .TRANSFER_DST_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL, subresource)
-}
-
-_channels_and_encoding_to_format :: proc(channels: int, encoding: Texture_Encoding) -> Format {
-	assert(channels != 0 || channels <= 4)
-
-	switch channels {
-	case 1:
-		return .R_u8 if encoding == .Linear else .R_srgb_u8
-	case 2:
-		return .RG_u8 if encoding == .Linear else .RG_srgb_u8
-	case 3:
-		return .RGB_u8 if encoding == .Linear else .RGB_srgb_u8
-	case 4:
-		return .RGBA_u8 if encoding == .Linear else .RGBA_srgb_u8
-	}
-	return .RGBA_srgb_u8
 }
 
 _format_to_vk :: #force_inline proc(format: Format) -> vk.Format {
