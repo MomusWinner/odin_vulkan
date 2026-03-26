@@ -2,7 +2,6 @@ _private
 
 bin
 *.exe
-*.o
 *.pdb
 *.spv
 gen_*

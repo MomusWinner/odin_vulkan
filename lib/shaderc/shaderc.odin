@@ -16,14 +16,12 @@ package shaderc
 
 import _c "core:c"
 
-SHADERC_SHARED :: #config(SHADERC_SHARED, true)
-
 when ODIN_OS == .Windows 
 {
 	@(extra_linker_flags = "/NODEFAULTLIB:libcmt")
 	foreign import libshaderc "./libs/shaderc_combined.lib"
 } else when ODIN_OS == .Linux {
-	foreign import libshaderc {"external/libshaderc_shared.so.1" when SHADERC_SHARED else "/external/libshaderc_combined.a"}
+	foreign import libshaderc "external/libshaderc_shared.so"
 
 }
 
