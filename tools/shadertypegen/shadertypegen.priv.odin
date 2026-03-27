@@ -304,22 +304,6 @@ generate_odin :: proc(
 		pkg_pref = fmt.aprintf("%s.", path[len(path) - 1])
 	}
 
-	fmt.fprintfln(
-		f,
-		`
-ubo_get_buffer :: proc(h: {0:s}Uniform_Buffer) -> {0:s}Buffer{{
-	b := {0:s}get_uniform_buffer(h)
-	return b.buffer_h
-}}
-sbo_get_buffer :: proc(h: {0:s}Storage_Buffer) -> {0:s}Buffer{{
-	b := {0:s}get_storage_buffer(h)
-	return b.buffer_h
-}}
-	`,
-		pkg_pref,
-	)
-
-
 	for name in d.ordered {
 		s := d.structures[name]
 		switch s.type {
@@ -419,7 +403,7 @@ create_mtrl_{0:s} :: proc(
 	m.dirty = true
 	m.apply = mtrl_{0:s}_apply
 
-	m.buffer_h := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
+	m.buffer := {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 `,
 		get_odin_proc_struct_name(s),
 		s.name,
@@ -531,7 +515,7 @@ generate_odin_apply_proc :: proc(f: ^os.File, s: Struct, ve_pkg: string) {
 	fmt.fprintf(
 		f,
 		`
-	{1:s}buffer_fill(b.buffer_h, gpu_data_ptr, size_of({0:s}), loc = loc)
+	{1:s}buffer_fill(b.buffer, gpu_data_ptr, size_of({0:s}), loc = loc)
 	b.dirty = false
 }}
 `,
@@ -569,7 +553,7 @@ create_sbo_{0:s} :: proc(
 	s.dirty = true
 	s.apply = sbo_{0:s}_apply
 
-	s.buffer_h = {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
+	s.buffer = {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 `,
 		get_odin_proc_struct_name(s),
 		s.name,
@@ -619,7 +603,7 @@ create_ubo_{0:s} :: proc(
 	u.dirty = true
 	u.apply = ubo_{0:s}_apply
 
-	u.buffer_h = {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
+	u.buffer = {2:s}create_buffer(buffer_usage, size_of({3:s}), loc = loc)
 `,
 		get_odin_proc_struct_name(s),
 		s.name,

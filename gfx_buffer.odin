@@ -26,11 +26,11 @@ Storage_Buffer :: distinct hm.Handle
 INVALID_STORAGE_BUFFER_HANDLE :: Storage_Buffer{max(u32), max(u32)}
 
 Cached_Buffer :: struct {
-	buffer_h: Buffer,
-	dirty:    bool,
-	apply:    proc(data: ^Cached_Buffer, loc := #caller_location),
-	data:     rawptr,
-	type:     typeid,
+	buffer: Buffer,
+	dirty:  bool,
+	apply:  proc(data: ^Cached_Buffer, loc := #caller_location),
+	data:   rawptr,
+	type:   typeid,
 }
 
 Uniform_Buffer_Data :: Cached_Buffer
@@ -66,7 +66,7 @@ buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: 
 
 ubo_get_buffer :: proc(h: Uniform_Buffer) -> Buffer {
 	b := get_uniform_buffer(h)
-	return b.buffer_h
+	return b.buffer
 }
 
 store_uniform_buffer :: proc(ubo: Uniform_Buffer_Data) -> Uniform_Buffer {
@@ -86,14 +86,14 @@ has_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 detstroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	if !ok do return false
-	b := _acquire_buffer_h(uniform_buffer.buffer_h)
+	b := _acquire_buffer_h(uniform_buffer.buffer)
 	_destroy_buffer(&b)
 	return true
 }
 
 sbo_get_buffer :: proc(h: Storage_Buffer) -> Buffer {
 	b := get_storage_buffer(h)
-	return b.buffer_h
+	return b.buffer
 }
 
 store_storage_buffer :: proc(sbo: Storage_Buffer_Data) -> Storage_Buffer {
@@ -113,7 +113,7 @@ get_storage_buffer :: proc(handle: Storage_Buffer, loc := #caller_location) -> ^
 detstroy_storage_buffer :: proc(handle: Storage_Buffer) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	if !ok do return false
-	b := _acquire_buffer_h(storage_buffer.buffer_h)
+	b := _acquire_buffer_h(storage_buffer.buffer)
 	_destroy_buffer(&b)
 	return true
 }
