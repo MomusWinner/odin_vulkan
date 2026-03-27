@@ -30,7 +30,7 @@ skybox_scene_init :: proc(s: ^Scene) {
 
 	ve.set_cursor_mode(.Disabled)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
 	d.cube = ve.create_primitive_cube()
@@ -69,9 +69,9 @@ skybox_scene_draw :: proc(s: ^Scene) {
 	{
 		ve.set_camera(d.camera)
 		// Skybox
-		ve.draw_mesh(&d.cube, d.skybox_pipeline, handles = {h0 = d.cubemap})
+		ve.draw_mesh(d.cube, d.skybox_pipeline, handles = {h0 = d.cubemap})
 		// Diamond
-		ve.draw_mesh(&d.cube, d.reflect_pipeline, ve.trf_get_matrix(d.trf), {h0 = d.cubemap})
+		ve.draw_mesh(d.cube, d.reflect_pipeline, ve.trf_get_matrix(d.trf), {h0 = d.cubemap})
 	}
 	ve.end_draw()
 

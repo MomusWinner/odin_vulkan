@@ -77,7 +77,7 @@ bloom_scene_init :: proc(s: ^Scene) {
 
 	ve.set_cursor_mode(.Disabled)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
 	ve.init_render_target(&d.rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
@@ -166,28 +166,28 @@ bloom_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render_target(&d.rt)
 	for &t in d.cube_trfs {
-		ve.draw_mesh(&d.cube, d.multilight_pipeline, ve.trf_get_matrix(t), {h0 = d.multilight_ubo})
+		ve.draw_mesh(d.cube, d.multilight_pipeline, ve.trf_get_matrix(t), {h0 = d.multilight_ubo})
 	}
 	for &l in d.light_sources {
-		ve.draw_mesh(&d.cube, d.light_source_pipeline, ve.trf_get_matrix(l.trf), {h0 = l.box_ubo})
+		ve.draw_mesh(d.cube, d.light_source_pipeline, ve.trf_get_matrix(l.trf), {h0 = l.box_ubo})
 	}
 	ve.end_render_target(&d.rt)
 
 	for i in 0 ..< 3 {
 		// Horizontal gaussian blur
 		ve.begin_render_target(&d.rt, {1})
-		ve.draw_mesh(&d.square, d.blur_hor_pipeline, handles = {h0 = d.blur_ubo})
+		ve.draw_mesh(d.square, d.blur_hor_pipeline, handles = {h0 = d.blur_ubo})
 		ve.end_render_target(&d.rt)
 
 		// Vertical gaussian blur
 		ve.begin_render_target(&d.rt, {1})
-		ve.draw_mesh(&d.square, d.blur_ver_pipeline, handles = {h0 = d.blur_ubo})
+		ve.draw_mesh(d.square, d.blur_ver_pipeline, handles = {h0 = d.blur_ubo})
 		ve.end_render_target(&d.rt)
 	}
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&d.square, d.hdr_pipeline, handles = {h0 = d.hdr_ubo})
+		ve.draw_mesh(d.square, d.hdr_pipeline, handles = {h0 = d.hdr_ubo})
 	}
 	ve.end_draw()
 

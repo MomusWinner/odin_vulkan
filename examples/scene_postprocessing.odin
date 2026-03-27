@@ -40,7 +40,7 @@ create_postprocessing_scene :: proc() -> Scene {
 postprocessing_scene_init :: proc(s: ^Scene) {
 	d := new(Postprocessing_Scene_Data)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
 	d.texture = ve.load_texture("examples/assets/room.png")
@@ -85,13 +85,13 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_render_target(&d.rt)
 	{
-		ve.draw_mesh(&d.model, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.ubo})
+		ve.draw_mesh(d.model, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.ubo})
 	}
 	ve.end_render_target(&d.rt)
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&d.square, d.postproc_pipeline, handles = {h0 = d.postprocessing_ubo})
+		ve.draw_mesh(d.square, d.postproc_pipeline, handles = {h0 = d.postprocessing_ubo})
 	}
 	ve.end_draw()
 

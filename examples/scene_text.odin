@@ -51,7 +51,7 @@ text_scene_init :: proc(s: ^Scene) {
 	d.camera.position = {0, 0, 2}
 	d.camera.target = {0, 0, 0}
 	d.camera.up = {0, 1, 0}
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 
 	d.font = ve.load_font(
 		"examples/assets/fonts/RobotoMono.ttf",
@@ -170,7 +170,7 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 }
 
 text_draw :: proc(text: ^Text, pipeline: ve.Graphics_Pipeline) {
-	ve.draw_mesh(&text.mesh, pipeline, ve.trf_get_matrix(text.trf), ve.Handles{h0 = text.ubo})
+	ve.draw_mesh(text.mesh, pipeline, ve.trf_get_matrix(text.trf), ve.Handles{h0 = text.ubo})
 }
 
 text_shader_attribute :: proc() -> ve.Vertex_Input_Description {

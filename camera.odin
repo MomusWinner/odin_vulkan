@@ -56,7 +56,7 @@ set_camera_buffer :: proc(buffer: Buffer) {
 	ctx.gfx.frame.camera = buffer
 }
 
-camera_init :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective, loc := #caller_location) {
+init_camera :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective, loc := #caller_location) {
 	assert_not_nil(camera, loc)
 
 	camera.fov = DEFAULT_FOV

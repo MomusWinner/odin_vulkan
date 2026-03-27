@@ -36,7 +36,7 @@ create_outline_scene :: proc() -> Scene {
 outline_scene_init :: proc(s: ^Scene) {
 	d := new(Outline_Scene_Data)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
 	d.mesh = ve.load_meshes("./examples/assets/Suzanne.obj", context.temp_allocator)[0]
@@ -83,8 +83,8 @@ outline_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.model_ubo})
-		ve.draw_mesh(&d.mesh, d.outline_pipeline, ve.trf_get_matrix(d.trf), {h0 = d.outline_ubo})
+		ve.draw_mesh(d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.model_ubo})
+		ve.draw_mesh(d.mesh, d.outline_pipeline, ve.trf_get_matrix(d.trf), {h0 = d.outline_ubo})
 	}
 	ve.end_draw()
 

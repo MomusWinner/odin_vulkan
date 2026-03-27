@@ -29,7 +29,7 @@ create_model_scene :: proc() -> Scene {
 model_scene_init :: proc(s: ^Scene) {
 	d := new(Model_Scene_Data)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
 	d.texture = ve.load_texture("./examples/assets/room.png")
@@ -61,7 +61,7 @@ model_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw()
 	{
 		ve.set_camera(d.camera)
-		ve.draw_mesh(&d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.ubo})
+		ve.draw_mesh(d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.ubo})
 	}
 	ve.end_draw()
 

@@ -39,7 +39,7 @@ instancing_scene_init :: proc(s: ^Scene) {
 
 	ve.set_cursor_mode(.Disabled)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
 	d.cube = ve.create_primitive_cube()
@@ -85,7 +85,7 @@ instancing_scene_draw :: proc(s: ^Scene) {
 	ve.begin_draw(clear_color = {.1, .1, .1, 1})
 	{
 		ve.cmd_bind_vertex_buffer(d.instance_vbo, 1)
-		ve.draw_mesh(&d.cube, d.pipeline, ve.trf_get_matrix(d.trf), instance_count = INSTANCE_COUNT)
+		ve.draw_mesh(d.cube, d.pipeline, ve.trf_get_matrix(d.trf), instance_count = INSTANCE_COUNT)
 	}
 	ve.end_draw()
 

@@ -84,7 +84,7 @@ compute_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_draw()
 	{
-		ve.draw_mesh(&d.mesh, d.pipeline, {})
+		ve.draw_mesh(d.mesh, d.pipeline, {})
 	}
 	ve.end_draw()
 

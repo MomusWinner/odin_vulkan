@@ -972,15 +972,13 @@ destroy_mesh :: proc(mesh: ^Mesh, loc := #caller_location) {
 }
 
 draw_mesh :: proc(
-	mesh: ^Mesh,
+	mesh: Mesh,
 	pipeline: Graphics_Pipeline,
 	trf: Maybe(mat4) = nil,
 	handles: Handles = {},
 	instance_count: u32 = 1,
 	loc := #caller_location,
 ) {
-	assert_not_nil(mesh, loc)
-
 	ebo, has_ebo := mesh.ebo.?
 
 	cmd_bind_vertex_buffer(mesh.vbo, 0, loc = loc)

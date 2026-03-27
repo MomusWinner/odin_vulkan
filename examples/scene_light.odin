@@ -58,10 +58,10 @@ light_scene_init :: proc(s: ^Scene) {
 
 	ve.set_cursor_mode(.Disabled)
 
-	ve.camera_init(&d.camera)
+	ve.init_camera(&d.camera)
 	d.camera.position = {0, 2, 8}
 
-	ve.camera_init(&d.light_camera, .Orthographic)
+	ve.init_camera(&d.light_camera, .Orthographic)
 	d.light_camera.position = {0.0001, 7, 0.0}
 	d.light_camera.near = 1.0
 	d.light_camera.far = 40.5
@@ -151,8 +151,8 @@ light_scene_draw :: proc(s: ^Scene) {
 	ve.begin_render_target(&d.rt)
 	{
 		ve.set_camera(d.light_camera)
-		ve.draw_mesh(&d.suzanne_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.suzanne_trf))
-		ve.draw_mesh(&d.ground_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.ground_trf))
+		ve.draw_mesh(d.suzanne_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.suzanne_trf))
+		ve.draw_mesh(d.ground_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.ground_trf))
 	}
 	ve.end_render_target(&d.rt)
 
@@ -163,8 +163,8 @@ light_scene_draw :: proc(s: ^Scene) {
 			h0 = d.light_ubo,
 			h1 = d.light_data_ubo,
 		}
-		ve.draw_mesh(&d.suzanne_mesh, d.light_pipeline, ve.trf_get_matrix(d.suzanne_trf), handles)
-		ve.draw_mesh(&d.ground_mesh, d.light_pipeline, ve.trf_get_matrix(d.ground_trf), handles)
+		ve.draw_mesh(d.suzanne_mesh, d.light_pipeline, ve.trf_get_matrix(d.suzanne_trf), handles)
+		ve.draw_mesh(d.ground_mesh, d.light_pipeline, ve.trf_get_matrix(d.ground_trf), handles)
 	}
 	ve.end_draw()
 
