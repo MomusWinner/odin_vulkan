@@ -70,7 +70,7 @@ case "$1" in
     gen)
         echo "Generating..."
         $ODIN run ./tools/shadertypegen/ -- \
-            -outpute-glsl-dir:examples/assets/shaders/ \
+            -output-glsl-dir:examples/assets/shaders/ \
             -src-dir:./examples \
             -ve-import:"ve .."
         ;;
