@@ -45,14 +45,13 @@ Buffer_Image_Copy :: struct {
 _create_texture :: proc(
 	image: Image,
 	mip_levels: u32 = 1,
-	encoding: Texture_Encoding = .srgb,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	loc := #caller_location,
 ) -> (
 	texture: Texture_Data,
 ) {
-	desired_channels: int = image.channels
-	image_size := cast(vk.DeviceSize)(image.width * image.height * desired_channels)
+	channels: int = pixel_format_to_channels(image.format)
+	image_size := cast(vk.DeviceSize)(image.width * image.height * channels)
 
 	sc := begin_single_cmd()
 
@@ -60,7 +59,7 @@ _create_texture :: proc(
 	staging_buffer := _create_buffer({.Transfer, .Host_Write}, image_size, image.data)
 	defer _destroy_buffer(&staging_buffer)
 
-	format: Format = channels_encoding_to_format(image.channels, encoding)
+	format: Format = cast(Format)image.format
 
 	// Image
 	vk_image, allocation, allocation_info := _create_vk_image(

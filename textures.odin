@@ -12,11 +12,11 @@ import stb_image "vendor:stb/image"
 import vk "vendor:vulkan"
 
 Image :: struct {
-	width:    int,
-	height:   int,
-	channels: int,
-	data:     [^]byte,
-	path:     string,
+	width:  int,
+	height: int,
+	format: Pixel_Format,
+	data:   [^]byte,
+	path:   string,
 }
 
 Sampler_Border_Color :: enum {
@@ -56,30 +56,56 @@ Sampler_Info :: struct {
 	lod_clamp:         Sampler_Lod_Clamp,
 }
 
-Texture_Encoding :: enum {
-	srgb,
-	norm_u8,
-	norm_i8,
-	u8,
-	i8,
+Pixel_Format :: enum {
+	// 1 channel
+	R_norm_u8      = 9,
+	R_norm_i8      = 10,
+	R_u8           = 13,
+	R_i8           = 14,
+	// 2 channels
+	RG_norm_u8     = 16,
+	RG_norm_i8     = 17,
+	RG_u8          = 20,
+	RG_i8          = 21,
+	// 3 channels
+	RGB_norm_u8    = 23,
+	RGB_norm_i8    = 24,
+	RGB_u8         = 27,
+	RGB_i8         = 28,
+	// 4 channels
+	RGBA_norm_u8   = 37,
+	RGBA_norm_i8   = 38,
+	RGBA_scaled_u8 = 39,
+	RGBA_scaled_i8 = 40,
+	RGBA_u8        = 41,
+	RGBA_i8        = 42,
+	RGBA_srgb_u8   = 43,
 }
 
-load_image :: proc(path: string, desired_channels: int = 0, loc := #caller_location) -> (image: Image, ok: bool) {
+load_image :: proc(
+	path: string,
+	format: Pixel_Format = .RGBA_srgb_u8,
+	loc := #caller_location,
+) -> (
+	image: Image,
+	ok: bool,
+) {
 	stb_image.set_flip_vertically_on_load(1)
 	width, height, channels: i32
 
 	cpath, alloc_err := strings.clone_to_cstring(path, context.temp_allocator)
 	if alloc_err != .None do log.panicf("Failed to allocate memory: %v", alloc_err, loc)
 
-	data := stb_image.load(cpath, &width, &height, &channels, cast(i32)desired_channels)
+	desired_channels := cast(i32)pixel_format_to_channels(format)
+	data := stb_image.load(cpath, &width, &height, &channels, desired_channels)
 
-	if channels == 0 {
+	if data == nil {
 		return {}, false
 	}
 
 	image.width = cast(int)width
 	image.height = cast(int)height
-	image.channels = desired_channels == 0 ? cast(int)channels : cast(int)desired_channels
+	image.format = format
 	image.path = path
 	image.data = data
 	ok = true
@@ -94,29 +120,28 @@ destroy_image :: proc(image: Image) {
 @(require_results)
 load_texture :: proc(
 	path: string,
-	mip_levels: u32 = 1,
-	desired_channels: int = 4,
-	encoding: Texture_Encoding = .srgb,
+	format: Pixel_Format = .RGBA_srgb_u8,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> Texture {
-	image, ok := load_image(path, desired_channels, loc = loc)
+	image, ok := load_image(path, format, loc = loc)
 	defer destroy_image(image)
 	if !ok {
 		log.error("Couldn't load texture by path: ", path)
 		return {}
 	}
-	return create_texture(image, mip_levels, encoding, sampler_info, loc)
+	return create_texture(image, format, sampler_info, mip_levels, loc)
 }
 
 create_texture :: proc(
 	image: Image,
-	mip_levels: u32 = 1,
-	encoding: Texture_Encoding = .srgb,
+	format: Pixel_Format,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> Texture {
-	return _store_texture(_create_texture(image, mip_levels, encoding, sampler_info, loc), loc)
+	return _store_texture(_create_texture(image, mip_levels, sampler_info, loc), loc)
 }
 
 destroy_texture :: proc(texture: Texture, loc := #caller_location) {
@@ -142,7 +167,7 @@ texture_set_sampler :: proc(texture: Texture, info: Sampler_Info) {
 	_update_texture_h(texture)
 }
 
-CUBEMAP_LAYERS_COUNT :: 6
+CUBEMAP_LAYER_COUNT :: 6
 
 // Creates a cubemap texture from 6 face images.
 // Face orientation follows the standard cubemap layout:
@@ -150,19 +175,25 @@ CUBEMAP_LAYERS_COUNT :: 6
 // 2: +Y (top)     3: -Y (bottom)
 // 4: +Z (front)   5: -Z (back)
 @(require_results)
-load_cubemap_texture :: proc(paths: [CUBEMAP_LAYERS_COUNT]string, mip_levels: u32 = 1, anisotropy: f32 = 1) -> Texture {
-	images: [CUBEMAP_LAYERS_COUNT]Image
+load_cubemap_texture :: proc(
+	paths: [CUBEMAP_LAYER_COUNT]string,
+	format: Pixel_Format,
+	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	mip_levels: u32 = 1,
+	loc := #caller_location,
+) -> Texture {
+	images: [CUBEMAP_LAYER_COUNT]Image
 	for path, i in paths {
-		image, ok := load_image(path)
+		image, ok := load_image(path, format, loc)
 		if !ok {
-			log.error("couldn't load texture by path: ", path)
+			log.error("Couldn't load texture by path: ", path)
 			return {}
 		}
 
 		images[i] = image
 	}
 
-	texture := create_texture_cubemap(images, mip_levels)
+	texture := create_texture_cubemap(images, sampler_info, mip_levels)
 
 	for &image in images {
 		destroy_image(image)
@@ -177,10 +208,9 @@ load_cubemap_texture :: proc(paths: [CUBEMAP_LAYERS_COUNT]string, mip_levels: u3
 // 2: +Y (top)     3: -Y (bottom)
 // 4: +Z (front)   5: -Z (back)
 create_texture_cubemap :: proc(
-	faces: [CUBEMAP_LAYERS_COUNT]Image,
-	mip_levels: u32 = 1,
-	encoding: Texture_Encoding = .srgb,
+	faces: [CUBEMAP_LAYER_COUNT]Image,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> (
 	cubemap: Texture_Cubemap,
@@ -191,14 +221,14 @@ create_texture_cubemap :: proc(
 			ERROR :: "All cubemap faces must have identical width, height, and channel count"
 			assert(faces[i].width == faces[j].width, ERROR, loc)
 			assert(faces[i].height == faces[j].height, ERROR, loc)
-			assert(faces[i].channels == faces[j].channels, ERROR, loc)
+			assert(faces[i].format == faces[j].format, ERROR, loc)
 		}
 	}
 
 	image := faces[0]
-	desired_channels: int = image.channels
-	layer_size := cast(Device_Size)(image.width * image.height * desired_channels)
-	image_size := layer_size * CUBEMAP_LAYERS_COUNT
+	channels: int = pixel_format_to_channels(image.format)
+	layer_size := cast(Device_Size)(image.width * image.height * channels)
+	image_size := layer_size * CUBEMAP_LAYER_COUNT
 
 	sc := begin_single_cmd()
 
@@ -219,7 +249,7 @@ create_texture_cubemap :: proc(
 
 	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 
-	format := channels_encoding_to_format(image.channels, encoding)
+	format := cast(Format)image.format
 
 	// Image
 	vk_image, allocation, allocation_info := _create_vk_image(
@@ -241,12 +271,12 @@ create_texture_cubemap :: proc(
 		vk_image,
 		.UNDEFINED,
 		.TRANSFER_DST_OPTIMAL,
-		vk.ImageSubresourceRange{aspectMask = {.COLOR}, levelCount = mip_levels, layerCount = CUBEMAP_LAYERS_COUNT},
+		vk.ImageSubresourceRange{aspectMask = {.COLOR}, levelCount = mip_levels, layerCount = CUBEMAP_LAYER_COUNT},
 	)
 
-	regions: [CUBEMAP_LAYERS_COUNT]vk.BufferImageCopy
+	regions: [CUBEMAP_LAYER_COUNT]vk.BufferImageCopy
 
-	for i in 0 ..< CUBEMAP_LAYERS_COUNT {
+	for i in 0 ..< CUBEMAP_LAYER_COUNT {
 		regions[i] = vk.BufferImageCopy {
 			bufferOffset = layer_size * cast(Device_Size)i,
 			bufferRowLength = 0,
@@ -283,7 +313,7 @@ create_texture_cubemap :: proc(
 		{.COLOR},
 		mip_levels,
 		.CUBE,
-		CUBEMAP_LAYERS_COUNT,
+		CUBEMAP_LAYER_COUNT,
 	)
 	sampler: vk.Sampler = _create_sampler(sampler_info)
 
@@ -299,62 +329,15 @@ create_texture_cubemap :: proc(
 	return
 }
 
-channels_encoding_to_format :: proc(channels: int, encoding: Texture_Encoding, loc := #caller_location) -> Format {
-	assert(channels != 0 || channels <= 4, loc = loc)
-
-	switch channels {
-	case 1:
-		switch encoding {
-		case .srgb:
-			log.panic("SRGB is not supported for 1 channel.", loc)
-		case .norm_u8:
-			return .R_norm_u8
-		case .norm_i8:
-			return .R_norm_i8
-		case .i8:
-			return .R_i8
-		case .u8:
-			return .R_u8
-		}
-	case 2:
-		switch encoding {
-		case .srgb:
-			log.panic("SRGB is not supported for 2 channel.", loc)
-		case .norm_u8:
-			return .RG_norm_u8
-		case .norm_i8:
-			return .RG_norm_i8
-		case .i8:
-			return .RG_i8
-		case .u8:
-			return .RG_u8
-		}
-	case 3:
-		switch encoding {
-		case .srgb:
-			log.panic("SRGB is not supported for 3 channel.", loc)
-		case .norm_u8:
-			return .RGB_norm_u8
-		case .norm_i8:
-			return .RGB_norm_i8
-		case .i8:
-			return .RGB_i8
-		case .u8:
-			return .RGB_u8
-		}
-	case 4:
-		switch encoding {
-		case .srgb:
-			return .RGBA_srgb_u8
-		case .norm_u8:
-			return .RGB_norm_u8
-		case .norm_i8:
-			return .RGB_norm_i8
-		case .i8:
-			return .RGB_i8
-		case .u8:
-			return .RGB_u8
-		}
+pixel_format_to_channels :: proc(format: Pixel_Format) -> int {
+	if format >= Pixel_Format.R_norm_u8 && format <= Pixel_Format.R_i8 {
+		return 1
+	} else if format >= Pixel_Format.RG_norm_u8 && format <= Pixel_Format.RG_i8 {
+		return 2
+	} else if format >= Pixel_Format.RGB_norm_u8 && format <= Pixel_Format.RGB_i8 {
+		return 3
+	} else if format >= Pixel_Format.RGBA_norm_u8 && format <= Pixel_Format.RGBA_srgb_u8 {
+		return 3
 	}
-	log.panic(location = loc)
+	return 0
 }
