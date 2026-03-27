@@ -329,8 +329,10 @@ Format :: enum i32 {
 	RGBA_i64        = 120,
 	RGBA_f64        = 121,
 	// depth
-	// depth_stencil
+	D_f24_pack32    = 125,
 	D_f32           = 126,
+	// depth_stencil
+	D_f24_S_u8      = 129,
 	D_f32_S_u8      = 130,
 }
 

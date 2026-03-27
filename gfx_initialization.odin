@@ -626,47 +626,36 @@ _choose_swapchain_present_mode :: proc(modes: []vk.PresentModeKHR) -> vk.Present
 			return .MAILBOX
 		}
 	}
-	log.error("Fifo selected")
-
 	// As a fallback, fifo (basically vsync) is always available.
 	return .FIFO
 }
 
 @(private)
-_find_depth_format :: proc(physical_device: vk.PhysicalDevice, support_stencil: bool) -> Format {
-	if support_stencil {
+_find_depth_format :: proc(physical_device: vk.PhysicalDevice, stencil: bool) -> Format {
+	if stencil {
 		return _vk_to_format(
-			_find_supported_format(physical_device, {.D32_SFLOAT_S8_UINT}, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT}),
+			_find_supported_format(
+				physical_device,
+				{.D32_SFLOAT_S8_UINT, .D24_UNORM_S8_UINT},
+				.OPTIMAL,
+				{.DEPTH_STENCIL_ATTACHMENT},
+			),
 		)
 	}
 
-	return _vk_to_format(_find_supported_format(physical_device, {.D32_SFLOAT}, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT}))
+	return _vk_to_format(
+		_find_supported_format(
+			physical_device,
+			{.D32_SFLOAT, .X8_D24_UNORM_PACK32},
+			.OPTIMAL,
+			{.DEPTH_STENCIL_ATTACHMENT},
+		),
+	)
 }
 
 @(private)
 _has_stencil_component :: proc(format: Format) -> bool {
 	return format == .D_f32_S_u8
-}
-
-@(private)
-_find_memory_type :: proc(
-	physical_device: vk.PhysicalDevice, // FIXME: not used
-	type_filter: u32,
-	properties: vk.MemoryPropertyFlags,
-) -> (
-	memory_type: u32,
-	ok: bool,
-) {
-	mem_property: vk.PhysicalDeviceMemoryProperties
-	vk.GetPhysicalDeviceMemoryProperties(physical_device, &mem_property)
-
-	for i: u32 = 0; i < mem_property.memoryTypeCount; i += 1 {
-		if (type_filter & (1 << i) != 0) && (mem_property.memoryTypes[i].propertyFlags >= properties) {
-			return i, true
-		}
-	}
-
-	return 0, false
 }
 
 @(private)
