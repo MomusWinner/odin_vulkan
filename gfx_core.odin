@@ -449,6 +449,7 @@ end_pass :: proc() {
 	case present_result == .ERROR_OUT_OF_DATE_KHR || present_result == .SUBOPTIMAL_KHR:
 		ctx.gfx.frame.status = .IncorrectSwapchainSize
 	case present_result == .SUCCESS:
+		ctx.gfx.frame.status = .Success
 	case:
 		log.panicf("vulkan: present failure: %v", present_result)
 	}
