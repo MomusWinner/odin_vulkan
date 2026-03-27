@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 APP_NAME="ve_examples"
 SRC_DIR="examples"
