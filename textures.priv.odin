@@ -44,13 +44,14 @@ Buffer_Image_Copy :: struct {
 
 _create_texture :: proc(
 	image: Image,
-	mip_levels: u32 = 1,
+	format: Pixel_Format,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
+	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> (
 	texture: Texture_Data,
 ) {
-	channels: int = pixel_format_to_channels(image.format)
+	channels: int = pixel_format_to_channels(format)
 	image_size := cast(vk.DeviceSize)(image.width * image.height * channels)
 
 	sc := begin_single_cmd()
@@ -59,7 +60,7 @@ _create_texture :: proc(
 	staging_buffer := _create_buffer({.Transfer, .Host_Write}, image_size, image.data)
 	defer _destroy_buffer(&staging_buffer)
 
-	format: Format = cast(Format)image.format
+	format: Format = cast(Format)format
 
 	// Image
 	vk_image, allocation, allocation_info := _create_vk_image(

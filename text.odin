@@ -11,7 +11,7 @@ import vk "vendor:vulkan"
 
 Font :: struct {
 	size:                    f32,
-	glyph:                   Texture,
+	glyph_map:               Texture,
 	packed_chars:            []tt.packedchar,
 	aligned_quads:           []tt.aligned_quad,
 	codepoint_to_char_index: map[int]int,
@@ -151,13 +151,13 @@ load_font_from_memory :: proc(
 		channels = 1,
 	}
 
-	texture_h := create_texture(image, 1, sampler_info = sampler_info)
+	texture := create_texture(image, .R_norm_u8, sampler_info = sampler_info)
 
 	return Font {
 		size = create_info.size,
 		packed_chars = packed_chars,
 		aligned_quads = aligned_quads,
-		glyph = texture_h,
+		glyph_map = texture,
 		codepoint_to_char_index = codepoint_to_char_index,
 		default_char = create_info.default_char,
 	}

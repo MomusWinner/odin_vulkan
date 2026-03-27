@@ -12,11 +12,11 @@ import stb_image "vendor:stb/image"
 import vk "vendor:vulkan"
 
 Image :: struct {
-	width:  int,
-	height: int,
-	format: Pixel_Format,
-	data:   [^]byte,
-	path:   string,
+	width:    int,
+	height:   int,
+	channels: int,
+	data:     [^]byte,
+	path:     string,
 }
 
 Sampler_Border_Color :: enum {
@@ -82,22 +82,14 @@ Pixel_Format :: enum {
 	RGBA_srgb_u8   = 43,
 }
 
-load_image :: proc(
-	path: string,
-	format: Pixel_Format = .RGBA_srgb_u8,
-	loc := #caller_location,
-) -> (
-	image: Image,
-	ok: bool,
-) {
+load_image :: proc(path: string, desired_channels: int, loc := #caller_location) -> (image: Image, ok: bool) {
 	stb_image.set_flip_vertically_on_load(1)
 	width, height, channels: i32
 
 	cpath, alloc_err := strings.clone_to_cstring(path, context.temp_allocator)
 	if alloc_err != .None do log.panicf("Failed to allocate memory: %v", alloc_err, loc)
 
-	desired_channels := cast(i32)pixel_format_to_channels(format)
-	data := stb_image.load(cpath, &width, &height, &channels, desired_channels)
+	data := stb_image.load(cpath, &width, &height, &channels, cast(i32)desired_channels)
 
 	if data == nil {
 		return {}, false
@@ -105,7 +97,7 @@ load_image :: proc(
 
 	image.width = cast(int)width
 	image.height = cast(int)height
-	image.format = format
+	image.channels = cast(int)desired_channels
 	image.path = path
 	image.data = data
 	ok = true
@@ -125,7 +117,8 @@ load_texture :: proc(
 	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> Texture {
-	image, ok := load_image(path, format, loc = loc)
+	channels := pixel_format_to_channels(format)
+	image, ok := load_image(path, channels, loc = loc)
 	defer destroy_image(image)
 	if !ok {
 		log.error("Couldn't load texture by path: ", path)
@@ -141,7 +134,7 @@ create_texture :: proc(
 	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> Texture {
-	return _store_texture(_create_texture(image, mip_levels, sampler_info, loc), loc)
+	return _store_texture(_create_texture(image, format, sampler_info, mip_levels, loc), loc)
 }
 
 destroy_texture :: proc(texture: Texture, loc := #caller_location) {
@@ -177,14 +170,15 @@ CUBEMAP_LAYER_COUNT :: 6
 @(require_results)
 load_cubemap_texture :: proc(
 	paths: [CUBEMAP_LAYER_COUNT]string,
-	format: Pixel_Format,
+	format: Pixel_Format = .RGBA_srgb_u8,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	mip_levels: u32 = 1,
 	loc := #caller_location,
 ) -> Texture {
 	images: [CUBEMAP_LAYER_COUNT]Image
+	channels := pixel_format_to_channels(format)
 	for path, i in paths {
-		image, ok := load_image(path, format, loc)
+		image, ok := load_image(path, channels, loc)
 		if !ok {
 			log.error("Couldn't load texture by path: ", path)
 			return {}
@@ -193,7 +187,7 @@ load_cubemap_texture :: proc(
 		images[i] = image
 	}
 
-	texture := create_texture_cubemap(images, sampler_info, mip_levels)
+	texture := create_texture_cubemap(images, format, sampler_info, mip_levels)
 
 	for &image in images {
 		destroy_image(image)
@@ -209,6 +203,7 @@ load_cubemap_texture :: proc(
 // 4: +Z (front)   5: -Z (back)
 create_texture_cubemap :: proc(
 	faces: [CUBEMAP_LAYER_COUNT]Image,
+	format: Pixel_Format,
 	sampler_info: Sampler_Info = DEFAULT_SAMPLER_INFO,
 	mip_levels: u32 = 1,
 	loc := #caller_location,
@@ -221,12 +216,12 @@ create_texture_cubemap :: proc(
 			ERROR :: "All cubemap faces must have identical width, height, and channel count"
 			assert(faces[i].width == faces[j].width, ERROR, loc)
 			assert(faces[i].height == faces[j].height, ERROR, loc)
-			assert(faces[i].format == faces[j].format, ERROR, loc)
+			assert(faces[i].channels == faces[j].channels, ERROR, loc)
 		}
 	}
 
 	image := faces[0]
-	channels: int = pixel_format_to_channels(image.format)
+	channels: int = pixel_format_to_channels(format)
 	layer_size := cast(Device_Size)(image.width * image.height * channels)
 	image_size := layer_size * CUBEMAP_LAYER_COUNT
 
@@ -249,7 +244,7 @@ create_texture_cubemap :: proc(
 
 	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 
-	format := cast(Format)image.format
+	format := cast(Format)format
 
 	// Image
 	vk_image, allocation, allocation_info := _create_vk_image(
@@ -337,7 +332,7 @@ pixel_format_to_channels :: proc(format: Pixel_Format) -> int {
 	} else if format >= Pixel_Format.RGB_norm_u8 && format <= Pixel_Format.RGB_i8 {
 		return 3
 	} else if format >= Pixel_Format.RGBA_norm_u8 && format <= Pixel_Format.RGBA_srgb_u8 {
-		return 3
+		return 4
 	}
 	return 0
 }

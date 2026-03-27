@@ -135,7 +135,7 @@ create_text :: proc(
 	ve.trf_set_scale(&trf, vec3{1, 1, 1})
 
 	ubo := create_ubo_text()
-	ubo_text_set_glyph(ubo, font.glyph)
+	ubo_text_set_glyph(ubo, font.glyph_map)
 	ubo_text_set_color(ubo, color)
 
 	vertices := ve.create_text_mesh(font, text, size, context.temp_allocator, loc)
