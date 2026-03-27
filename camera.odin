@@ -16,12 +16,6 @@ Camera_UBO :: struct {
 	view:       mat4,
 	projection: mat4,
 	position:   vec3,
-}
-
-Camera_Data :: struct {
-	view:       mat4,
-	projection: mat4,
-	position:   vec3,
 	_pad0:      f32,
 }
 
