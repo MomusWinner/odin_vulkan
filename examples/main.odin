@@ -72,7 +72,7 @@ main :: proc() {
 	// current_scene = create_light_scene()
 	// current_scene = create_skybox_scene()
 	// current_scene = create_outline_scene()
-	// current_scene = create_hdr_scene()
+	// current_scene = create_bloom_scene()
 	// current_scene = create_instancing_scene()
 	// current_scene = create_compute_scene()
 	// current_scene = create_text_scene()
