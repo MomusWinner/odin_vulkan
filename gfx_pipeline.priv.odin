@@ -473,18 +473,10 @@ _create_compute_pipeline :: proc(
 	create_info: Create_Compute_Pipeline_Info,
 	allocator := context.allocator,
 	loc := #caller_location,
-) -> (
-	Compute_Pipeline_Data,
-	bool,
-) {
+) -> Compute_Pipeline_Data {
 	create_info := create_info
-	path := strings.concatenate({create_info.shader_path, ".spv"}, context.temp_allocator)
 
-	module, ok := _create_shader_module(path, GFX_DEBUG, loc)
-	if !ok {
-		log.errorf("Couldn't find compute shader \"%s\".", path, loc)
-		return {}, false
-	}
+	module := _create_shader_module(create_info.source)
 	defer vk.DestroyShaderModule(ctx.gfx.vk_state.device, module, nil)
 
 	spec: ^vk.SpecializationInfo = nil
@@ -534,7 +526,7 @@ _create_compute_pipeline :: proc(
 		layout      = pipeline_layout_info,
 	}
 
-	return compute_pipeline, true
+	return compute_pipeline
 }
 
 @(private = "file")
@@ -626,58 +618,53 @@ _destroy_pipline :: proc(pipeline: ^Pipeline) {
 _create_shader_module :: proc {
 	_create_shader_module_from_file,
 	_create_shader_module_from_memory,
+	_create_shader_module_from_shader_source,
+}
+
+_create_shader_module_from_shader_source :: proc(source: Shader_Source, loc := #caller_location) -> vk.ShaderModule {
+	switch s in source {
+	case string:
+		return _create_shader_module_from_file(s, loc)
+	case []byte:
+		return _create_shader_module_from_memory(s, loc)
+	}
+	panic("")
 }
 
 @(private = "file")
 @(require_results)
-_create_shader_module_from_file :: proc(
-	path: string,
-	compile: bool = false,
-	loc := #caller_location,
-) -> (
-	module: vk.ShaderModule,
-	ok: bool,
-) {
-
-	get_source_path :: proc(path: string) -> string {
-		if len(path) > 4 && path[len(path) - 4:] == ".spv" {
-			return path[:len(path) - 4]
-		}
-		log.panic(fmt.tprintf("Invalid shader '%s': expected .spv extension", path))
+_create_shader_module_from_file :: proc(path: string, loc := #caller_location) -> (module: vk.ShaderModule) {
+	is_compiled :: proc(path: string) -> bool {
+		return len(path) > 4 && path[len(path) - 4:] == ".spv"
 	}
 
-	if compile {
+	create_shader_module_from_compiled_source :: proc(path: string) -> vk.ShaderModule {
+		data, ok := read_file(path, context.temp_allocator)
+		if !ok {
+			log.panic("Coulnd't load shader: ", path)
+		}
+		return _create_shader_module_from_memory(data)
+	}
+
+	if is_compiled(path) {
+		return create_shader_module_from_compiled_source(path)
+	} else {
 		when GFX_DEBUG {
-			data, w_ok := _shader_compile_and_write(ctx.gfx.pipeline_manager, get_source_path(path), loc)
+			data, w_ok := _shader_compile_and_write(ctx.gfx.pipeline_manager, path, loc)
 			if !w_ok {
-				log.panic("Couldn't write compiled shader ", path)
+				log.panic("Couldn't write a compiled shader to: ", path)
 			}
-
-			return _create_shader_module_from_memory(data), w_ok
+			return _create_shader_module_from_memory(data)
 		} else {
-			log.panic("Couldn't compile shader on release mode")
+			spv_path := fmt.tprintf("%s.spv", path)
+			return create_shader_module_from_compiled_source(spv_path)
 		}
 	}
-	data, success := read_file(path, context.temp_allocator)
-
-	if !success {
-		when GFX_DEBUG {
-			data = _shader_compile(ctx.gfx.pipeline_manager, get_source_path(path), loc)
-			success := wirte_file(path, data)
-			if !success {
-				log.panic("Couldn't write compiled shader ", path)
-			}
-		} else {
-			log.error("coulnd't load shader module: ", path)
-		}
-	}
-
-	return _create_shader_module_from_memory(data), success
 }
 
 @(private = "file")
 @(require_results)
-_create_shader_module_from_memory :: proc(code: []byte) -> (module: vk.ShaderModule) {
+_create_shader_module_from_memory :: proc(code: []byte, loc := #caller_location) -> (module: vk.ShaderModule) {
 	as_u32 := slice.reinterpret([]u32, code)
 
 	create_info := vk.ShaderModuleCreateInfo {
@@ -702,12 +689,7 @@ _create_shader_stages :: proc(
 	for i in 0 ..< create_info.stage_infos.len {
 		stage_info := create_info.stage_infos.data[i]
 
-		path := strings.concatenate({stage_info.shader_path, ".spv"}, context.temp_allocator)
-		shader_module, c_ok := _create_shader_module(path, compile, loc)
-
-		if !c_ok {
-			log.panicf("Couldn't create shader module for stage %v. Path: %s", stage_info.stage, stage_info.shader_path)
-		}
+		shader_module := _create_shader_module(stage_info.source, loc)
 
 		spec: ^vk.SpecializationInfo = nil
 		if sm.len(stage_info.consts) > 0 {

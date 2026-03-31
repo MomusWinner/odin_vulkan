@@ -30,8 +30,8 @@ create_default_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/default.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/default.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/default.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/default.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -47,8 +47,8 @@ create_skybox_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/skybox.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/skybox.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/skybox.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/skybox.frag"},
 	)
 
 	create_info := ve.Create_Pipeline_Info {
@@ -66,8 +66,8 @@ create_postprocessing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/postprocessing.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/postprocessing.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/postprocessing.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/postprocessing.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -80,8 +80,8 @@ create_light_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/light.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/light.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/light.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -95,10 +95,7 @@ create_depth_only_pipeline :: proc() -> ve.Graphics_Pipeline {
 	sm.append(&vert_descriptions, ve.create_vertex_input_description())
 
 	stages := ve.Stage_Infos{}
-	sm.push_back_elems(
-		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light.vert"},
-	)
+	sm.push_back_elems(&stages, ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/light.vert"})
 
 	create_info := get_base_create_pipeline_info()
 	create_info.stage_infos = stages
@@ -119,8 +116,8 @@ create_reflect_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/reflect.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/reflect.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/reflect.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/reflect.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -139,8 +136,8 @@ create_hdr_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/hdr.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/hdr.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/hdr.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/hdr.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -153,8 +150,8 @@ create_outline_model_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/default.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/default.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/default.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/default.frag"},
 	)
 
 	stencil_state := ve.Stencil_Op_State {
@@ -182,8 +179,8 @@ create_outline_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/outline.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/outline.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/outline.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/outline.frag"},
 	)
 
 	stencil_state := ve.Stencil_Op_State {
@@ -211,8 +208,8 @@ create_multilight_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/multilight.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/multilight.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/multilight.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/multilight.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -228,10 +225,10 @@ create_gaussian_blur_pipeline :: proc(horizontal: b32) -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/gaussian_blur.vert"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/gaussian_blur.vert"},
 		ve.Pipeline_Stage_Info {
 			stage = .Fragment,
-			shader_path = "examples/assets/shaders/gaussian_blur.frag",
+			source = "examples/assets/shaders/gaussian_blur.frag",
 			consts = consts,
 		},
 	)
@@ -246,8 +243,8 @@ create_light_source_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/light_source.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/light_source.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/light_source.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/light_source.frag"},
 	)
 
 	create_info := get_base_create_pipeline_info()
@@ -293,8 +290,8 @@ create_instancing_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/instancing.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/instancing.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/instancing.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/instancing.frag"},
 	)
 
 	create_info := ve.Create_Pipeline_Info {
@@ -337,8 +334,8 @@ create_particle_pipeline :: proc() -> ve.Graphics_Pipeline {
 	stages := ve.Stage_Infos{}
 	sm.push_back_elems(
 		&stages,
-		ve.Pipeline_Stage_Info{stage = .Vertex, shader_path = "examples/assets/shaders/particle.vert"},
-		ve.Pipeline_Stage_Info{stage = .Fragment, shader_path = "examples/assets/shaders/particle.frag"},
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/particle.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/particle.frag"},
 	)
 
 	vert_descriptions: ve.Vertex_Input_Descriptions
@@ -359,10 +356,56 @@ create_compute_pipeline :: proc(x_invocations: i32) -> ve.Compute_Pipeline {
 	sm.append(&consts, ve.Shader_Constant{id = 0, value = {int = x_invocations}})
 
 	info := ve.Create_Compute_Pipeline_Info {
-		bindless    = true,
-		shader_path = "examples/assets/shaders/particle.comp",
-		consts      = consts,
+		bindless = true,
+		source   = "examples/assets/shaders/particle.comp",
+		consts   = consts,
 	}
 	handle := ve.create_compute_pipeline(info)
 	return handle
+}
+
+create_text_pipeline :: proc() -> ve.Graphics_Pipeline {
+	vert_descriptions: ve.Vertex_Input_Descriptions
+	sm.append(&vert_descriptions, text_shader_attribute())
+
+	stages := ve.Stage_Infos{}
+	sm.push_back_elems(
+		&stages,
+		ve.Pipeline_Stage_Info{stage = .Vertex, source = "examples/assets/shaders/text.vert"},
+		ve.Pipeline_Stage_Info{stage = .Fragment, source = "examples/assets/shaders/text.frag"},
+	)
+
+	bleding := ve.Blending_Infos{}
+	sm.append(
+		&bleding,
+		ve.Blending_Info {
+			src_color_blend_factor = .Src_Alpha,
+			dst_color_blend_factor = .One_Minus_Src_Alpha,
+			color_blend_op = .Add,
+			src_alpha_blend_factor = .One,
+			dst_alpha_blend_factor = .Zero,
+			alpha_blend_op = .Add,
+			color_write_mask = {.R, .G, .B, .A},
+		},
+	)
+
+	create_info := ve.Create_Pipeline_Info {
+		bindless = true,
+		vertex_input_descriptions = vert_descriptions,
+		blending_info = {attachment_infos = bleding},
+		stage_infos = stages,
+		topology = .Triangle_List,
+		rasterizer = {polygon_mode = .Fill, line_width = 1, cull_mode = {}, front_face = .Clockwise},
+		depth = {
+			enable = true,
+			write_enable = true,
+			compare_op = .Less,
+			bounds_test_enable = false,
+			min_bounds = 0,
+			max_bounds = 0,
+		},
+		stencil = {enable = false},
+	}
+
+	return ve.create_graphics_pipeline(create_info)
 }

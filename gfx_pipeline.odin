@@ -30,10 +30,16 @@ Shader_Constant :: struct {
 }
 Shader_Constants :: sm.Small_Array(MAX_PIPELINE_SHADER_CONTANT_COUNT, Shader_Constant)
 
+Shader_Source :: union {
+	string,
+	[]byte,
+}
+
 Pipeline_Stage_Info :: struct {
-	stage:       Shader_Stage_Flag,
-	shader_path: string,
-	consts:      Shader_Constants,
+	stage:  Shader_Stage_Flag,
+	// May be the path to a shader or the shader spv content
+	source: Shader_Source,
+	consts: Shader_Constants,
 }
 
 Front_Face :: enum c.int {
@@ -136,7 +142,7 @@ Create_Pipeline_Info :: struct {
 Create_Compute_Pipeline_Info :: struct {
 	descriptor_set_infos: Pipeline_Set_Layout_Infos,
 	bindless:             bool,
-	shader_path:          string,
+	source:               Shader_Source,
 	consts:               Shader_Constants,
 }
 
@@ -284,9 +290,7 @@ destroy_graphics_pipeline :: proc(pipeline: Graphics_Pipeline) -> bool {
 
 @(require_results)
 create_compute_pipeline :: proc(create_pipeline_info: Create_Compute_Pipeline_Info) -> Compute_Pipeline {
-	pipeline, ok := _create_compute_pipeline(create_pipeline_info, context.allocator)
-	if !ok do log.panic(fmt.tprintf("Couldn't load pipeline: \n %v", create_pipeline_info))
-
+	pipeline := _create_compute_pipeline(create_pipeline_info, context.allocator)
 	handle := _pipeline_manager_registe_compute_pipeline(ctx.gfx.pipeline_manager, pipeline)
 
 	return handle
