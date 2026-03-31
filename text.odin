@@ -135,14 +135,14 @@ load_font_from_memory :: proc(
 	}
 
 	// NOTE: Write Font Data to PNG
-	image.write_png(
-		"font_image.png",
-		create_info.atlas_width,
-		create_info.atlas_height,
-		1,
-		raw_data(font_atlas_bitmap),
-		create_info.atlas_width,
-	)
+	// image.write_png(
+	// 	"font_image.png",
+	// 	create_info.atlas_width,
+	// 	create_info.atlas_height,
+	// 	1,
+	// 	raw_data(font_atlas_bitmap),
+	// 	create_info.atlas_width,
+	// )
 
 	image := Image {
 		width    = cast(int)create_info.atlas_width,
