@@ -1065,7 +1065,12 @@ _destroy_swapchain :: proc() {
 
 @(private)
 _recreate_swapchain :: proc() {
-	_swapchain_recreate(ctx.gfx.swapchain)
+	vk.DeviceWaitIdle(ctx.gfx.vk_state.device)
+	_swapchain_destroy(ctx.gfx.swapchain)
+	swapchain := _swapchain_new(ctx.gfx.swapchain.sample_count)
+	sc := begin_single_cmd()
+	_swapchain_setup(ctx.gfx.swapchain, sc.cmd)
+	end_single_cmd(sc)
 }
 
 @(private)
@@ -1157,19 +1162,6 @@ _swapchain_setup :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer
 		stencil := .Stencil in ctx.info.gfx.attachments
 		_swapchain_setupt_depth_texture(swapchain, command_buffer, stencil)
 	}
-}
-
-@(private = "file")
-_swapchain_recreate :: proc(swapchain: ^Swapchain) {
-	vk.DeviceWaitIdle(ctx.gfx.vk_state.device)
-
-	_swapchain_destroy(swapchain)
-
-	swapchain := _swapchain_new(swapchain.sample_count)
-
-	sc := begin_single_cmd()
-	_swapchain_setup(swapchain, sc.cmd)
-	end_single_cmd(sc)
 }
 
 @(private = "file")
