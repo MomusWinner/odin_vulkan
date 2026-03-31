@@ -364,10 +364,10 @@ begin_pass :: proc(loc := #caller_location) {
 	)
 
 	#partial switch acquire_result {
-	case .ERROR_OUT_OF_DATE_KHR:
+	case .ERROR_OUT_OF_DATE_KHR, .SUBOPTIMAL_KHR:
 		frame_data.status = .IncorrectSwapchainSize
 		return
-	case .SUCCESS, .SUBOPTIMAL_KHR:
+	case .SUCCESS:
 	case:
 		log.panicf("acquire next image failure: %v", acquire_result)
 	}
