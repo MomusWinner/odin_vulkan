@@ -58,5 +58,5 @@ trf_get_right :: proc(trf: Transform) -> vec3 {
 }
 
 trf_get_matrix :: proc(trf: Transform) -> mat4 {
-	return glsl.mat4Translate(trf.position) * glsl.mat4Scale(trf.scale) * glsl.mat4FromQuat(trf.rotation)
+	return glsl.mat4Translate(trf.position) * glsl.mat4FromQuat(trf.rotation) * glsl.mat4Scale(trf.scale)
 }
