@@ -346,10 +346,6 @@ begin_pass :: proc(loc := #caller_location) {
 
 	defer ctx.gfx.render_started = true
 
-	frame_data := Frame_Data {
-		status = .Success,
-	}
-
 	// Wait for previous frame
 	must(vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64)))
 
@@ -364,10 +360,8 @@ begin_pass :: proc(loc := #caller_location) {
 	)
 
 	#partial switch acquire_result {
-	case .ERROR_OUT_OF_DATE_KHR, .SUBOPTIMAL_KHR:
-		frame_data.status = .IncorrectSwapchainSize
-		return
-	case .SUCCESS:
+	case .SUCCESS, .SUBOPTIMAL_KHR:
+		ctx.gfx.frame.status = .Success
 	case:
 		log.panicf("acquire next image failure: %v", acquire_result)
 	}
@@ -460,7 +454,7 @@ end_pass :: proc() {
 
 	if ctx.gfx.frame.status == .IncorrectSwapchainSize {
 		ctx.gfx.frame.swapchain_resized = true
-		_on_screen_resized()
+		_resize_swapchain()
 	}
 
 	_clear_deffered_destructor()
@@ -578,7 +572,7 @@ end_compute :: proc() {
 }
 
 @(private)
-_on_screen_resized :: proc() {
+_resize_swapchain :: proc() {
 	// Don't do anything when minimized.
 	for w, h := glfw.GetFramebufferSize(ctx.window.id);
 	    w == 0 || h == 0;
@@ -1067,7 +1061,7 @@ _destroy_swapchain :: proc() {
 _recreate_swapchain :: proc() {
 	vk.DeviceWaitIdle(ctx.gfx.vk_state.device)
 	_swapchain_destroy(ctx.gfx.swapchain)
-	swapchain := _swapchain_new(ctx.gfx.swapchain.sample_count)
+	ctx.gfx.swapchain = _swapchain_new(ctx.gfx.swapchain.sample_count)
 	sc := begin_single_cmd()
 	_swapchain_setup(ctx.gfx.swapchain, sc.cmd)
 	end_single_cmd(sc)
