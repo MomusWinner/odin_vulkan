@@ -83,11 +83,11 @@ text_scene_init :: proc(s: ^Scene) {
 
 text_scene_update :: proc(s: ^Scene) {
 	d := cast(^Text_Scene_Data)s.data
-	d.color_value += ve.get_delta_time() * 5
-	green := (math.sin_f32(cast(f32)ve.get_total_time() * 5) + 1) / 2
+	d.color_value += ve.time_get_delta() * 5
+	green := (math.sin_f32(cast(f32)ve.time_get_total() * 5) + 1) / 2
 	text_set_color(&d.text, vec3{1, green, 1})
 
-	d.elapsed_time += cast(f64)ve.get_delta_time()
+	d.elapsed_time += cast(f64)ve.time_get_delta()
 	if d.elapsed_time > d.time_delta {
 		d.elapsed_time = 0
 		strings.write_string(&d.builder, "\n... ")

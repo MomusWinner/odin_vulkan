@@ -115,16 +115,16 @@ light_scene_update :: proc(s: ^Scene) {
 	camera = &d.light_camera
 
 	if ve.key_is_down(.Up) {
-		camera.position.z += ve.get_delta_time() * speed
+		camera.position.z += ve.time_get_delta() * speed
 	}
 	if ve.key_is_down(.Down) {
-		camera.position.z -= ve.get_delta_time() * speed
+		camera.position.z -= ve.time_get_delta() * speed
 	}
 	if ve.key_is_down(.Left) {
-		camera.position.x += ve.get_delta_time() * speed
+		camera.position.x += ve.time_get_delta() * speed
 	}
 	if ve.key_is_down(.Right) {
-		camera.position.x -= ve.get_delta_time() * speed
+		camera.position.x -= ve.time_get_delta() * speed
 	}
 
 	ve.camera_update_simple_controller(&d.camera)

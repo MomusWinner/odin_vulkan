@@ -124,13 +124,10 @@ window_set_fullscreen :: proc(enable: bool) {
 	ctx.window.fullscreen = enable
 }
 
-get_delta_time :: proc() -> f32 {
-	return ctx.time.delta_time
-}
-
-get_total_time :: proc() -> f64 {
-	return ctx.time.total_time
-}
+@(require_results)
+time_get_delta :: proc() -> f32 {return ctx.time.delta_time}
+@(require_results)
+time_get_total :: proc() -> f64 {return ctx.time.total_time}
 
 init :: proc(info: Ve_Info, loc := #caller_location) {
 	// TODO: set custom allocator.

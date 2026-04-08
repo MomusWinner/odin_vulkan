@@ -146,10 +146,10 @@ bloom_scene_update :: proc(s: ^Scene) {
 	exp := ubo_hdr_get_exposure(d.hdr_ubo)
 	speed: f32 = 1.0
 	if (ve.key_is_down(.Up)) {
-		ubo_hdr_set_exposure(d.hdr_ubo, exp + speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(d.hdr_ubo, exp + speed * ve.time_get_delta())
 	}
 	if (ve.key_is_down(.Down)) {
-		ubo_hdr_set_exposure(d.hdr_ubo, exp - speed * ve.get_delta_time())
+		ubo_hdr_set_exposure(d.hdr_ubo, exp - speed * ve.time_get_delta())
 	}
 }
 

@@ -65,10 +65,10 @@ outline_scene_update :: proc(s: ^Scene) {
 	speed: f32 = 0.1
 
 	if ve.key_is_down(.W) {
-		ubo_outline_set_outline_width(d.outline_ubo, width + speed * cast(f32)ve.get_delta_time())
+		ubo_outline_set_outline_width(d.outline_ubo, width + speed * cast(f32)ve.time_get_delta())
 	}
 	if ve.key_is_down(.S) {
-		new_width := width - speed * cast(f32)ve.get_delta_time()
+		new_width := width - speed * cast(f32)ve.time_get_delta()
 		if new_width < 0 do new_width = 0
 		ubo_outline_set_outline_width(d.outline_ubo, new_width)
 	}

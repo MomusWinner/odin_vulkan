@@ -70,7 +70,7 @@ instancing_scene_init :: proc(s: ^Scene) {
 
 instancing_scene_update :: proc(s: ^Scene) {
 	d := cast(^Instancing_Scene_Data)s.data
-	d.rotation += ve.get_delta_time() * 0.1
+	d.rotation += ve.time_get_delta() * 0.1
 	ve.trf_rotate(&d.trf, {0, 1, 0}, d.rotation)
 	ve.camera_update_simple_controller(&d.camera)
 }

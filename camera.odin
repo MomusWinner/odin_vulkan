@@ -181,7 +181,7 @@ camera_update_simple_controller :: proc(
 	zoom_speed: f32 = 2.5,
 ) {
 	speed := speed
-	speed *= get_delta_time()
+	speed *= time_get_delta()
 
 	m_delta := mouse_get_delta()
 	if lin.length_vec2(m_delta) > 0.0001 {
@@ -189,7 +189,7 @@ camera_update_simple_controller :: proc(
 		forward := camera_get_forward(camera^)
 
 		{ 	// set camera pitch
-			angle: f32 = -m_delta.y * get_delta_time() * mouse_sens
+			angle: f32 = -m_delta.y * time_get_delta() * mouse_sens
 
 			maxAngleUp := vemath.vec3_angle(up, forward)
 			maxAngleUp -= 0.001
@@ -203,11 +203,11 @@ camera_update_simple_controller :: proc(
 		}
 
 		{ 	// set camera yaw
-			camera_set_yaw(camera, -m_delta.x * get_delta_time() * mouse_sens)
+			camera_set_yaw(camera, -m_delta.x * time_get_delta() * mouse_sens)
 		}
 	}
 
-	camera_set_zoom(camera, camera.zoom + mouse_get_scroll_f32() * get_delta_time() * zoom_speed)
+	camera_set_zoom(camera, camera.zoom + mouse_get_scroll_f32() * time_get_delta() * zoom_speed)
 
 	camera.zoom = lin.clamp_vec3(camera.zoom, 0.01, 5)
 

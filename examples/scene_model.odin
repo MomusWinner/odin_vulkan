@@ -49,7 +49,7 @@ model_scene_init :: proc(s: ^Scene) {
 
 model_scene_update :: proc(s: ^Scene) {
 	d := cast(^Model_Scene_Data)s.data
-	d.model_rotation += ve.get_delta_time()
+	d.model_rotation += ve.time_get_delta()
 	ve.trf_rotate(&d.trf, {0, 1, 0}, d.model_rotation)
 }
 

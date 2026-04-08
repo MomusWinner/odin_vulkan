@@ -70,7 +70,7 @@ compute_scene_init :: proc(s: ^Scene) {
 
 compute_scene_update :: proc(s: ^Scene) {
 	d := cast(^Compute_Scene_Data)s.data
-	ubo_delta_time_set_delta_time(d.time_ubo, ve.get_delta_time())
+	ubo_delta_time_set_delta_time(d.time_ubo, ve.time_get_delta())
 }
 
 compute_scene_draw :: proc(s: ^Scene) {
