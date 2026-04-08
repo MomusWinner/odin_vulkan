@@ -28,7 +28,7 @@ _init_gfx :: proc(init_info: Graphics_Init_Info) {
 	callback_ctx = context
 
 	_init_vulkan_state()
-	ctx.gfx.cmd = _create_draw_command_buffers(ctx.gfx.vk_state) // TODO:
+	ctx.gfx.cmd = _create_draw_command_buffer(ctx.gfx.vk_state)
 	_init_limits()
 
 	_init_swapchaint_cfg()
@@ -411,7 +411,7 @@ _destroy_command_pool :: proc() {
 }
 
 @(private = "file")
-_create_draw_command_buffers :: proc(vks: Vulkan_State) -> Command_Buffer {
+_create_draw_command_buffer :: proc(vks: Vulkan_State) -> Command_Buffer {
 	alloc_info := vk.CommandBufferAllocateInfo {
 		sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
 		commandPool        = vks.command_pool,
