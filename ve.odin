@@ -25,36 +25,24 @@ quat :: math.quat
 game_event_proc :: proc(user_data: rawptr)
 
 Ve :: struct {
-	window:       struct {
+	window: struct {
 		id:         glfw.WindowHandle,
+		focused:    bool,
 		fullscreen: bool,
 		prev:       struct {
 			width, height: int,
 			x, y:          int,
 		},
 	},
-	info:         Ve_Info,
-	should_close: bool,
-	gfx:          Graphics,
-	time:         struct {
+	info:   Ve_Info,
+	gfx:    Graphics,
+	time:   struct {
 		start_time:     time.Time,
 		previous_frame: time.Time,
 		delta_time:     f32,
 		total_time:     f64,
 	},
-	input:        struct {
-		keyboard: struct {
-			states:          [KEYBOARD_MAX_KEY]i32,
-			previous_states: [KEYBOARD_MAX_KEY]i32,
-		},
-		mouse:    struct {
-			states:             [glfw.MOUSE_BUTTON_LAST]i32,
-			previous_states:    [glfw.MOUSE_BUTTON_LAST]i32,
-			position:           vec2,
-			previouse_position: vec2,
-			scroll:             vec2,
-		},
-	},
+	input:  Input_State,
 }
 
 Ve_Info :: struct {
@@ -72,15 +60,34 @@ Ve_Info :: struct {
 @(private)
 ctx: Ve
 
-@(private)
-g_err_ctx: runtime.Context // FIXME:
+@(private = "file")
+glfw_callback_ctx: runtime.Context
 
 @(require_results)
-get_screen_width :: proc() -> int {return ctx.gfx.swapchain.width}
+get_swapchain_size :: proc() -> (int, int) {return get_swapchain_width(), get_swapchain_height()}
 @(require_results)
-get_screen_height :: proc() -> int {return ctx.gfx.swapchain.height}
+get_swapchain_width :: proc() -> int {return ctx.gfx.swapchain.width}
+@(require_results)
+get_swapchain_height :: proc() -> int {return ctx.gfx.swapchain.height}
+
+get_screen_size :: get_swapchain_size
+get_screen_width :: get_swapchain_width
+get_screen_height :: get_swapchain_height
+
 @(require_results)
 screen_resized :: proc() -> bool {return ctx.gfx.frame.swapchain_resized}
+
+@(require_results)
+get_framebuffer_size :: proc() -> (int, int) {
+	w, h := glfw.GetFramebufferSize(ctx.window.id)
+	return cast(int)w, cast(int)h
+}
+
+@(require_results)
+get_window_size :: proc() -> (int, int) {
+	w, h := glfw.GetWindowSize(ctx.window.id)
+	return cast(int)w, cast(int)h
+}
 
 @(require_results)
 get_window_pos :: proc() -> (int, int) {
@@ -90,6 +97,8 @@ get_window_pos :: proc() -> (int, int) {
 set_window_pos :: proc(x, y: int) {
 	glfw.SetWindowPos(ctx.window.id, cast(i32)x, cast(i32)y)
 }
+
+get_window_focused :: proc() -> bool {return ctx.window.focused}
 
 set_window_fullscreen :: proc(enable: bool) {
 	if enable == ctx.window.fullscreen do return
@@ -167,8 +176,9 @@ init :: proc(info: Ve_Info, loc := #caller_location) {
 	}
 	assert(window != nil, "Couldn't create window. Please check window settings", loc)
 
-	g_err_ctx = context
+	glfw_callback_ctx = context
 	glfw.SetErrorCallback(_glfw_error_callback)
+	glfw.SetWindowFocusCallback(window, _glfw_window_focus_callback)
 
 	ctx.window.id = window
 	ctx.info = info
@@ -195,7 +205,11 @@ should_close :: proc() -> bool {
 	}
 	ctx.time.total_time = time.duration_seconds(time.since(ctx.time.start_time))
 
-	_update_input()
+	_input_late_update()
+
+	glfw.PollEvents()
+
+	_input_update()
 
 	return cast(bool)_window_should_close()
 }
@@ -224,8 +238,13 @@ load_meshes :: proc(path: string, allocator := context.allocator) -> []Mesh {
 
 @(private = "file")
 _glfw_error_callback :: proc "c" (code: i32, description: cstring) {
-	context = g_err_ctx
+	context = glfw_callback_ctx
 	log.errorf("glfw: %i: %s", code, description)
+}
+
+@(private = "file")
+_glfw_window_focus_callback :: proc "c" (window: glfw.WindowHandle, focused: c.int) {
+	ctx.window.focused = true if focused == 1 else false
 }
 
 @(private)

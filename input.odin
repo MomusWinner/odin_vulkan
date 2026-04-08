@@ -6,6 +6,21 @@ import "core:log"
 import "core:math"
 import "vendor:glfw"
 
+Input_State :: struct {
+	keyboard: struct {
+		states:          [KEYBOARD_MAX_KEY]i32,
+		previous_states: [KEYBOARD_MAX_KEY]i32,
+	},
+	mouse:    struct {
+		states:             [glfw.MOUSE_BUTTON_LAST]i32,
+		previous_states:    [glfw.MOUSE_BUTTON_LAST]i32,
+		scale:              vec2,
+		position:           vec2,
+		previouse_position: vec2,
+		scroll:             vec2,
+	},
+}
+
 Key :: enum {
 	Space        = 32,
 	Apostrophe   = 39, /* ' */
@@ -179,7 +194,7 @@ is_key_up :: proc(key: Key) -> bool {
 }
 
 get_mouse_position :: proc() -> vec2 {
-	return ctx.input.mouse.position
+	return ctx.input.mouse.position * get_mouse_scale()
 }
 
 get_mouse_delta :: proc() -> vec2 {
@@ -226,22 +241,26 @@ get_scroll_f32 :: proc() -> f32 {
 	return ctx.input.mouse.scroll.y
 }
 
+set_mouse_scale :: proc(scale: vec2) {ctx.input.mouse.scale = scale}
+@(require_results)
+get_mouse_scale :: proc() -> vec2 {return ctx.input.mouse.scale}
+
 @(private)
 _init_input :: proc() {
 	glfw.SetScrollCallback(ctx.window.id, _scroll_callback)
 	ctx.input.mouse.previouse_position = vec2{cast(f32)get_screen_width(), cast(f32)get_screen_height()} / 2
+
+	window_w, window_h := get_window_size()
+	framebuffer_w, framebuffer_h := get_framebuffer_size()
+	set_mouse_scale(vec2{cast(f32)framebuffer_w / cast(f32)window_w, cast(f32)framebuffer_h / cast(f32)window_h})
 }
 
 @(private)
-_update_input :: proc() {
-	ctx.input.mouse.scroll = 0
-	glfw.PollEvents()
-
+_input_update :: proc() {
 	// Keyboard
 	ctx.input.keyboard.previous_states = ctx.input.keyboard.states
 	for key in glfw.KEY_SPACE ..< KEYBOARD_MAX_KEY {
 		state := glfw.GetKey(ctx.window.id, cast(i32)key)
-
 		ctx.input.keyboard.states[key] = state
 	}
 
@@ -256,6 +275,12 @@ _update_input :: proc() {
 	ctx.input.mouse.position = {cast(f32)mouse_pos_x, cast(f32)mouse_pos_y}
 }
 
+@(private)
+_input_late_update :: proc() {
+	ctx.input.mouse.scroll = 0
+}
+
+@(private)
 _scroll_callback :: proc "c" (window: glfw.WindowHandle, xoffset, yoffset: f64) {
 	ctx.input.mouse.scroll = vec2{cast(f32)xoffset, cast(f32)yoffset}
 }
