@@ -37,7 +37,7 @@ create_instancing_scene :: proc() -> Scene {
 instancing_scene_init :: proc(s: ^Scene) {
 	d := new(Instancing_Scene_Data)
 
-	ve.set_cursor_mode(.Disabled)
+	ve.cursor_set_mode(.Disabled)
 
 	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}

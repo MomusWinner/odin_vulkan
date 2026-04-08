@@ -183,7 +183,7 @@ camera_update_simple_controller :: proc(
 	speed := speed
 	speed *= get_delta_time()
 
-	m_delta := get_mouse_delta()
+	m_delta := mouse_get_delta()
 	if lin.length_vec2(m_delta) > 0.0001 {
 		up := camera_get_up(camera^)
 		forward := camera_get_forward(camera^)
@@ -207,24 +207,24 @@ camera_update_simple_controller :: proc(
 		}
 	}
 
-	camera_set_zoom(camera, camera.zoom + get_scroll_f32() * get_delta_time() * zoom_speed)
+	camera_set_zoom(camera, camera.zoom + mouse_get_scroll_f32() * get_delta_time() * zoom_speed)
 
 	camera.zoom = lin.clamp_vec3(camera.zoom, 0.01, 5)
 
-	if is_key_down(.LeftShift) {
+	if key_is_down(.LeftShift) {
 		speed *= 2
 	}
 
-	if is_key_down(.W) {
+	if key_is_down(.W) {
 		camera_move(camera, camera_get_forward(camera^) * speed)
 	}
-	if is_key_down(.S) {
+	if key_is_down(.S) {
 		camera_move(camera, -camera_get_forward(camera^) * speed)
 	}
-	if is_key_down(.A) {
+	if key_is_down(.A) {
 		camera_move(camera, camera_get_left(camera^) * speed)
 	}
-	if is_key_down(.D) {
+	if key_is_down(.D) {
 		camera_move(camera, camera_get_right(camera^) * speed)
 	}
 }

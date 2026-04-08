@@ -82,11 +82,11 @@ main :: proc() {
 
 	prev: time.Time
 	for !ve.should_close() {
-		if (ve.is_key_pressed(.Escape)) {
+		if (ve.key_is_pressed(.Escape)) {
 			break
 		}
 
-		if (ve.is_key_pressed(.R)) {
+		if (ve.key_is_pressed(.R)) {
 			ve.hot_reload_shaders()
 		}
 

@@ -177,47 +177,47 @@ Cursor_Mode :: enum {
 	Captured,
 }
 
-is_key_pressed :: proc(key: Key) -> bool {
+key_is_pressed :: proc(key: Key) -> bool {
 	return ctx.input.keyboard.states[key] == glfw.PRESS && ctx.input.keyboard.previous_states[key] == glfw.RELEASE
 }
 
-is_key_released :: proc(key: Key) -> bool {
+key_is_released :: proc(key: Key) -> bool {
 	return ctx.input.keyboard.states[key] == glfw.RELEASE && ctx.input.keyboard.previous_states[key] == glfw.PRESS
 }
 
-is_key_down :: proc(key: Key) -> bool {
+key_is_down :: proc(key: Key) -> bool {
 	return ctx.input.keyboard.states[key] == glfw.PRESS
 }
 
-is_key_up :: proc(key: Key) -> bool {
+key_is_up :: proc(key: Key) -> bool {
 	return ctx.input.keyboard.states[key] == glfw.RELEASE
 }
 
-get_mouse_position :: proc() -> vec2 {
-	return ctx.input.mouse.position * get_mouse_scale()
+mouse_get_position :: proc() -> vec2 {
+	return ctx.input.mouse.position * mouse_get_scale()
 }
 
-get_mouse_delta :: proc() -> vec2 {
-	return ctx.input.mouse.position - ctx.input.mouse.previouse_position
+mouse_get_delta :: proc() -> vec2 {
+	return (ctx.input.mouse.position - ctx.input.mouse.previouse_position) * mouse_get_scale()
 }
 
-is_mouse_button_pressed :: proc(button: MouseButton) -> bool {
+mouse_button_is_pressed :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.PRESS && ctx.input.mouse.previous_states[button] == glfw.RELEASE
 }
 
-is_mouse_button_released :: proc(button: MouseButton) -> bool {
+mouse_button_is_released :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.RELEASE && ctx.input.mouse.previous_states[button] == glfw.PRESS
 }
 
-is_mouse_button_down :: proc(button: MouseButton) -> bool {
+mouse_button_is_down :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.PRESS
 }
 
-is_mouse_button_up :: proc(button: MouseButton) -> bool {
+mouse_button_is_up :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.RELEASE
 }
 
-set_cursor_mode :: proc(state: Cursor_Mode) {
+cursor_set_mode :: proc(state: Cursor_Mode) {
 	switch state {
 	case .Normal:
 		glfw.SetInputMode(ctx.window.id, glfw.CURSOR, glfw.CURSOR_NORMAL)
@@ -230,20 +230,20 @@ set_cursor_mode :: proc(state: Cursor_Mode) {
 	}
 }
 
-get_scroll_vec2 :: proc() -> vec2 {
+mouse_get_scroll_vec2 :: proc() -> vec2 {
 	return ctx.input.mouse.scroll
 }
 
-get_scroll_f32 :: proc() -> f32 {
+mouse_get_scroll_f32 :: proc() -> f32 {
 	if math.abs(ctx.input.mouse.scroll.x) > math.abs(ctx.input.mouse.scroll.y) {
 		return ctx.input.mouse.scroll.x
 	}
 	return ctx.input.mouse.scroll.y
 }
 
-set_mouse_scale :: proc(scale: vec2) {ctx.input.mouse.scale = scale}
+mouse_set_scale :: proc(scale: vec2) {ctx.input.mouse.scale = scale}
 @(require_results)
-get_mouse_scale :: proc() -> vec2 {return ctx.input.mouse.scale}
+mouse_get_scale :: proc() -> vec2 {return ctx.input.mouse.scale}
 
 @(private)
 _init_input :: proc() {
@@ -252,7 +252,7 @@ _init_input :: proc() {
 
 	window_w, window_h := get_window_size()
 	framebuffer_w, framebuffer_h := get_framebuffer_size()
-	set_mouse_scale(vec2{cast(f32)framebuffer_w / cast(f32)window_w, cast(f32)framebuffer_h / cast(f32)window_h})
+	mouse_set_scale(vec2{cast(f32)framebuffer_w / cast(f32)window_w, cast(f32)framebuffer_h / cast(f32)window_h})
 }
 
 @(private)

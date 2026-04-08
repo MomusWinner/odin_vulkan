@@ -56,7 +56,7 @@ create_light_scene :: proc() -> Scene {
 light_scene_init :: proc(s: ^Scene) {
 	d := new(Lighting_Scene_Data)
 
-	ve.set_cursor_mode(.Disabled)
+	ve.cursor_set_mode(.Disabled)
 
 	ve.init_camera(&d.camera)
 	d.camera.position = {0, 2, 8}
@@ -114,22 +114,22 @@ light_scene_update :: proc(s: ^Scene) {
 	camera: ^ve.Camera
 	camera = &d.light_camera
 
-	if ve.is_key_down(.Up) {
+	if ve.key_is_down(.Up) {
 		camera.position.z += ve.get_delta_time() * speed
 	}
-	if ve.is_key_down(.Down) {
+	if ve.key_is_down(.Down) {
 		camera.position.z -= ve.get_delta_time() * speed
 	}
-	if ve.is_key_down(.Left) {
+	if ve.key_is_down(.Left) {
 		camera.position.x += ve.get_delta_time() * speed
 	}
-	if ve.is_key_down(.Right) {
+	if ve.key_is_down(.Right) {
 		camera.position.x -= ve.get_delta_time() * speed
 	}
 
 	ve.camera_update_simple_controller(&d.camera)
 
-	if ve.is_key_pressed(.T) {
+	if ve.key_is_pressed(.T) {
 		ve.wait_render_completion()
 		ve.texture_set_sampler(
 			d.shadow_map_texture,

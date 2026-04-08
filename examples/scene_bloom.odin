@@ -75,7 +75,7 @@ create_bloom_scene :: proc() -> Scene {
 bloom_scene_init :: proc(s: ^Scene) {
 	d := new(Bloom_Scene_Data)
 
-	ve.set_cursor_mode(.Disabled)
+	ve.cursor_set_mode(.Disabled)
 
 	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
@@ -145,10 +145,10 @@ bloom_scene_update :: proc(s: ^Scene) {
 
 	exp := ubo_hdr_get_exposure(d.hdr_ubo)
 	speed: f32 = 1.0
-	if (ve.is_key_down(.Up)) {
+	if (ve.key_is_down(.Up)) {
 		ubo_hdr_set_exposure(d.hdr_ubo, exp + speed * ve.get_delta_time())
 	}
-	if (ve.is_key_down(.Down)) {
+	if (ve.key_is_down(.Down)) {
 		ubo_hdr_set_exposure(d.hdr_ubo, exp - speed * ve.get_delta_time())
 	}
 }

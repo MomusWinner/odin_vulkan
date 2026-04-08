@@ -28,7 +28,7 @@ create_skybox_scene :: proc() -> Scene {
 skybox_scene_init :: proc(s: ^Scene) {
 	d := new(Skybox_Scene_Data)
 
-	ve.set_cursor_mode(.Disabled)
+	ve.cursor_set_mode(.Disabled)
 
 	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
