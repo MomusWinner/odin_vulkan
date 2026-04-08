@@ -452,7 +452,9 @@ end_pass :: proc() {
 		ctx.gfx.frame.swapchain_resized = false
 	}
 
-	if ctx.gfx.frame.status == .IncorrectSwapchainSize {
+	swapchain_w, swapchain_h := swapchain_get_size()
+	framebuffer_w, framebuffer_h := framebuffer_get_size()
+	if ctx.gfx.frame.status == .IncorrectSwapchainSize || swapchain_w != framebuffer_w || swapchain_h != framebuffer_h {
 		ctx.gfx.frame.swapchain_resized = true
 		_resize_swapchain()
 	}

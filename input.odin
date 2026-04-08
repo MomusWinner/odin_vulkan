@@ -248,10 +248,10 @@ mouse_get_scale :: proc() -> vec2 {return ctx.input.mouse.scale}
 @(private)
 _init_input :: proc() {
 	glfw.SetScrollCallback(ctx.window.id, _scroll_callback)
-	ctx.input.mouse.previouse_position = vec2{cast(f32)get_screen_width(), cast(f32)get_screen_height()} / 2
+	ctx.input.mouse.previouse_position = vec2{cast(f32)screen_get_width(), cast(f32)screen_get_height()} / 2
 
 	window_w, window_h := get_window_size()
-	framebuffer_w, framebuffer_h := get_framebuffer_size()
+	framebuffer_w, framebuffer_h := framebuffer_get_size()
 	mouse_set_scale(vec2{cast(f32)framebuffer_w / cast(f32)window_w, cast(f32)framebuffer_h / cast(f32)window_h})
 }
 

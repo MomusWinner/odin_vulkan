@@ -64,48 +64,48 @@ ctx: Ve
 glfw_callback_ctx: runtime.Context
 
 @(require_results)
-get_swapchain_size :: proc() -> (int, int) {return get_swapchain_width(), get_swapchain_height()}
+swapchain_get_size :: proc() -> (int, int) {return swapchain_get_width(), swapchain_get_height()}
 @(require_results)
-get_swapchain_width :: proc() -> int {return ctx.gfx.swapchain.width}
+swapchain_get_width :: proc() -> int {return ctx.gfx.swapchain.width}
 @(require_results)
-get_swapchain_height :: proc() -> int {return ctx.gfx.swapchain.height}
+swapchain_get_height :: proc() -> int {return ctx.gfx.swapchain.height}
+@(require_results)
+swapchain_resized :: proc() -> bool {return ctx.gfx.frame.swapchain_resized}
 
-get_screen_size :: get_swapchain_size
-get_screen_width :: get_swapchain_width
-get_screen_height :: get_swapchain_height
+screen_get_size :: swapchain_get_size
+screen_get_width :: swapchain_get_width
+screen_get_height :: swapchain_get_height
+screen_resized :: swapchain_resized
 
 @(require_results)
-screen_resized :: proc() -> bool {return ctx.gfx.frame.swapchain_resized}
-
-@(require_results)
-get_framebuffer_size :: proc() -> (int, int) {
+framebuffer_get_size :: proc() -> (int, int) {
 	w, h := glfw.GetFramebufferSize(ctx.window.id)
 	return cast(int)w, cast(int)h
 }
 
 @(require_results)
-get_window_size :: proc() -> (int, int) {
+window_get_size :: proc() -> (int, int) {
 	w, h := glfw.GetWindowSize(ctx.window.id)
 	return cast(int)w, cast(int)h
 }
-
 @(require_results)
-get_window_pos :: proc() -> (int, int) {
+window_get_position :: proc() -> (int, int) {
 	xpos, ypos := glfw.GetWindowPos(ctx.window.id)
 	return cast(int)xpos, cast(int)ypos
 }
-set_window_pos :: proc(x, y: int) {
+window_set_position :: proc(x, y: int) {
 	glfw.SetWindowPos(ctx.window.id, cast(i32)x, cast(i32)y)
 }
-
-get_window_focused :: proc() -> bool {return ctx.window.focused}
-
-set_window_fullscreen :: proc(enable: bool) {
+@(require_results)
+window_is_focused :: proc() -> bool {
+	return ctx.window.focused
+}
+window_set_fullscreen :: proc(enable: bool) {
 	if enable == ctx.window.fullscreen do return
 
 	if enable {
-		ctx.window.prev.width, ctx.window.prev.height = get_screen_width(), get_screen_height()
-		ctx.window.prev.x, ctx.window.prev.y = get_window_pos()
+		ctx.window.prev.width, ctx.window.prev.height = screen_get_width(), screen_get_height()
+		ctx.window.prev.x, ctx.window.prev.y = window_get_position()
 		monitor := glfw.GetPrimaryMonitor()
 		video := glfw.GetVideoMode(monitor)
 		glfw.SetWindowMonitor(ctx.window.id, monitor, 0, 0, video.width, video.height, video.refresh_rate)

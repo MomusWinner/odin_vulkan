@@ -80,7 +80,7 @@ bloom_scene_init :: proc(s: ^Scene) {
 	ve.init_camera(&d.camera)
 	d.camera.position = {0, 0, 2}
 
-	ve.init_render_target(&d.rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
+	ve.init_render_target(&d.rt, ve.screen_get_width(), ve.screen_get_height(), ._4)
 	hdr_color_attachmetn := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
 	bright_color_attachmetn := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
 	ve.render_target_add_depth_attachment(&d.rt)
@@ -157,7 +157,7 @@ bloom_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Bloom_Scene_Data)s.data
 
 	if (ve.screen_resized()) {
-		ve.render_target_resize(&d.rt, ve.get_screen_width(), ve.get_screen_height())
+		ve.render_target_resize(&d.rt, ve.screen_get_width(), ve.screen_get_height())
 	}
 
 	ve.begin_pass()

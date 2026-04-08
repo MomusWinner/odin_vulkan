@@ -56,7 +56,7 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	ve.trf_rotate(&d.trf, {0, 1, 0}, -3.14 / 2)
 	ve.trf_set_scale(&d.trf, 1)
 
-	ve.init_render_target(&d.rt, ve.get_screen_width(), ve.get_screen_height(), ._4)
+	ve.init_render_target(&d.rt, ve.screen_get_width(), ve.screen_get_height(), ._4)
 	color_attachment := ve.render_target_add_color_attachment(&d.rt, clear_value = {.01, .01, .01, 1.0})
 	ve.render_target_add_depth_attachment(&d.rt)
 
@@ -72,11 +72,11 @@ postprocessing_scene_update :: proc(s: ^Scene) {}
 postprocessing_scene_draw :: proc(s: ^Scene) {
 	d := cast(^Postprocessing_Scene_Data)s.data
 
-	ubo_postprocessing_set_width(d.postprocessing_ubo, cast(f32)ve.get_screen_width())
-	ubo_postprocessing_set_height(d.postprocessing_ubo, cast(f32)ve.get_screen_height())
+	ubo_postprocessing_set_width(d.postprocessing_ubo, cast(f32)ve.screen_get_width())
+	ubo_postprocessing_set_height(d.postprocessing_ubo, cast(f32)ve.screen_get_height())
 
 	if (ve.screen_resized()) {
-		ve.render_target_resize(&d.rt, ve.get_screen_width(), ve.get_screen_height())
+		ve.render_target_resize(&d.rt, ve.screen_get_width(), ve.screen_get_height())
 	}
 
 	ve.begin_pass()

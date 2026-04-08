@@ -41,7 +41,7 @@ set_camera_ex :: proc(camera: Camera, aspect: f32) {
 }
 
 set_camera :: proc(camera: Camera) {
-	aspect := cast(f32)get_screen_width() / cast(f32)get_screen_height()
+	aspect := cast(f32)screen_get_width() / cast(f32)screen_get_height()
 	ctx.gfx.frame.camera = camera_get_buffer(camera, aspect)
 }
 
