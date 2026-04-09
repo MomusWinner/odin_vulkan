@@ -163,7 +163,6 @@ camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) 
 	view := camera_get_view(camera)
 	projection := camera_get_projection(camera, aspect)
 
-	buffer := _get_buffer_h(camera.buffer)
 	camera_ubo := Camera_UBO {
 		view       = view,
 		projection = projection,
