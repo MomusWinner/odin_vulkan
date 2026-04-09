@@ -30,7 +30,7 @@ _create_buffer :: proc(
 	data: rawptr = nil,
 	loc := #caller_location,
 ) -> Buffer_Data {
-	when GFX_DEBUG {
+	when ODIN_DEBUG {
 		assert(size > 0, loc = loc)
 		required_flags := [?]Buffer_Usage_Flag{.Vertex, .Index, .Uniform, .Storage, .Transfer}
 		has_gpu_usage := false

@@ -1421,7 +1421,7 @@ _destroy_descriptor_layout_manager :: proc() {
 }
 
 @(require_results)
-get_descriptor_set_layouts :: proc(infos: Pipeline_Set_Layout_Infos) -> (layouts: Descriptor_Set_Layouts) {
+get_descriptor_set_layouts :: proc(infos: Pipeline_Set_Layout_Infos) -> (layouts: Pipeline_Descriptor_Set_Layouts) {
 	for i in 0 ..< infos.len {
 		sm.push(&layouts, get_descriptor_set_layout(infos.data[i]))
 	}
@@ -1516,7 +1516,7 @@ _set_info_to_descriptor_set_layout :: proc(set_info: Pipeline_Set_Layout_Info) -
 @(private = "file")
 @(require_results)
 _create_pipeline_layout :: proc(
-	descriptor_set_layouts: Descriptor_Set_Layouts,
+	descriptor_set_layouts: Pipeline_Descriptor_Set_Layouts,
 	push_constant: Maybe(vk.PushConstantRange) = nil,
 ) -> Pipeline_Layout {
 	descriptor_set_layouts := descriptor_set_layouts

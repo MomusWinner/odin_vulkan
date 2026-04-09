@@ -379,7 +379,7 @@ _format_to_vk :: #force_inline proc(format: Format) -> vk.Format {
 
 _vk_to_format :: #force_inline proc(format: vk.Format) -> Format {
 	f := cast(Format)format
-	when GFX_DEBUG {
+	when ODIN_DEBUG {
 		ok := reflect.enum_value_has_name(f)
 		if !ok {
 			log.panicf("Unsupported format: %v", format)

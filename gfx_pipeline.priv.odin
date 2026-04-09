@@ -11,6 +11,15 @@ import "core:strings"
 import "lib/shaderc"
 import vk "vendor:vulkan"
 
+BINDLESS_HEADER_FILE :: #load("./buildin/shaders/bindless.h")
+BUILDIN_INCLUDE_PREFIX :: "buildin:"
+
+Pipeline_Set_Layout_Infos :: sm.Small_Array(MAX_PIPELINE_SET_COUNT, Pipeline_Set_Layout_Info)
+Pipeline_Descriptor_Set_Layouts :: sm.Small_Array(MAX_PIPELINE_SET_COUNT, vk.DescriptorSetLayout)
+Pipeline_Shader_Stage_Create_Infos :: sm.Small_Array(MAX_PIPELINE_STAGE_COUNT, vk.PipelineShaderStageCreateInfo)
+Pipeline_Dynamic_States :: sm.Small_Array(MAX_PIPELINE_DYNAMIC_STATE_COUNT, vk.DynamicState)
+Pipeline_Set_Binding_Infos :: sm.Small_Array(MAX_PIPELINE_BINDING_COUNT, Pipeline_Set_Binding_Info)
+
 Pipeline_Set_Binding_Info :: struct {
 	binding:          u32,
 	descriptor_type:  vk.DescriptorType,
@@ -18,15 +27,6 @@ Pipeline_Set_Binding_Info :: struct {
 	stage_flags:      vk.ShaderStageFlags,
 	flags:            Maybe(vk.DescriptorBindingFlags),
 }
-
-// Pipeline_Color_BlendAttachment_States :: sm.Small_Array(MAX_COLOR_ATTACHMENTS, vk.PipelineColorBlendAttachmentState)
-Pipeline_Set_Layout_Infos :: sm.Small_Array(MAX_PIPELINE_SET_COUNT, Pipeline_Set_Layout_Info)
-Descriptor_Set_Layouts :: sm.Small_Array(MAX_PIPELINE_SET_COUNT, vk.DescriptorSetLayout)
-
-Pipeline_Shader_Stage_Create_Infos :: sm.Small_Array(MAX_PIPELINE_STAGE_COUNT, vk.PipelineShaderStageCreateInfo)
-Pipeline_Dynamic_States :: sm.Small_Array(MAX_PIPELINE_DYNAMIC_STATE_COUNT, vk.DynamicState)
-
-Pipeline_Set_Binding_Infos :: sm.Small_Array(MAX_PIPELINE_BINDING_COUNT, Pipeline_Set_Binding_Info)
 
 Pipeline_Set_Layout_Info :: struct {
 	binding_infos: Pipeline_Set_Binding_Infos,
@@ -67,7 +67,6 @@ Pipeline_Manager :: struct {
 	compute_pipelines:  hm.Handle_Map(Compute_Pipeline_Data, Compute_Pipeline),
 	compiler:           shaderc.compilerT,
 	compiler_options:   shaderc.compileOptionsT,
-	enable_compilation: bool,
 }
 
 Pipeline_Surface_Info :: struct {
@@ -76,7 +75,6 @@ Pipeline_Surface_Info :: struct {
 	color_formats: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
 }
 
-BINDLESS_HEADER_FILE :: #load("./buildin/shaders/bindless.h")
 
 _get_graphics_pipeline :: proc(handle: Graphics_Pipeline, loc := #caller_location) -> ^Graphics_Pipeline_Data {
 	return _pipeline_manager_get_graphics_pipeline(ctx.gfx.pipeline_manager, handle, loc)
@@ -86,10 +84,10 @@ _get_compute_pipeline :: proc(handle: Compute_Pipeline, loc := #caller_location)
 	return _pipeline_manager_get_compute_pipeline(ctx.gfx.pipeline_manager, handle, loc)
 }
 
-_init_pipeline_manager :: proc(enable_compilation: bool) {
+_init_pipeline_manager :: proc() {
 	assert(ctx.gfx.pipeline_manager == nil)
 	ctx.gfx.pipeline_manager = new(Pipeline_Manager)
-	_pipeline_manager_init(ctx.gfx.pipeline_manager, enable_compilation)
+	_pipeline_manager_init(ctx.gfx.pipeline_manager)
 }
 
 _destroy_pipeline_manager :: proc() {
@@ -102,7 +100,7 @@ _destroy_pipeline_manager :: proc() {
 	}
 	hm.destroy(&pm.graphics_pipelines)
 	hm.destroy(&pm.compute_pipelines)
-	when GFX_DEBUG {
+	when ENABLE_SHADER_COMPILATION {
 		shaderc.compile_options_release(pm.compiler_options)
 		shaderc.compiler_release(pm.compiler)
 	}
@@ -110,14 +108,9 @@ _destroy_pipeline_manager :: proc() {
 }
 
 @(private = "file")
-_pipeline_manager_init :: proc(pm: ^Pipeline_Manager, enable_compilation: bool) {
-	pm.enable_compilation = enable_compilation
-	if pm.enable_compilation {
-		when GFX_DEBUG {
-			_pipeline_manager_setup_compiler(pm)
-		} else {
-			log.panic("Couldn't setup Pipeline_Manager compiler in RELEASE mode")
-		}
+_pipeline_manager_init :: proc(pm: ^Pipeline_Manager) {
+	when ENABLE_SHADER_COMPILATION {
+		_pipeline_manager_setup_compiler(pm)
 	}
 }
 
@@ -158,8 +151,6 @@ _pipeline_manager_get_compute_pipeline :: proc(
 }
 
 _pipeline_manager_hot_reload :: proc() {
-	assert(ctx.gfx.pipeline_manager.enable_compilation)
-
 	fence := ctx.gfx.fence
 	vk.WaitForFences(ctx.gfx.vk_state.device, 1, &fence, true, max(u64))
 
@@ -191,9 +182,8 @@ _shader_resolve_include :: proc "system" (
 	requestingSource: cstring,
 	ncludeDepth: c.size_t,
 ) -> ^shaderc.includeResult {
-	context = g_context
+	context = callback_ctx
 
-	BUILDIN :: "buildin:"
 	source: string = strings.clone_from_cstring(requestedSource, allocator = context.temp_allocator)
 	path_to_include: strings.Builder
 	strings.builder_init_none(&path_to_include, context.temp_allocator)
@@ -201,12 +191,12 @@ _shader_resolve_include :: proc "system" (
 	data: []byte
 	file: string
 
-	if strings.starts_with(source, BUILDIN) {
+	if strings.starts_with(source, BUILDIN_INCLUDE_PREFIX) {
 		strings.write_string(&path_to_include, "./buildin/shaders/")
-		strings.write_string(&path_to_include, source[len(BUILDIN):])
+		strings.write_string(&path_to_include, source[len(BUILDIN_INCLUDE_PREFIX):])
 		file = strings.to_string(path_to_include)
 
-		switch source[len(BUILDIN):] {
+		switch source[len(BUILDIN_INCLUDE_PREFIX):] {
 		case "bindless.h":
 			data = BINDLESS_HEADER_FILE
 		case:
@@ -234,7 +224,7 @@ _shader_resolve_include :: proc "system" (
 
 @(private = "file")
 _shader_result_releaser :: proc "system" (userData: rawptr, includeResult: ^shaderc.includeResult) {
-	context = g_context
+	context = callback_ctx
 	delete(includeResult.sourceName)
 	delete(includeResult.content)
 	free(includeResult)
@@ -291,7 +281,7 @@ _reload_pipeline_variant :: proc(pipeline: ^Pipeline_Variant, create_info: Creat
 
 	vk.DestroyPipeline(ctx.gfx.vk_state.device, pipeline.id, nil)
 
-	shader_stages := _create_shader_stages(create_info, GFX_DEBUG)
+	shader_stages := _create_shader_stages(create_info)
 	defer _destroy_shader_stages(shader_stages)
 
 	pipeline_layout := _get_pipeline_layout(pipeline.layout)
@@ -384,7 +374,7 @@ _create_pipeline_variant :: proc(
 	surface_info := surface_info
 	_assert_create_pipeline_info(&create_info, loc)
 
-	shader_stages := _create_shader_stages(create_info, GFX_DEBUG, loc = loc)
+	shader_stages := _create_shader_stages(create_info, loc = loc)
 	defer _destroy_shader_stages(shader_stages)
 
 	pipeline_layout_info := Pipeline_Layout_Info {
@@ -634,7 +624,7 @@ _create_shader_module_from_shader_source :: proc(source: Shader_Source, loc := #
 @(private = "file")
 @(require_results)
 _create_shader_module_from_file :: proc(path: string, loc := #caller_location) -> (module: vk.ShaderModule) {
-	is_compiled :: proc(path: string) -> bool {
+	is_spv :: proc(path: string) -> bool {
 		return len(path) > 4 && path[len(path) - 4:] == ".spv"
 	}
 
@@ -646,19 +636,15 @@ _create_shader_module_from_file :: proc(path: string, loc := #caller_location) -
 		return _create_shader_module_from_memory(data)
 	}
 
-	if is_compiled(path) {
-		return create_shader_module_from_compiled_source(path)
-	} else {
-		when GFX_DEBUG {
-			data, w_ok := _shader_compile_and_write(ctx.gfx.pipeline_manager, path, loc)
-			if !w_ok {
-				log.panic("Couldn't write a compiled shader to: ", path)
-			}
-			return _create_shader_module_from_memory(data)
-		} else {
-			spv_path := fmt.tprintf("%s.spv", path)
-			return create_shader_module_from_compiled_source(spv_path)
+	when ENABLE_SHADER_COMPILATION {
+		data, w_ok := _shader_compile_and_write(ctx.gfx.pipeline_manager, path, loc)
+		if !w_ok {
+			log.panic("Couldn't write a compiled shader to: ", path)
 		}
+		return _create_shader_module_from_memory(data)
+	} else {
+		spv_path := path if is_spv(path) else fmt.tprintf("%s.spv", path)
+		return create_shader_module_from_compiled_source(spv_path)
 	}
 }
 
@@ -681,7 +667,6 @@ _create_shader_module_from_memory :: proc(code: []byte, loc := #caller_location)
 @(require_results)
 _create_shader_stages :: proc(
 	create_info: Create_Pipeline_Info,
-	compile := false,
 	loc := #caller_location,
 ) -> (
 	shader_stages: Pipeline_Shader_Stage_Create_Infos,
@@ -969,7 +954,7 @@ _surface_info_to_pipeline_surface_info :: proc(surface: Surface_Info) -> Pipelin
 
 @(private = "file")
 _assert_create_pipeline_info :: #force_inline proc(create_info: ^Create_Pipeline_Info, loc := #caller_location) {
-	when GFX_DEBUG {
+	when ODIN_DEBUG {
 		// Validate pipeline stage unique
 		for i_s, i in sm.slice(&create_info.stage_infos) {
 			for j_s, j in sm.slice(&create_info.stage_infos) {
