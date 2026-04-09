@@ -240,7 +240,14 @@ Graphics_Pipeline :: distinct hm.Handle
 
 Pipeline_Layout :: vk.PipelineLayout
 
-hot_reload_shaders :: proc() {
+hot_reload_shaders :: proc(loc := #caller_location) {
+	when !ENABLE_SHADER_COMPILATION {
+		log.warn(
+			"Shader compilation is not enabled (ENABLE_SHADER_COMPILATION). Now, only *.spv files are reloaded." +
+			"Shader hot reloading is only recommended for development!",
+			location = loc,
+		)
+	}
 	_pipeline_manager_hot_reload()
 }
 

@@ -151,12 +151,10 @@ _pipeline_manager_get_compute_pipeline :: proc(
 }
 
 _pipeline_manager_hot_reload :: proc() {
-	fence := ctx.gfx.fence
-	vk.WaitForFences(ctx.gfx.vk_state.device, 1, &fence, true, max(u64))
-
+	vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64))
 	log.debug("--- RELOADING SHADERS ---")
 	for &pipeline in ctx.gfx.pipeline_manager.graphics_pipelines.values {
-		_reload_graphics_pipelines(&pipeline)
+		_reload_graphics_pipeline(&pipeline)
 	}
 }
 
@@ -270,7 +268,7 @@ _destroy_compute_pipeline :: proc(pipeline: ^Compute_Pipeline_Data) {
 	_destroy_pipline(pipeline)
 }
 
-_reload_graphics_pipelines :: proc(pipeline: ^Graphics_Pipeline_Data) {
+_reload_graphics_pipeline :: proc(pipeline: ^Graphics_Pipeline_Data) {
 	for _, &variant in pipeline.variants {
 		_reload_pipeline_variant(&variant, pipeline.create_info)
 	}
