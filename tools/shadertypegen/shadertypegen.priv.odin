@@ -578,7 +578,7 @@ generate_odin_uniform_buffer_struct :: proc(d: Parse_Data, f: ^os.File, s: Struc
 	fmt.fprintfln(f, `
 ///////////////////////////
 // %s
-//////////unform_buffer////
+//////////uniform_buffer////
 `, s.name)
 	fmt.fprintfln(f, "%s :: struct #packed {{", get_odin_data_struct_name(s.name, s.memory_layout))
 
