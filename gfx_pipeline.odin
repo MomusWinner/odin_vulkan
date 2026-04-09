@@ -178,7 +178,7 @@ Blend_Factor :: enum c.int {
 	One_Minus_Src1_Alpha     = 18,
 }
 
-BlendOp :: enum c.int {
+Blend_Op :: enum c.int {
 	Add              = 0,
 	Subtract         = 1,
 	Reverse_Subtract = 2,
@@ -189,10 +189,10 @@ BlendOp :: enum c.int {
 Blending_Info :: struct {
 	src_color_blend_factor: Blend_Factor,
 	dst_color_blend_factor: Blend_Factor,
-	color_blend_op:         BlendOp,
+	color_blend_op:         Blend_Op,
 	src_alpha_blend_factor: Blend_Factor,
 	dst_alpha_blend_factor: Blend_Factor,
-	alpha_blend_op:         BlendOp,
+	alpha_blend_op:         Blend_Op,
 	color_write_mask:       vk.ColorComponentFlags,
 }
 
