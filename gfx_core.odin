@@ -346,24 +346,32 @@ begin_pass :: proc(loc := #caller_location) {
 
 	defer ctx.gfx.render_started = true
 
-	// Wait for previous frame
-	must(vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64)))
+	out_of_date := true
+	for out_of_date {
+		// Wait for previous frame
+		must(vk.WaitForFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence, true, max(u64)))
 
-	images: u32 = cast(u32)len(ctx.gfx.swapchain.images)
-	acquire_result := vk.AcquireNextImageKHR(
-		device = ctx.gfx.vk_state.device,
-		swapchain = ctx.gfx.swapchain.swapchain,
-		timeout = max(u64),
-		semaphore = ctx.gfx.image_available_semaphore,
-		fence = {},
-		pImageIndex = &ctx.gfx.swapchain.image_index,
-	)
+		acquire_result := vk.AcquireNextImageKHR(
+			device = ctx.gfx.vk_state.device,
+			swapchain = ctx.gfx.swapchain.swapchain,
+			timeout = max(u64),
+			semaphore = ctx.gfx.image_available_semaphore,
+			fence = {},
+			pImageIndex = &ctx.gfx.swapchain.image_index,
+		)
 
-	#partial switch acquire_result {
-	case .SUCCESS, .SUBOPTIMAL_KHR:
-		ctx.gfx.frame.status = .Success
-	case:
-		log.panicf("acquire next image failure: %v", acquire_result)
+		#partial switch acquire_result {
+		case .SUCCESS, .SUBOPTIMAL_KHR:
+			out_of_date = false
+		case .ERROR_OUT_OF_DATE_KHR:
+			out_of_date = true
+		case:
+			log.panicf("acquire next image failure: %v", acquire_result)
+		}
+
+		if out_of_date {
+			_resize_swapchain()
+		}
 	}
 
 	must(vk.ResetFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence))
@@ -599,11 +607,9 @@ wait_render_completion :: proc() {
 //  ╚═════╝╚═╝     ╚═╝╚═════╝ 
 
 cmd_set_full_viewport_scissor :: proc(loc := #caller_location) {
-	width := get_screen_width()
-	height := get_screen_height()
-
-	cmd_set_viewport(width, height, loc = loc)
-	cmd_set_scissor(width, height, loc = loc)
+	w, h := screen_get_size()
+	cmd_set_viewport(w, h, loc = loc)
+	cmd_set_scissor(w, h, loc = loc)
 }
 
 cmd_set_viewport :: proc(width, height: int, max_depth: f32 = 1, loc := #caller_location) {
