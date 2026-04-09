@@ -21,7 +21,7 @@ Render_Target_Color_Attachment :: struct {
 Render_Target_Color_Attachments :: sm.Small_Array(MAX_COLOR_ATTACHMENTS, Render_Target_Color_Attachment)
 
 Render_Target_Depth_Attachment :: union {
-	Render_Target_Common_Depth_Attachment,
+	Render_Target_Unreadable_Depth_Attachment,
 	Render_Target_Readable_Depth_Attachment,
 }
 
@@ -29,7 +29,7 @@ Stencil_Info :: struct {
 	clear_value: u32,
 }
 
-Render_Target_Common_Depth_Attachment :: struct {
+Render_Target_Unreadable_Depth_Attachment :: struct {
 	resource: Texture_Data,
 	info:     vk.RenderingAttachmentInfo,
 }
@@ -81,7 +81,7 @@ destroy_render_target :: proc(render_target: ^Render_Target, loc := #caller_loca
 
 	if has_depth_attachment {
 		switch &attachment in depth_attachment {
-		case Render_Target_Common_Depth_Attachment:
+		case Render_Target_Unreadable_Depth_Attachment:
 			_destroy_texture(&attachment.resource)
 		case Render_Target_Readable_Depth_Attachment:
 			t := _acquire_texture_h(attachment.texture_h)
@@ -165,7 +165,7 @@ render_target_add_depth_attachment :: proc(
 	depth_resource := _create_render_target_depth_resource(w, h, sc.cmd, surface.sample_count, has_stencil)
 	end_single_cmd(sc)
 
-	depth_attachment := Render_Target_Common_Depth_Attachment {
+	depth_attachment := Render_Target_Unreadable_Depth_Attachment {
 		resource = depth_resource,
 		info = {
 			sType = .RENDERING_ATTACHMENT_INFO,
@@ -282,7 +282,7 @@ begin_render_target :: proc(surface: ^Render_Target, active_color_attachments: [
 	depth_format: Format
 	if has_depth_attachment {
 		switch &attachment in depth_attachment {
-		case Render_Target_Common_Depth_Attachment:
+		case Render_Target_Unreadable_Depth_Attachment:
 			p_depth_attachment = &attachment.info
 			depth_format = attachment.resource.format
 		case Render_Target_Readable_Depth_Attachment:
@@ -355,7 +355,7 @@ end_render_target :: proc(surface: ^Render_Target, loc := #caller_location) {
 
 	if has_depth_attachment {
 		switch attachment in depth_attachment {
-		case Render_Target_Common_Depth_Attachment:
+		case Render_Target_Unreadable_Depth_Attachment:
 		case Render_Target_Readable_Depth_Attachment:
 			texture := _get_texture_h(attachment.texture_h)
 			msaa, has_msaa := attachment.msaa_texture.?
@@ -381,17 +381,15 @@ render_target_resize :: proc(surface: ^Render_Target, width, height: int, loc :=
 
 @(private = "file")
 _render_target_resize :: proc(surface: ^Render_Target, width, height: int, loc := #caller_location) {
-	assert(width > 0 && height > 0)
-	surface.width = width
-	surface.height = height
-
-	depth_attachment, has_depth_attachment := surface.depth_attachment.?
+	assert(width > 0 && height > 0, loc = loc)
+	surface.width, surface.height = width, height
 
 	_render_target_resize_color_attachments(width, height, surface)
 
+	depth_attachment, has_depth_attachment := surface.depth_attachment.?
 	if has_depth_attachment {
 		switch &attachment in depth_attachment {
-		case Render_Target_Common_Depth_Attachment:
+		case Render_Target_Unreadable_Depth_Attachment:
 			has_stencil := _has_stencil_component(attachment.resource.format)
 
 			_destroy_texture(&attachment.resource)
@@ -404,7 +402,7 @@ _render_target_resize :: proc(surface: ^Render_Target, width, height: int, loc :
 					stencil_info = Stencil_Info{clear_value = attachment.info.clearValue.depthStencil.stencil},
 				)
 			} else {
-				render_target_add_depth_attachment(surface)
+				render_target_add_depth_attachment(surface, clear_value = attachment.info.clearValue.depthStencil.depth)
 			}
 		case Render_Target_Readable_Depth_Attachment:
 			_render_target_resize_readable_depth_attachment(width, height, surface)
