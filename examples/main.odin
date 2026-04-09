@@ -60,7 +60,7 @@ main :: proc() {
 	context.logger = log.create_console_logger()
 	defer log.destroy_console_logger(context.logger)
 
-	ve.init(
+	ve.start(
 		{
 			gfx = {swapchain_sample_count = ._4, attachments = {.Depth, .Stencil}},
 			window = {width = 800, height = 400, title = "Examples"},
@@ -81,7 +81,7 @@ main :: proc() {
 	current_scene.init(&current_scene)
 
 	prev: time.Time
-	for !ve.should_close() {
+	for ve.update() {
 		if (ve.key_is_pressed(.Escape)) {
 			break
 		}
@@ -102,7 +102,6 @@ main :: proc() {
 		prev = time.now()
 	}
 
-	ve.wait_render_completion()
 	current_scene.destroy(&current_scene)
 
 	ve.close()

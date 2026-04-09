@@ -100,6 +100,10 @@ window_set_position :: proc(x, y: int) {
 window_is_focused :: proc() -> bool {
 	return ctx.window.focused
 }
+@(private)
+window_should_close :: proc() -> bool {
+	return cast(bool)glfw.WindowShouldClose(ctx.window.id)
+}
 window_set_fullscreen :: proc(enable: bool) {
 	if enable == ctx.window.fullscreen do return
 
@@ -129,7 +133,7 @@ time_get_delta :: proc() -> f32 {return ctx.time.delta_time}
 @(require_results)
 time_get_total :: proc() -> f64 {return ctx.time.total_time}
 
-init :: proc(info: Ve_Info, loc := #caller_location) {
+start :: proc(info: Ve_Info, loc := #caller_location) {
 	// TODO: set custom allocator.
 	// glfw.InitAllocator()
 
@@ -190,7 +194,7 @@ close :: proc() {
 	glfw.Terminate()
 }
 
-should_close :: proc() -> bool {
+update :: proc() -> bool {
 	now := time.now()
 	if ctx.time.previous_frame != {} {
 		ctx.time.delta_time = cast(f32)time.duration_seconds(time.diff(ctx.time.previous_frame, now))
@@ -208,7 +212,11 @@ should_close :: proc() -> bool {
 
 	_input_update()
 
-	return cast(bool)_window_should_close()
+	if window_should_close() {
+		wait_render_completion()
+		return false
+	}
+	return true
 }
 
 @(require_results)
@@ -242,9 +250,4 @@ _glfw_error_callback :: proc "c" (code: i32, description: cstring) {
 @(private = "file")
 _glfw_window_focus_callback :: proc "c" (window: glfw.WindowHandle, focused: c.int) {
 	ctx.window.focused = true if focused == 1 else false
-}
-
-@(private)
-_window_should_close :: proc() -> b32 {
-	return glfw.WindowShouldClose(ctx.window.id)
 }
