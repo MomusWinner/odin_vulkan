@@ -221,14 +221,7 @@ update :: proc() -> bool {
 
 @(require_results)
 load_meshes :: proc(path: string, allocator := context.allocator) -> []Mesh {
-	imp_meshes, ok := import_obj(path)
-	defer {
-		for m in imp_meshes {
-			delete(m.vertices)
-			delete(m.indices)
-		}
-		delete(imp_meshes)
-	}
+	imp_meshes, ok := import_obj(path, context.temp_allocator)
 	if !ok {
 		log.error("Couldn't import obj", path)
 	}

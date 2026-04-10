@@ -82,6 +82,7 @@ main :: proc() {
 
 	prev: time.Time
 	for ve.update() {
+		free_all(context.temp_allocator)
 		if (ve.key_is_pressed(.Escape)) {
 			break
 		}

@@ -38,11 +38,11 @@ import_obj :: proc(path: string, allocator := context.allocator) -> ([]ObjMesh, 
 
 	data_string := string(data)
 
-	meshes := make([dynamic]ObjMesh, context.allocator)
+	meshes := make([dynamic]ObjMesh, allocator)
 
 	name := ""
-	vertices := make([dynamic]Vertex, context.allocator)
-	indices := make([dynamic]u16, context.allocator)
+	vertices := make([dynamic]Vertex, allocator)
+	indices := make([dynamic]u16, allocator)
 
 	index_by_vertex: map[u32]u16 = make(map[u32]u16, context.temp_allocator)
 
