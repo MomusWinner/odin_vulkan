@@ -163,7 +163,7 @@ load_font_from_memory :: proc(
 	}
 }
 
-unload_font :: proc(font: ^Font, loc := #caller_location) {
+destroy_font :: proc(font: ^Font, loc := #caller_location) {
 	assert_not_nil(font, loc)
 
 	delete(font.packed_chars)
@@ -184,10 +184,16 @@ create_text_mesh :: proc(
 	size: f32,
 	allocator := context.allocator,
 	loc := #caller_location,
-) -> []FontVertex {
+) -> (
+	[]FontVertex,
+	f32,
+	f32,
+) {
 	position := vec3{0, 0, 0}
 	vertices := make([]FontVertex, len(text) * 6, allocator)
 	vertex_index := 0
+
+	width, height: f32
 
 	order := [6]int{0, 1, 2, 0, 2, 3}
 
@@ -253,7 +259,9 @@ create_text_mesh :: proc(
 
 		vertex_index += 6
 		position.x += packed_char.xadvance * size
+
+		if position.x > width do width = position.x
 	}
 
-	return vertices
+	return vertices, width, height
 }

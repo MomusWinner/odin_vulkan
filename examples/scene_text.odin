@@ -26,12 +26,14 @@ Text_UBO :: struct {
 }
 
 Text :: struct {
-	font: ^ve.Font,
-	size: f32,
-	text: string,
-	mesh: ve.Mesh,
-	trf:  ve.Transform,
-	ubo:  ve.Uniform_Buffer,
+	font:   ^ve.Font,
+	size:   f32,
+	text:   string,
+	mesh:   ve.Mesh,
+	trf:    ve.Transform,
+	ubo:    ve.Uniform_Buffer,
+	width:  f32,
+	height: f32,
 }
 
 create_text_scene :: proc() -> Scene {
@@ -116,7 +118,7 @@ text_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Text_Scene_Data)s.data
 
 	strings.builder_destroy(&d.builder)
-	ve.unload_font(&d.font)
+	ve.destroy_font(&d.font)
 
 	free(d)
 }
@@ -138,7 +140,7 @@ create_text :: proc(
 	ubo_text_set_glyph(ubo, font.glyph_map)
 	ubo_text_set_color(ubo, color)
 
-	vertices := ve.create_text_mesh(font, text, size, context.temp_allocator, loc)
+	vertices, width, height := ve.create_text_mesh(font, text, size, context.temp_allocator, loc)
 	vertices_size := cast(ve.Device_Size)(size_of(ve.FontVertex) * len(vertices))
 	vbo := ve.create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
 
@@ -147,7 +149,16 @@ create_text :: proc(
 		vertex_count = len(vertices),
 	}
 
-	return Text{font = font, trf = trf, size = size, ubo = ubo, text = text, mesh = mesh}
+	return Text {
+		font = font,
+		width = width,
+		height = height,
+		trf = trf,
+		size = size,
+		ubo = ubo,
+		text = text,
+		mesh = mesh,
+	}
 }
 
 text_set_color :: proc(text: ^Text, color: vec3, loc := #caller_location) {
@@ -158,7 +169,7 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 	text.text = text_str
 	ve.destroy_mesh(&text.mesh, loc)
 
-	vertices := ve.create_text_mesh(text.font, text_str, text.size, context.temp_allocator, loc)
+	vertices, width, height := ve.create_text_mesh(text.font, text_str, text.size, context.temp_allocator, loc)
 	vertices_size := cast(ve.Device_Size)(size_of(ve.FontVertex) * len(vertices))
 	vbo := ve.create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
 
@@ -167,6 +178,8 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 		vertex_count = len(vertices),
 	}
 	text.mesh = mesh
+	text.width = width
+	text.height = height
 }
 
 text_draw :: proc(text: ^Text, pipeline: ve.Graphics_Pipeline) {
