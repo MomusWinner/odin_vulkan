@@ -74,7 +74,7 @@ RegisterUniform(Camera, {
 	mat4 view;
 	mat4 projection;
 	vec3 position;
-	float pad0;
+	vec3 target;
 });
 
 #define getCameraByHandle(index) GetResource(Camera, index)

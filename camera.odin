@@ -17,6 +17,8 @@ Camera_UBO :: struct {
 	projection: mat4,
 	position:   vec3,
 	_pad0:      f32,
+	target:     vec3,
+	_pad1:      f32,
 }
 
 Camera_Projection_Type :: enum {
@@ -158,7 +160,6 @@ camera_get_projection :: proc(camera: Camera, aspect: f32, loc := #caller_locati
 	return projection
 }
 
-@(private)
 camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) -> Buffer {
 	view := camera_get_view(camera)
 	projection := camera_get_projection(camera, aspect)
@@ -167,6 +168,7 @@ camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) 
 		view       = view,
 		projection = projection,
 		position   = camera.position,
+		target     = camera.target,
 	}
 	buffer_fill(camera.buffer, &camera_ubo, size_of(Camera_UBO))
 
