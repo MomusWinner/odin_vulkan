@@ -9,7 +9,7 @@ import "core:strings"
 import "lib/vma"
 import vk "vendor:vulkan"
 
-DEFAULT_SURFACE_SAMPLER_INFO :: Sampler_Info {
+DEFAULT_RENDER_TARGET_SAMPLER_INFO :: Sampler_Info {
 	mag_filter        = .Linear,
 	min_filter        = .Linear,
 	address_mode_u    = .Clamp_To_Border,
