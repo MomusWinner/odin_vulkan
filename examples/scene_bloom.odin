@@ -81,8 +81,8 @@ bloom_scene_init :: proc(s: ^Scene) {
 	d.camera.position = {0, 0, 2}
 
 	ve.init_render_target(&d.rt, ve.screen_get_width(), ve.screen_get_height(), ._4)
-	hdr_color_attachmetn := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
-	bright_color_attachmetn := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
+	hdr_color_attachment := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
+	bright_color_attachment := ve.render_target_add_color_attachment(&d.rt, format = .RGBA_norm_u16)
 	ve.render_target_add_depth_attachment(&d.rt)
 
 	d.square = ve.create_primitive_square()
@@ -91,15 +91,15 @@ bloom_scene_init :: proc(s: ^Scene) {
 
 	d.hdr_pipeline = create_hdr_pipeline()
 	d.hdr_ubo = create_ubo_hdr()
-	ubo_hdr_set_scene(d.hdr_ubo, hdr_color_attachmetn)
-	ubo_hdr_set_bloom(d.hdr_ubo, bright_color_attachmetn)
+	ubo_hdr_set_scene(d.hdr_ubo, hdr_color_attachment)
+	ubo_hdr_set_bloom(d.hdr_ubo, bright_color_attachment)
 	ubo_hdr_set_exposure(d.hdr_ubo, 0.5)
 
 	d.blur_hor_pipeline = create_gaussian_blur_pipeline(true)
 	d.blur_ver_pipeline = create_gaussian_blur_pipeline(false)
 
 	d.blur_ubo = create_ubo_gaussian_blur()
-	ubo_gaussian_blur_set_blur(d.blur_ubo, bright_color_attachmetn)
+	ubo_gaussian_blur_set_blur(d.blur_ubo, bright_color_attachment)
 
 	d.multilight_pipeline = create_multilight_pipeline()
 	d.multilight_ubo = create_ubo_multilight()

@@ -83,7 +83,7 @@ has_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 	return hm.has_handle(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 }
 
-detstroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
+destroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	if !ok do return false
 	b := _acquire_buffer_h(uniform_buffer.buffer)
@@ -110,7 +110,7 @@ get_storage_buffer :: proc(handle: Storage_Buffer, loc := #caller_location) -> ^
 	return b
 }
 
-detstroy_storage_buffer :: proc(handle: Storage_Buffer) -> bool {
+destroy_storage_buffer :: proc(handle: Storage_Buffer) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	if !ok do return false
 	b := _acquire_buffer_h(storage_buffer.buffer)
