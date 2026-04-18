@@ -1560,56 +1560,56 @@ create_primitive_square :: proc(size: f32 = 1) -> Mesh {
 	return create_mesh(vertices[:], {})
 }
 
-create_primitive_cube :: proc(size: f32 = 1) -> Mesh {
+create_primitive_cube :: proc(size: vec3 = 1) -> Mesh {
 	vertices := [?]Vertex {
 		// position         tex_pos        normal              color
 		// -Z
-		{{size, size, -size}, {1.0, 1.0}, {0.0, 0.0, -1.0}},
-		{{size, -size, -size}, {1.0, 0.0}, {0.0, 0.0, -1.0}},
-		{{-size, -size, -size}, {0.0, 0.0}, {0.0, 0.0, -1.0}},
-		{{-size, -size, -size}, {0.0, 0.0}, {0.0, 0.0, -1.0}},
-		{{-size, size, -size}, {0.0, 1.0}, {0.0, 0.0, -1.0}},
-		{{size, size, -size}, {1.0, 1.0}, {0.0, 0.0, -1.0}},
+		{{size.x, size.y, -size.z}, {1.0, 1.0}, {0.0, 0.0, -1.0}},
+		{{size.x, -size.y, -size.z}, {1.0, 0.0}, {0.0, 0.0, -1.0}},
+		{{-size.x, -size.y, -size.z}, {0.0, 0.0}, {0.0, 0.0, -1.0}},
+		{{-size.x, -size.y, -size.z}, {0.0, 0.0}, {0.0, 0.0, -1.0}},
+		{{-size.x, size.y, -size.z}, {0.0, 1.0}, {0.0, 0.0, -1.0}},
+		{{size.x, size.y, -size.z}, {1.0, 1.0}, {0.0, 0.0, -1.0}},
 
 		// +Z
-		{{size, -size, size}, {1.0, 0.0}, {0.0, 0.0, 1.0}},
-		{{size, size, size}, {1.0, 1.0}, {0.0, 0.0, 1.0}},
-		{{-size, -size, size}, {0.0, 0.0}, {0.0, 0.0, 1.0}},
-		{{-size, -size, size}, {0.0, 0.0}, {0.0, 0.0, 1.0}},
-		{{size, size, size}, {1.0, 1.0}, {0.0, 0.0, 1.0}},
-		{{-size, size, size}, {0.0, 1.0}, {0.0, 0.0, 1.0}},
+		{{size.x, -size.y, size.z}, {1.0, 0.0}, {0.0, 0.0, 1.0}},
+		{{size.x, size.y, size.z}, {1.0, 1.0}, {0.0, 0.0, 1.0}},
+		{{-size.x, -size.y, size.z}, {0.0, 0.0}, {0.0, 0.0, 1.0}},
+		{{-size.x, -size.y, size.z}, {0.0, 0.0}, {0.0, 0.0, 1.0}},
+		{{size.x, size.y, size.z}, {1.0, 1.0}, {0.0, 0.0, 1.0}},
+		{{-size.x, size.y, size.z}, {0.0, 1.0}, {0.0, 0.0, 1.0}},
 
 		// -X
-		{{-size, -size, -size}, {0.0, 0.0}, {-1.0, 0.0, 0.0}},
-		{{-size, -size, size}, {1.0, 0.0}, {-1.0, 0.0, 0.0}},
-		{{-size, size, size}, {1.0, 1.0}, {-1.0, 0.0, 0.0}},
-		{{-size, size, size}, {1.0, 1.0}, {-1.0, 0.0, 0.0}},
-		{{-size, size, -size}, {0.0, 1.0}, {-1.0, 0.0, 0.0}},
-		{{-size, -size, -size}, {0.0, 0.0}, {-1.0, 0.0, 0.0}},
+		{{-size.x, -size.y, -size.z}, {0.0, 0.0}, {-1.0, 0.0, 0.0}},
+		{{-size.x, -size.y, size.z}, {1.0, 0.0}, {-1.0, 0.0, 0.0}},
+		{{-size.x, size.y, size.z}, {1.0, 1.0}, {-1.0, 0.0, 0.0}},
+		{{-size.x, size.y, size.z}, {1.0, 1.0}, {-1.0, 0.0, 0.0}},
+		{{-size.x, size.y, -size.z}, {0.0, 1.0}, {-1.0, 0.0, 0.0}},
+		{{-size.x, -size.y, -size.z}, {0.0, 0.0}, {-1.0, 0.0, 0.0}},
 
 		// +X
-		{{size, size, size}, {1.0, 1.0}, {1.0, 0.0, 0.0}},
-		{{size, -size, size}, {1.0, 0.0}, {1.0, 0.0, 0.0}},
-		{{size, -size, -size}, {0.0, 0.0}, {1.0, 0.0, 0.0}},
-		{{size, -size, -size}, {0.0, 0.0}, {1.0, 0.0, 0.0}},
-		{{size, size, -size}, {0.0, 1.0}, {1.0, 0.0, 0.0}},
-		{{size, size, size}, {1.0, 1.0}, {1.0, 0.0, 0.0}},
+		{{size.x, size.y, size.z}, {1.0, 1.0}, {1.0, 0.0, 0.0}},
+		{{size.x, -size.y, size.z}, {1.0, 0.0}, {1.0, 0.0, 0.0}},
+		{{size.x, -size.y, -size.z}, {0.0, 0.0}, {1.0, 0.0, 0.0}},
+		{{size.x, -size.y, -size.z}, {0.0, 0.0}, {1.0, 0.0, 0.0}},
+		{{size.x, size.y, -size.z}, {0.0, 1.0}, {1.0, 0.0, 0.0}},
+		{{size.x, size.y, size.z}, {1.0, 1.0}, {1.0, 0.0, 0.0}},
 
 		// -Y
-		{{-size, -size, -size}, {0.0, 1.0}, {0.0, -1.0, 0.0}},
-		{{size, -size, -size}, {1.0, 1.0}, {0.0, -1.0, 0.0}},
-		{{size, -size, size}, {1.0, 0.0}, {0.0, -1.0, 0.0}},
-		{{size, -size, size}, {1.0, 0.0}, {0.0, -1.0, 0.0}},
-		{{-size, -size, size}, {0.0, 0.0}, {0.0, -1.0, 0.0}},
-		{{-size, -size, -size}, {0.0, 1.0}, {0.0, -1.0, 0.0}},
+		{{-size.x, -size.y, -size.z}, {0.0, 1.0}, {0.0, -1.0, 0.0}},
+		{{size.x, -size.y, -size.z}, {1.0, 1.0}, {0.0, -1.0, 0.0}},
+		{{size.x, -size.y, size.z}, {1.0, 0.0}, {0.0, -1.0, 0.0}},
+		{{size.x, -size.y, size.z}, {1.0, 0.0}, {0.0, -1.0, 0.0}},
+		{{-size.x, -size.y, size.z}, {0.0, 0.0}, {0.0, -1.0, 0.0}},
+		{{-size.x, -size.y, -size.z}, {0.0, 1.0}, {0.0, -1.0, 0.0}},
 
 		// +Y
-		{{size, size, size}, {1.0, 0.0}, {0.0, 1.0, 0.0}},
-		{{size, size, -size}, {1.0, 1.0}, {0.0, 1.0, 0.0}},
-		{{-size, size, -size}, {0.0, 1.0}, {0.0, 1.0, 0.0}},
-		{{-size, size, -size}, {0.0, 1.0}, {0.0, 1.0, 0.0}},
-		{{-size, size, size}, {0.0, 0.0}, {0.0, 1.0, 0.0}},
-		{{size, size, size}, {1.0, 0.0}, {0.0, 1.0, 0.0}},
+		{{size.x, size.y, size.z}, {1.0, 0.0}, {0.0, 1.0, 0.0}},
+		{{size.x, size.y, -size.z}, {1.0, 1.0}, {0.0, 1.0, 0.0}},
+		{{-size.x, size.y, -size.z}, {0.0, 1.0}, {0.0, 1.0, 0.0}},
+		{{-size.x, size.y, -size.z}, {0.0, 1.0}, {0.0, 1.0, 0.0}},
+		{{-size.x, size.y, size.z}, {0.0, 0.0}, {0.0, 1.0, 0.0}},
+		{{size.x, size.y, size.z}, {1.0, 0.0}, {0.0, 1.0, 0.0}},
 	}
 	return create_mesh(vertices[:], {})
 }
