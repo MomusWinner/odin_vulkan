@@ -212,11 +212,7 @@ update :: proc() -> bool {
 
 	_input_update()
 
-	if window_should_close() {
-		wait_render_completion()
-		return false
-	}
-	return true
+	return !window_should_close()
 }
 
 @(require_results)

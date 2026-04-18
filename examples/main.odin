@@ -102,6 +102,7 @@ main :: proc() {
 		}
 		prev = time.now()
 	}
+	ve.wait_render_completion()
 
 	current_scene.destroy(&current_scene)
 
