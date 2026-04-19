@@ -213,8 +213,16 @@ mouse_button_is_down :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.PRESS
 }
 
+mouse_button_is_start_down :: proc(button: MouseButton) -> bool {
+	return ctx.input.mouse.states[button] == glfw.PRESS && ctx.input.mouse.previous_states[button] != glfw.PRESS
+}
+
 mouse_button_is_up :: proc(button: MouseButton) -> bool {
 	return ctx.input.mouse.states[button] == glfw.RELEASE
+}
+
+mouse_button_is_start_up :: proc(button: MouseButton) -> bool {
+	return ctx.input.mouse.states[button] == glfw.RELEASE && ctx.input.mouse.previous_states[button] != glfw.RELEASE
 }
 
 cursor_set_mode :: proc(state: Cursor_Mode) {
