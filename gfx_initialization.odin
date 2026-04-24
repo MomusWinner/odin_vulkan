@@ -222,28 +222,24 @@ _physical_device_extensions :: proc(
 
 @(private = "file")
 _pick_physical_device :: proc() {
-	score_physical_device :: proc(device: vk.PhysicalDevice) -> (score: int) {
+	score_physical_device :: proc(device: vk.PhysicalDevice) -> (score: int, err_msg: string) {
 		features: Physical_Device_Features
 		_get_physical_device_features(device, &features)
-		success, msg := _validate_physical_device_features(features)
+		success, msg := _validate_physical_device_features(features, context.temp_allocator)
 		if !success {
-			log.info(" !", msg)
-			return 0
+			return 0, msg
 		}
 
 		props: vk.PhysicalDeviceProperties
 		vk.GetPhysicalDeviceProperties(device, &props)
 
 		name := byte_arr_str(&props.deviceName)
-		log.infof("-- %q", name)
-		defer log.infof(" * device %q scored %v", name, score)
 
 		// Need certain extensions supported.
 		{
 			extensions, result := _physical_device_extensions(device, context.temp_allocator)
 			if result != .SUCCESS {
-				log.infof(" ! enumerate device extension properties failed: %v", result)
-				return 0
+				return 0, fmt.tprintf(" ! enumerate device extension properties failed: %v", result)
 			}
 
 			required_loop: for required in DEVICE_EXTENSIONS {
@@ -254,8 +250,7 @@ _pick_physical_device :: proc() {
 					}
 				}
 
-				log.infof(" ! device does not support required extension %q", required)
-				return 0
+				return 0, fmt.tprintf(" ! device does not support required extension %q", required)
 			}
 		}
 
@@ -263,25 +258,21 @@ _pick_physical_device :: proc() {
 		{
 			support, result := _query_swapchain_support(device, ctx.gfx.vk_state.surface, context.temp_allocator)
 			if result != .SUCCESS {
-				log.infof(" ! query swapchain support failure: %v", result)
-				return 0
+				return 0, fmt.tprintf(" ! query swapchain support failure: %v", result)
 			}
 
 			// Need at least a format and present mode.
 			if len(support.formats) == 0 || len(support.presentModes) == 0 {
-				log.info(" ! device does not support swapchain")
-				return 0
+				return 0, " ! device does not support swapchain"
 			}
 		}
 
 		families := _find_queue_families(device, ctx.gfx.vk_state.surface)
 		if _, has_graphics := families.graphics.?; !has_graphics {
-			log.info(" ! device does not have a graphics queue")
-			return 0
+			return 0, " ! device does not have a graphics queue"
 		}
 		if _, has_present := families.present.?; !has_present {
-			log.info(" ! device does not have a presentation queue")
-			return 0
+			return 0, " ! device does not have a presentation queue"
 		}
 
 		// Favor GPUs.
@@ -294,14 +285,9 @@ _pick_physical_device :: proc() {
 			score += 100_000
 		case .CPU, .OTHER:
 		}
-		log.infof(" * scored %i based on device type %v", score, props.deviceType)
 
 		// Maximum texture size.
 		score += int(props.limits.maxImageDimension2D)
-		log.infof(
-			" * added the max 2D image dimensions (texture size) of %v to the score",
-			props.limits.maxImageDimension2D,
-		)
 		return
 	}
 
@@ -312,20 +298,33 @@ _pick_physical_device :: proc() {
 	devices := make([]vk.PhysicalDevice, count, context.temp_allocator)
 	must(vk.EnumeratePhysicalDevices(ctx.gfx.vk_state.instance, &count, raw_data(devices)))
 
-
-	log.info("////////////////////////////////////////")
-	log.info("// START EVALUATING DEVICES")
-	log.info("////////////////////////////////////////")
 	best_device_score := -1
-	for device in devices {
-		if score := score_physical_device(device); score > best_device_score {
+	msgs := make([]string, len(devices), context.temp_allocator)
+	for device, i in devices {
+		if score, msg := score_physical_device(device); score > best_device_score {
+			msgs[i] = msg
 			ctx.gfx.vk_state.physical_device = device
 			best_device_score = score
 		}
 	}
 
 	if best_device_score <= 0 {
-		log.panic("vulkan: no suitable GPU found")
+		for device_msg, i in msgs {
+			props: vk.PhysicalDeviceProperties
+			vk.GetPhysicalDeviceProperties(devices[i], &props)
+			log.errorf(
+				`
+Device Name: %s
+API Version: %d
+Device Version: %d
+Error: %s`,
+				props.deviceName,
+				props.apiVersion,
+				props.driverVersion,
+				device_msg,
+			)
+		}
+		log.panicf("vulkan: no suitable GPU found")
 	}
 
 	vk.GetPhysicalDeviceProperties(ctx.gfx.vk_state.physical_device, &ctx.gfx.vk_state.physical_device_property)
