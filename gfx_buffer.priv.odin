@@ -268,14 +268,15 @@ _create_vk_device_local_buffer :: proc(
 ) {
 	sc := begin_single_cmd()
 
+	// Result buffer
+	vk_buffer, allocation, allocation_info = _create_vk_buffer(size, {.TRANSFER_DST} + usage, .AUTO_PREFER_DEVICE, {})
+
 	// TODO: Don't create a staging buffer if the device has enough DEVICE_LOCAL and HOST_VISIBLE memory
 	// Staging buffer
 	staging_buffer := _create_staging_buffer(data, size, loc)
-	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
 	defer _destroy_buffer(&staging_buffer)
 
-	// Result buffer
-	vk_buffer, allocation, allocation_info = _create_vk_buffer(size, {.TRANSFER_DST} + usage, .AUTO_PREFER_DEVICE, {})
+	_cmd_buffer_barrier(sc.cmd, vk_buffer, {.MEMORY_READ}, {.TRANSFER_WRITE}, dst_stage_mask | {.COPY}, {.TRANSFER})
 	_cmd_copy_buffer(sc.cmd, staging_buffer.id, vk_buffer, size)
 	_cmd_buffer_barrier(sc.cmd, vk_buffer, {.TRANSFER_WRITE}, dst_access_mask, {.TRANSFER}, dst_stage_mask)
 
@@ -298,6 +299,7 @@ _create_staging_buffer :: proc(data: rawptr, size: Device_Size, loc := #caller_l
 	_vk_map_memory(alloc, &buffer.mapped)
 	_buffer_fill_mapped_memory(alloc, alloc_info, data, size, buffer.mapped)
 
+	_vk_set_debug_object_name(vk_buffer, .BUFFER, fmt.tprintf("staging_buffer %s", _location_to_string(loc)))
 	return Buffer_Data{id = vk_buffer, size = size, vk_usage = {.TRANSFER_SRC}, alloc = alloc, alloc_info = alloc_info}
 }
 
