@@ -88,7 +88,7 @@ main :: proc() {
 
 	src_dir, _ := filepath.clean(opt.src_dir, context.temp_allocator)
 	glsl_dir, _ := filepath.join({opt.output_glsl_dir, "gen_types.h"}, context.temp_allocator)
-	odin_dir, _ := filepath.join({opt.src_dir, "gen_materials.odin"}, context.temp_allocator)
+	odin_dir, _ := filepath.join({opt.src_dir, "gen_shader_types.odin"}, context.temp_allocator)
 
 	generate_shader_types(src_dir, glsl_dir, odin_dir, gfx_pkg_info)
 }
