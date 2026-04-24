@@ -742,7 +742,7 @@ cmd_dispatch :: proc(
 }
 
 @(require_results)
-begin_single_cmd :: proc() -> Single_Command {
+begin_single_cmd :: proc(loc := #caller_location) -> Single_Command {
 	alloc_info := vk.CommandBufferAllocateInfo {
 		sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
 		level              = .PRIMARY,
@@ -751,21 +751,21 @@ begin_single_cmd :: proc() -> Single_Command {
 	}
 
 	command_buffer: vk.CommandBuffer
-	must(vk.AllocateCommandBuffers(ctx.gfx.vk_state.device, &alloc_info, &command_buffer))
+	must(vk.AllocateCommandBuffers(ctx.gfx.vk_state.device, &alloc_info, &command_buffer), loc = loc)
 
 	begin_info := vk.CommandBufferBeginInfo {
 		sType = .COMMAND_BUFFER_BEGIN_INFO,
 		flags = {.ONE_TIME_SUBMIT},
 	}
-	must(vk.BeginCommandBuffer(command_buffer, &begin_info))
+	must(vk.BeginCommandBuffer(command_buffer, &begin_info), loc = loc)
 
 	return Single_Command{cmd = command_buffer}
 }
 
-end_single_cmd :: proc(single_command: Single_Command) {
+end_single_cmd :: proc(single_command: Single_Command, loc := #caller_location) {
 	command_buffer := single_command.cmd
 
-	must(vk.EndCommandBuffer(command_buffer))
+	must(vk.EndCommandBuffer(command_buffer), loc = loc)
 
 	submit_info := vk.SubmitInfo {
 		sType              = .SUBMIT_INFO,
@@ -773,8 +773,8 @@ end_single_cmd :: proc(single_command: Single_Command) {
 		pCommandBuffers    = &command_buffer,
 	}
 
-	must(vk.QueueSubmit(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, 0))
-	must(vk.QueueWaitIdle(ctx.gfx.vk_state.graphics_queue))
+	must(vk.QueueSubmit(ctx.gfx.vk_state.graphics_queue, 1, &submit_info, 0), loc = loc)
+	must(vk.QueueWaitIdle(ctx.gfx.vk_state.graphics_queue), loc = loc)
 
 	vk.FreeCommandBuffers(ctx.gfx.vk_state.device, ctx.gfx.vk_state.command_pool, 1, &command_buffer)
 }
