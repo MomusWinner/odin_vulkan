@@ -268,7 +268,7 @@ _create_vk_device_local_buffer :: proc(
 ) {
 	sc := begin_single_cmd()
 
-	// TODO: Don't create a staging buffer if the device has enough DEVICE_LOCAL and HOST_VISIBLE memeory
+	// TODO: Don't create a staging buffer if the device has enough DEVICE_LOCAL and HOST_VISIBLE memory
 	// Staging buffer
 	staging_buffer := _create_staging_buffer(data, size, loc)
 	_cmd_buffer_barrier(sc.cmd, staging_buffer.id, {.HOST_WRITE}, {.TRANSFER_READ}, {.HOST}, {.TRANSFER})
