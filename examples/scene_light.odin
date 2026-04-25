@@ -93,7 +93,7 @@ light_scene_init :: proc(s: ^Scene) {
 	ubo_light_data_set_shadow(d.light_data_ubo, d.shadow_map_texture)
 	ubo_light_data_set_color(d.light_data_ubo, 1)
 
-	d.suzanne_mesh = ve.load_meshes_from_obj("examples/assets/Suzanne.obj", context.temp_allocator)[0]
+	d.suzanne_mesh = ve.load_obj("examples/assets/Suzanne.obj", context.temp_allocator)[0]
 	d.ground_mesh = ve.create_primitive_square()
 
 	ve.init_trf(&d.suzanne_trf)

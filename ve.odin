@@ -215,12 +215,22 @@ update :: proc() -> bool {
 	return !window_should_close()
 }
 
-@(require_results)
-load_meshes_from_obj :: proc(path: string, allocator := context.allocator) -> []Mesh {
-	imp_meshes, ok := import_obj(path, context.temp_allocator)
+load_obj :: proc {
+	load_obj_from_file,
+	load_obj_from_memory,
+}
+
+load_obj_from_file :: proc(path: string, allocator := context.allocator) -> []Mesh {
+	data, ok := read_file(path, context.temp_allocator)
 	if !ok {
-		log.error("Couldn't import obj", path)
+		log.error("Couldn't find obj file", path)
 	}
+	return load_obj_from_memory(data, allocator)
+}
+
+@(require_results)
+load_obj_from_memory :: proc(data: []byte, allocator := context.allocator) -> []Mesh {
+	imp_meshes := parse_obj(data, context.temp_allocator)
 	meshes := make([]Mesh, len(imp_meshes), allocator)
 
 	for imp_mesh, i in imp_meshes {

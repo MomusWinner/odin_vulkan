@@ -19,7 +19,22 @@ Obj_Vertex :: struct {
 	p, t, n: int,
 }
 
-import_obj :: proc(path: string, allocator := context.allocator) -> ([]Obj_Mesh, bool) {
+parse_obj :: proc {
+	parse_obj_from_file,
+	parse_obj_from_memory,
+}
+
+parse_obj_from_file :: proc(path: string, allocator := context.allocator) -> ([]Obj_Mesh, bool) {
+	data, ok := read_file(path, context.temp_allocator)
+	if !ok {
+		log.errorf("Couldn't load file by path: %s", path)
+		return nil, false
+	}
+
+	return parse_obj_from_memory(data, allocator), true
+}
+
+parse_obj_from_memory :: proc(data: []byte, allocator := context.allocator) -> []Obj_Mesh {
 	parse_f32 :: proc(s: string) -> f32 {
 		value, _ := strconv.parse_f32(s)
 		return value
@@ -34,12 +49,6 @@ import_obj :: proc(path: string, allocator := context.allocator) -> ([]Obj_Mesh,
 	parse_f :: proc(s: string) -> (p: int, t: int, n: int) {
 		indexes := strings.split(s, "/", context.temp_allocator)
 		return parse_int(indexes[0]) - 1, parse_int(indexes[1]) - 1, parse_int(indexes[2]) - 1
-	}
-
-	data, ok := read_file(path, context.temp_allocator)
-	if !ok {
-		log.errorf("Couldn't load file by path: %s", path)
-		return nil, false
 	}
 
 	data_string := string(data)
@@ -105,5 +114,5 @@ import_obj :: proc(path: string, allocator := context.allocator) -> ([]Obj_Mesh,
 	}
 	append(&meshes, Obj_Mesh{name = name, vertices = vertices[:], indices = indices[:]})
 
-	return meshes[:], true
+	return meshes[:]
 }

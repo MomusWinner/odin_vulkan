@@ -44,7 +44,7 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	d.camera.position = {0, 0, 2}
 
 	d.texture = ve.load_texture("examples/assets/room.png")
-	d.model = ve.load_meshes("examples/assets/room.obj", context.temp_allocator)[0]
+	d.model = ve.load_obj("examples/assets/room.obj", context.temp_allocator)[0]
 	d.square = ve.create_primitive_square()
 	d.pipeline = create_default_pipeline()
 
