@@ -1,94 +1,154 @@
 # ve 
-A small Vulkan Rendering Engine
+A small Vulkan Rendering Engine. 
 
 > [!WARNING]
 > **`ve` is currently under active development** and is not recommended for production use. The API may change significantly between versions.
-> 
-> **Platform Support Note:** Currently only Linux is supported. Windows support is planned for future releases.
+
+#### Platforms
+ - Linux
+ - Windows
+
+#### Requirements
+ - Odin version [`2026-03`](https://odin-lang.org/docs/install/)
+ - libstdc++
+
+#### Dependencies
+ - [glfw](https://github.com/glfw/glfw)
+ - [vma](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+ - [shaderc](https://github.com/google/shaderc)
+ - [stb](https://github.com/nothings/stb)
+
+## Installetion
+
+```bash
+# Clone the repository
+git clone https://github.com/MomusWinner/ve.git
+cd ve
+
+# For Linux
+./examples.sh gen
+./examples.sh run
+
+# For Windows
+examples.bat gen
+examples.bat run
+```
 
 ##  Key Features
 
-### Pipeline Hot Reloading
-Real-time shader and pipeline recompilation during runtime
+The key features of ve are `shader hot reloading`, `bindless rendering`, and `gpu buffer code generation`.
+
+### Shader Hot Reloading
+Supports real-time shader recompilation while the engine is running. This feature can be disabled using -define:ENABLE_SHADER_COMPILATION=false.
+By default, it is enabled only in debug builds.
 ```odin
-    if (ve.is_key_pressed(.R)) {
-        gfx.hot_reload_shaders()
-    }
+if (ve.key_is_pressed(.R)) {
+    ve.hot_reload_shaders()
+}
 ```
 
-### Material Code Generation
-Automatic material system generation from material structures. A key advantage of this approach is type-safe material interfaces. The generator also handles ``std140`` memory alignment by automatically adding the necessary padding.
+> [!NOTE]
+> Shader hot reloading is intended for use only in developent.
+
+### Buffer Types Generation
+Automatic buffer type generation system from Odin structures. A key advantage of this approach is type-safe buffer interfaces.
+The generator also handles `std140` and `std430` memory alignment layouts by automatically adding necessary padding.
 
 Example:
 ```odin
 package main
 
 import "ve"
-import gfx "ve/graphics"
 
-@(material)
-My_Material :: struct {
-    color:   ve.vec4,
-    vector:  ve.vec3,
-    texture: gfx.Texture_Handle,
+@(buffer) // defaults to std140
+My_UBO :: struct {
+	color:   ve.vec4,
+	texture: ve.Texture,
+	ubo:     ve.Buffer,
+}
+
+@(buffer = "storage") // defaults to std430
+My_SBO :: struct {
+    ...
+}
+
+@(buffer = "storage,std140")
+My_Second_SBO :: struct {
+    ...
 }
 ```
 
-After defining your material struct, run:
+After defining your buffer struct, run:
 ```bash
-$ make gen
+odin run ./tools/shadertypegen/ -- \
+    -output-glsl-dir:path_to_your_shaders \
+    -src-dir:path_to_your_project \
+    -ve-import:"ve .."
 ```
 This generates two files:
 1. An Odin source file in your project package.
-2. A shader header file at ``assets/shader/gen_types.h``.
+2. A shader header file at `path_to_your_shaders/gen_types.h`.
 
-The generated Odin source file provides type-safe getter and setter functions for each field in your material struct:
+The generated Odin source file provides type-safe getter and setter procedures for each field of your struct:
 ```odin
-    material: gfx.Material
+ubo: ve.Uniform_Buffer = create_ubo_my()
 
-    init_mtrl_my(&material, pipeline_h)
+ubo_my_set_color(ubo, vec3{1, 0, 0})
+ubo_my_set_texture(ubo, texture)
+ubo_my_set_ubo(ubo, other_ubo)
 
-    mtrl_my_set_color(&material, {0.5, 1, 0, 1})
-    mtrl_my_set_texture(&material, texture_h)
-    mtrl_my_set_vector(&material, {1, 1, 1})
+ubo_buffer: ve.Buffer = ve.ubo_get_buffer(ubo)
 
-    my_texture := mtrl_my_get_texture(material)
-    my_color := mtrl_my_get_color(material)
-    my_vector := mtrl_my_get_vector(material)
+ve.destroy_uniform_buffer(ubo)
 ```
-
 
 ### Bindless Rendering
 Leverages modern GPU bindless descriptors to eliminate explicit texture and buffer bind calls, improving performance and simplifying resource management.
+Bindless rendering allows access to buffers and textures by index in an array. For example: gTextures[your_index].
 
-### 🚧Archetype ECS🚧
-In development
+## CPU to GPU Data Transfer
+Ve supports transferring `textures`, `uniform buffers`, and `storage buffers`.
+Uniform and storage buffers can be created in two ways: manually or by type generation ([described below](#buffer-types-generation)).
 
-## Vulkan Features
-- Dynamic Rendering
-- Descriptor Indexing
-- Synchronization 2
+In a draw operation, you can pass a mesh, pipeline, transformation matrix, and a list of handles from 0 to 9 (h0, h1, h2...).
+But what is h0? Because ve uses a bindless rendering approach, it's very useful to pass some indices to the shader.
 
-## Installetion
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/ve.git
-cd ve
-
-unzip dependencies.zip
-make gen-ve
-make gen
-make run
+For example, we can pass any type of resource (`ve.Buffer`, `ve.Texture`, `ve.Unifrom_Buffer`, `ve.Storage_Buffer`) to h0, h1, etc., and later access it in a GLSL shader.
+> [!NOTE]
+> `ve.Unifrom_Buffer` and `ve.Storage_Buffer` are wrappers around ve.Buffer. They are needed for type generation.
+```odin
+ve.draw_mesh(d.mesh, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = buffer, h1 = ubo, h2 = texture})
 ```
+
+> [!NOTE]
+> `#include "buildin:bindless.h"` is needed for bindless rendering.
+
+```glsl
+#include "buildin:bindless.h"
+#include "your_path/gen_types.h"
+
+RegisterUniform(MyBuffer1, { // manual uniform buffer registration
+	vec3 color;
+});
+
+layout(location = 0) in vec2 fragTexCoord;
+
+int main() {
+    vec3 color =  texture(gTextures2D[H2()], fragTexCoord).rgb;
+
+    MyBuffer1 b1 = GetResource(MyBuffer1, H0()); // manual
+    MyBuffer2 b2 = getMyBufferUBO(H1()); // same thing, but auto-generated
+    ...
+}
+```
+
 ## Examples
+The `./examples` folder contains various examples demonstrating how to use ve correctly.
 
 #### Postprocessing
-Demonstrates a combination of screen-space blur and custom background color grading applied in post-processing.
 <img width="1920" height="1080" alt="screenshot_20260425_104335" src="https://github.com/user-attachments/assets/33f690c5-f6d3-462c-abf4-f4a8bc71acb1" />
 
 #### Text
-Shows anti-aliased text rendering with support for custom fonts and layouts.
 <img width="1920" height="1080" alt="screenshot_20260425_104659" src="https://github.com/user-attachments/assets/6c157d34-aa46-4585-9925-5b144a3c55f4" />
 
 #### Light
