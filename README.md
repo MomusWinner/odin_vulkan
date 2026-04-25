@@ -43,12 +43,12 @@ Supports real-time shader recompilation while the engine is running. This featur
 By default, it is enabled only in debug builds.
 ```odin
 if (ve.key_is_pressed(.R)) {
-    ve.hot_reload_shaders()
+    ve.shaders_hot_reload()
 }
 ```
 
 > [!NOTE]
-> Shader hot reloading is intended for use only in developent.
+> Shader hot reloading is intended for use only in development.
 
 ### Buffer Types Generation
 Automatic buffer type generation system from Odin structures. A key advantage of this approach is type-safe buffer interfaces.

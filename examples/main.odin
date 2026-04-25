@@ -88,7 +88,7 @@ main :: proc() {
 		}
 
 		if (ve.key_is_pressed(.R)) {
-			ve.hot_reload_shaders()
+			ve.shaders_hot_reload()
 		}
 
 		current_scene.update(&current_scene)
