@@ -33,7 +33,7 @@ model_scene_init :: proc(s: ^Scene) {
 	d.camera.position = {0, 0, 2}
 
 	d.texture = ve.load_texture("./examples/assets/room.png")
-	d.mesh = ve.load_meshes("./examples/assets/room.obj", context.temp_allocator)[0]
+	d.mesh = ve.load_meshes_from_obj("./examples/assets/room.obj", context.temp_allocator)[0]
 
 	d.pipeline = create_default_pipeline()
 
