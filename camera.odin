@@ -105,31 +105,32 @@ camera_set_target_only :: proc(camera: ^Camera, position: vec3) {
 }
 
 camera_set_yaw :: proc(camera: ^Camera, angle: f32, loc := #caller_location) {
-	assert_not_nil(camera, loc)
-
-	target_position := camera.target - camera.position
-	trans := lin.mat4Rotate(camera_get_up(camera^), angle)
-	target := trans * vec4{target_position.x, target_position.y, target_position.z, 0}
-	camera.target = target.xyz
+	camera_rotate(camera, camera_get_up(camera^), angle, loc)
 }
 
 // Rotates the camera around its right vector
 camera_set_pitch :: proc(camera: ^Camera, angle: f32, loc := #caller_location) {
-	assert_not_nil(camera, loc)
-
-	target_position := camera.target - camera.position
-	trans := lin.mat4Rotate(camera_get_right(camera^), angle)
-	target := trans * vec4{target_position.x, target_position.y, target_position.z, 0}
-	camera.target = target.xyz
+	camera_rotate(camera, camera_get_right(camera^), angle, loc)
 }
 
 camera_set_roll :: proc(camera: ^Camera, angle: f32, loc := #caller_location) {
+	camera_rotate(camera, camera_get_forward(camera^), angle, loc)
+}
+
+camera_rotate :: proc(camera: ^Camera, axis: vec3, angle: f32, loc := #caller_location) {
 	assert_not_nil(camera, loc)
 
-	target_position := camera.target - camera.position
-	trans := lin.mat4Rotate(camera_get_forward(camera^), angle)
-	target := trans * vec4{target_position.x, target_position.y, target_position.z, 0}
-	camera.target = target.xyz
+	// Get current direction and distance
+	direction := camera.target - camera.position
+	distance := lin.length(direction)
+
+	// Normalize direction and rotate around right axis
+	normalized_dir := lin.normalize(direction)
+	trans := lin.mat4Rotate(axis, angle)
+	new_direction := trans * vec4{normalized_dir.x, normalized_dir.y, normalized_dir.z, 0}
+
+	// Apply with original distance
+	camera.target = camera.position + new_direction.xyz * distance
 }
 
 camera_set_zoom :: proc(camera: ^Camera, zoom: vec3, loc := #caller_location) {
