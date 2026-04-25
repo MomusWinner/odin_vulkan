@@ -67,13 +67,7 @@ text_scene_init :: proc(s: ^Scene) {
 		},
 	)
 
-	d.text = create_text(
-		&d.font,
-		"По берегу мы шли. Кипел поток,\nГде выли тени злы, полубиты,\nПоверженны в кровавый кипяток.",
-		vec3{-1, 0, 0},
-		1,
-		0.0025,
-	)
+	d.text = create_text(&d.font, "Hello World!\nПривет мир!\n", vec3{-1, 0, 0}, 1, 0.0025)
 
 	strings.builder_init_len(&d.builder, len(d.text.text))
 	strings.write_string(&d.builder, d.text.text)
