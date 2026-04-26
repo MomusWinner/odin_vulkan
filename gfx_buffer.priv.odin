@@ -52,24 +52,20 @@ _create_buffer :: proc(
 	memory_usage: vma.MemoryUsage
 	memory_flags: vma.AllocationCreateFlags
 
-	if .Host_Write in usage {
-		memory_usage = .CPU_ONLY
-		memory_usage = .AUTO_PREFER_HOST
-		memory_flags += {.MAPPED, .HOST_ACCESS_SEQUENTIAL_WRITE}
-	}
-	if .Host_Read in usage {
-		memory_usage = .CPU_ONLY
-		memory_usage = .AUTO_PREFER_HOST
-		memory_flags -= {.MAPPED, .HOST_ACCESS_SEQUENTIAL_WRITE}
-		memory_flags += {.HOST_ACCESS_RANDOM}
-	}
-
 	vk_buffer: vk.Buffer
 	alloc: vma.Allocation
 	alloc_info: vma.AllocationInfo
 	mapped: rawptr
 
 	if (.Host_Write in usage || .Host_Read in usage) {
+		memory_usage = .AUTO
+		if .Host_Write in usage {
+			memory_flags = {.MAPPED, .HOST_ACCESS_SEQUENTIAL_WRITE}
+		}
+		if .Host_Read in usage {
+			memory_flags = {.MAPPED, .HOST_ACCESS_RANDOM}
+		}
+
 		vk_buffer, alloc, alloc_info = _create_vk_buffer(size, vk_usage, memory_usage, memory_flags, {}, {})
 		_vk_map_memory(alloc, &mapped, loc)
 		if data != nil {
