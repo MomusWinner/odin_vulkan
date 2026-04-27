@@ -108,7 +108,7 @@ Bindless rendering allows access to buffers and textures by index in an array. F
 
 ## CPU to GPU Data Transfer
 Ve supports transferring `textures`, `uniform buffers`, and `storage buffers`.
-Uniform and storage buffers can be created in two ways: manually or by type generation ([described below](#buffer-types-generation)).
+Uniform and storage buffers can be created in two ways: manually or by type generation ([described abow](#buffer-types-generation)).
 
 In a draw operation, you can pass a mesh, pipeline, transformation matrix, and a list of handles from 0 to 9 (h0, h1, h2...).
 But what is h0? Because ve uses a bindless rendering approach, it's very useful to pass some indices to the shader.
