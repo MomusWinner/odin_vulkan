@@ -255,7 +255,7 @@ begin_render_target :: proc(rt: ^Render_Target, active_color_attachments: []int 
 	src_color_attachments: Render_Target_Color_Attachments
 	if active_color_attachments != nil {
 		for ac in active_color_attachments {
-			assert(ac < rt.color_attachments.len && ac > 0)
+			assert(ac < rt.color_attachments.len && ac >= 0)
 			assert(slice.count(active_color_attachments[:], ac) == 1)
 			sm.append(&src_color_attachments, sm.get(rt.color_attachments, ac))
 			sm.append(&frame_data_acrive_color, ac)
