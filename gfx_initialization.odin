@@ -522,27 +522,15 @@ _validate_physical_device_features :: proc(
 	if field, ok := compare(features.features13, target.features13); !ok {
 		return false, fmt.aprintf("device does not support %s (Vulkan 1.3)", field, allocator = allocator)
 	}
-	if field, ok := compare(features.dynamic_rendering_local_read, target.dynamic_rendering_local_read); !ok {
-		return false, fmt.aprintf(
-			"device does not support %s (Dynamic Rendering Local Read)",
-			field,
-			allocator = allocator,
-		)
-	}
 
 	return true, ""
 }
 
 @(private)
 _get_required_physical_device_features :: proc(features: ^Physical_Device_Features) {
-	// DYNAMIC RENDERING LOCAL READ
-	features.dynamic_rendering_local_read.sType = .PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES
-	features.dynamic_rendering_local_read.pNext = nil
-	features.dynamic_rendering_local_read.dynamicRenderingLocalRead = true
-
 	// FEATURES 1.3
 	features.features13.sType = .PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
-	features.features13.pNext = &features.dynamic_rendering_local_read
+	features.features13.pNext = nil
 	features.features13.subgroupSizeControl = true
 	features.features13.dynamicRendering = true
 	features.features13.synchronization2 = true
@@ -557,6 +545,7 @@ _get_required_physical_device_features :: proc(features: ^Physical_Device_Featur
 	features.features12.timelineSemaphore = true
 	features.features12.scalarBlockLayout = true
 	features.features12.storageBuffer8BitAccess = true
+
 	// descriptor indexing
 	features.features12.descriptorIndexing = true
 	features.features12.shaderSampledImageArrayNonUniformIndexing = true

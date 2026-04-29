@@ -126,16 +126,13 @@ Swapchain :: struct {
 // FEATURES
 
 Physical_Device_Features :: struct {
-	dynamic_rendering_local_read: vk.PhysicalDeviceDynamicRenderingLocalReadFeatures,
+	features13: vk.PhysicalDeviceVulkan13Features,
 	// ^
 	// | pNext
-	features13:                   vk.PhysicalDeviceVulkan13Features,
+	features12: vk.PhysicalDeviceVulkan12Features,
 	// ^
 	// | pNext
-	features12:                   vk.PhysicalDeviceVulkan12Features,
-	// ^
-	// | pNext
-	features:                     vk.PhysicalDeviceFeatures2,
+	features:   vk.PhysicalDeviceFeatures2,
 }
 
 // MODEL
