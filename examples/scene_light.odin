@@ -1,15 +1,9 @@
 package main
 
 import ve ".."
-import vemath "../math"
 import "base:runtime"
-import sm "core:container/small_array"
-import "core:log"
 import "core:math"
 import lin "core:math/linalg/glsl"
-import "core:math/noise"
-import "core:time"
-import "vendor:microui"
 
 @(buffer)
 Light_Data_Ubo :: struct {
@@ -148,7 +142,15 @@ light_scene_draw :: proc(s: ^Scene) {
 
 	ve.begin_pass()
 
-	ve.begin_render_target(&d.rt)
+	ve.begin_render_target(
+		&d.rt,
+		depth_stencil_action = ve.Depth_Stencil_Attachment_Action {
+			depth_clear_value = 1,
+			stencil_clear_value = 0,
+			load_op = .Clear,
+			store_op = .Store,
+		},
+	)
 	{
 		ve.set_camera(d.light_camera)
 		ve.draw_mesh(d.suzanne_mesh, d.depth_only_pipeline, ve.trf_get_matrix(d.suzanne_trf))
@@ -156,7 +158,13 @@ light_scene_draw :: proc(s: ^Scene) {
 	}
 	ve.end_render_target(&d.rt)
 
-	ve.begin_draw({0.933, 0.525, 0.899, 1})
+	ve.begin_draw(
+		color_action = ve.Color_Attachment_Action {
+			clear_value = {0.933, 0.525, 0.899, 1},
+			load_op = .Clear,
+			store_op = .Store,
+		},
+	)
 	{
 		ve.set_camera(d.camera)
 		handles := ve.Handles {

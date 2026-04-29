@@ -1,11 +1,6 @@
 package ve
 
 import hm "container/handle_map"
-import "core:fmt"
-import "core:log"
-import "core:mem"
-import "lib/vma"
-import vk "vendor:vulkan"
 
 Buffer_Usage_Flags :: distinct bit_set[Buffer_Usage_Flag]
 Buffer_Usage_Flag :: enum {

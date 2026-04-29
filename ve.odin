@@ -7,7 +7,6 @@ import "core:strings"
 import "core:time"
 import "math"
 import "vendor:glfw"
-import vk "vendor:vulkan"
 
 vec2 :: math.vec2
 ivec2 :: math.ivec2

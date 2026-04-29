@@ -2,11 +2,9 @@ package main
 
 import ve ".."
 import "base:runtime"
-import sm "core:container/small_array"
 import "core:log"
 import "core:math"
 import "core:math/rand"
-import "core:time"
 
 INSTANCE_COUNT :: 500_000
 
@@ -82,7 +80,7 @@ instancing_scene_draw :: proc(s: ^Scene) {
 
 	ve.set_camera(d.camera)
 
-	ve.begin_draw(clear_color = {.1, .1, .1, 1})
+	ve.begin_draw()
 	{
 		ve.cmd_bind_vertex_buffer(d.instance_vbo, 1)
 		ve.draw_mesh(d.cube, d.pipeline, ve.trf_get_matrix(d.trf), instance_count = INSTANCE_COUNT)

@@ -3,9 +3,6 @@ package main
 import ve ".."
 import "base:runtime"
 import "core:log"
-import "core:math"
-import "core:math/rand"
-import "core:time"
 
 Model_Scene_Data :: struct {
 	texture:        ve.Texture,

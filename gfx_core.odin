@@ -8,10 +8,7 @@ import sm "core:container/small_array"
 import "core:fmt"
 import "core:log"
 import "core:math/linalg/glsl"
-import "core:mem"
-import "lib/shaderc"
 import "lib/vma"
-import "math"
 import "vendor:glfw"
 import vk "vendor:vulkan"
 
@@ -170,13 +167,13 @@ Surface_Info_Type :: enum {
 }
 
 Surface_Info :: struct {
-	type:                     Surface_Info_Type,
-	sample_count:             Sample_Count_Flag,
-	depth_format:             Format,
-	color_formats:            sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
-	active_color_attachments: sm.Small_Array(MAX_COLOR_ATTACHMENTS, int), // FIX:
-	width:                    int,
-	height:                   int,
+	type:                            Surface_Info_Type,
+	sample_count:                    Sample_Count_Flag,
+	depth_format:                    Format,
+	color_formats:                   sm.Small_Array(MAX_COLOR_ATTACHMENTS, Format),
+	active_color_attachment_indices: sm.Small_Array(MAX_COLOR_ATTACHMENTS, int),
+	width:                           int,
+	height:                          int,
 }
 
 Frame_Data :: struct {
@@ -193,6 +190,31 @@ Render_Frame :: struct {
 
 Sync_Data :: struct {
 	wait_semaphore_infos: []vk.SemaphoreSubmitInfo,
+}
+
+Attachment_Load_Op :: enum c.int {
+	Load      = 0,
+	Clear     = 1,
+	Dont_Care = 2,
+}
+
+Attachment_Store_Op :: enum c.int {
+	Store     = 0,
+	Dont_Care = 1,
+}
+
+Color_Attachment_Action :: struct {
+	index:       int,
+	clear_value: vec4,
+	load_op:     Attachment_Load_Op,
+	store_op:    Attachment_Store_Op,
+}
+
+Depth_Stencil_Attachment_Action :: struct {
+	depth_clear_value:   f32,
+	stencil_clear_value: u32,
+	load_op:             Attachment_Load_Op,
+	store_op:            Attachment_Store_Op,
 }
 
 // BINDLESS
@@ -470,7 +492,10 @@ end_pass :: proc() {
 	_clear_deffered_destructor()
 }
 
-begin_draw :: proc(clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) {
+begin_draw :: proc(
+	color_action: Maybe(Color_Attachment_Action) = nil,
+	depth_stencil_action: Maybe(Depth_Stencil_Attachment_Action) = nil,
+) {
 	_cmd_image_transition_layout(
 		_get_cmd(),
 		ctx.gfx.swapchain.images[ctx.gfx.swapchain.image_index],
@@ -479,21 +504,8 @@ begin_draw :: proc(clear_color: vec4 = {0.0, 0.0, 0.0, 1.0}) {
 		vk.ImageSubresourceRange{aspectMask = {.COLOR}, layerCount = 1, levelCount = 1},
 	)
 
-	color_attachment_info := _swapchaint_get_color_attachment_info(clear_color)
-
-	depth_stencil_clear_value := vk.ClearValue {
-		depthStencil = {1, 0},
-	}
-
-	depth_stencil_attachment_info := vk.RenderingAttachmentInfo {
-		sType       = .RENDERING_ATTACHMENT_INFO,
-		pNext       = nil,
-		imageView   = ctx.gfx.swapchain.depth_image.view,
-		imageLayout = .DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-		loadOp      = .CLEAR,
-		storeOp     = .DONT_CARE,
-		clearValue  = depth_stencil_clear_value,
-	}
+	color_attachment_info := _swapchaint_get_color_attachment_info(color_action)
+	depth_stencil_attachment_info := _swapchaint_get_depth_stencil_attachment_info(depth_stencil_action)
 
 	rendering_info := vk.RenderingInfo {
 		sType = .RENDERING_INFO,
@@ -599,12 +611,12 @@ wait_render_completion :: proc() {
 	vk.DeviceWaitIdle(ctx.gfx.vk_state.device)
 }
 
-//  ██████╗███╗   ███╗██████╗ 
+//  ██████╗███╗   ███╗██████╗
 // ██╔════╝████╗ ████║██╔══██╗
 // ██║     ██╔████╔██║██║  ██║
 // ██║     ██║╚██╔╝██║██║  ██║
 // ╚██████╗██║ ╚═╝ ██║██████╔╝
-//  ╚═════╝╚═╝     ╚═╝╚═════╝ 
+//  ╚═════╝╚═╝     ╚═╝╚═════╝
 
 cmd_set_full_viewport_scissor :: proc(loc := #caller_location) {
 	w, h := screen_get_size()
@@ -867,7 +879,8 @@ _cmd_image_transition_layout :: proc(
 		dst_stage = {.EARLY_FRAGMENT_TESTS}
 	} else if old_layout == .UNDEFINED && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
 		src_access = {}
-		dst_access = {.COLOR_ATTACHMENT_WRITE}
+		// TODO: COLOR_ATTACHMENT_READ is needed only in specific cases
+		dst_access = {.COLOR_ATTACHMENT_WRITE, .COLOR_ATTACHMENT_READ}
 
 		src_stage = {.ALL_COMMANDS}
 		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
@@ -885,7 +898,8 @@ _cmd_image_transition_layout :: proc(
 		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
 		src_access = {.MEMORY_READ}
-		dst_access = {.COLOR_ATTACHMENT_WRITE}
+		// TODO: COLOR_ATTACHMENT_READ is needed only in specific cases
+		dst_access = {.COLOR_ATTACHMENT_WRITE, .COLOR_ATTACHMENT_READ}
 
 		src_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 		dst_stage = {.COLOR_ATTACHMENT_OUTPUT}
@@ -1075,10 +1089,54 @@ _recreate_swapchain :: proc() {
 	end_single_cmd(sc)
 }
 
-@(private)
-_swapchaint_get_color_attachment_info :: proc(clear_color: vec4) -> vk.RenderingAttachmentInfo {
+@(private = "file")
+_swapchaint_get_depth_stencil_attachment_info :: proc(
+	depth_stencil_action: Maybe(Depth_Stencil_Attachment_Action),
+) -> vk.RenderingAttachmentInfo {
+	action, has_action := depth_stencil_action.?
+
+	if !has_action {
+		action = Depth_Stencil_Attachment_Action {
+			depth_clear_value   = 1,
+			stencil_clear_value = 0,
+			load_op             = .Clear,
+			store_op            = .Dont_Care,
+		}
+	}
+
+	depth_stencil_clear_value := vk.ClearValue {
+		depthStencil = {action.depth_clear_value, action.stencil_clear_value},
+	}
+
+	depth_stencil_attachment_info := vk.RenderingAttachmentInfo {
+		sType       = .RENDERING_ATTACHMENT_INFO,
+		pNext       = nil,
+		imageView   = ctx.gfx.swapchain.depth_image.view,
+		imageLayout = .DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		loadOp      = cast(vk.AttachmentLoadOp)action.load_op,
+		storeOp     = cast(vk.AttachmentStoreOp)action.store_op,
+		clearValue  = depth_stencil_clear_value,
+	}
+
+	return depth_stencil_attachment_info
+}
+
+@(private = "file")
+_swapchaint_get_color_attachment_info :: proc(
+	color_action: Maybe(Color_Attachment_Action),
+) -> vk.RenderingAttachmentInfo {
+	action, has_action := color_action.?
+
+	if !has_action {
+		action = Color_Attachment_Action {
+			clear_value = 0,
+			load_op     = .Clear,
+			store_op    = .Store,
+		}
+	}
+
 	vk_clear_color := vk.ClearValue {
-		color = {float32 = clear_color},
+		color = {float32 = action.clear_value},
 	}
 
 	color_attachment_info := vk.RenderingAttachmentInfo {
@@ -1086,8 +1144,8 @@ _swapchaint_get_color_attachment_info :: proc(clear_color: vec4) -> vk.Rendering
 		pNext              = nil,
 		imageLayout        = .ATTACHMENT_OPTIMAL,
 		resolveImageLayout = .COLOR_ATTACHMENT_OPTIMAL,
-		loadOp             = .CLEAR,
-		storeOp            = .STORE,
+		loadOp             = cast(vk.AttachmentLoadOp)action.load_op,
+		storeOp            = cast(vk.AttachmentStoreOp)action.store_op,
 		clearValue         = vk_clear_color,
 	}
 
@@ -1323,14 +1381,14 @@ _choose_swapchain_extent :: proc(window: glfw.WindowHandle, capabilities: vk.Sur
 }
 
 
-// ██████╗ ███████╗███████╗███████╗███████╗██████╗ ███████╗██████╗                     
-// ██╔══██╗██╔════╝██╔════╝██╔════╝██╔════╝██╔══██╗██╔════╝██╔══██╗                    
-// ██║  ██║█████╗  █████╗  █████╗  █████╗  ██████╔╝█████╗  ██║  ██║                    
-// ██║  ██║██╔══╝  ██╔══╝  ██╔══╝  ██╔══╝  ██╔══██╗██╔══╝  ██║  ██║                    
-// ██████╔╝███████╗██║     ██║     ███████╗██║  ██║███████╗██████╔╝                    
-// ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═════╝                     
+// ██████╗ ███████╗███████╗███████╗███████╗██████╗ ███████╗██████╗
+// ██╔══██╗██╔════╝██╔════╝██╔════╝██╔════╝██╔══██╗██╔════╝██╔══██╗
+// ██║  ██║█████╗  █████╗  █████╗  █████╗  ██████╔╝█████╗  ██║  ██║
+// ██║  ██║██╔══╝  ██╔══╝  ██╔══╝  ██╔══╝  ██╔══██╗██╔══╝  ██║  ██║
+// ██████╔╝███████╗██║     ██║     ███████╗██║  ██║███████╗██████╔╝
+// ╚═════╝ ╚══════╝╚═╝     ╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═════╝
 //
-// ██████╗ ███████╗███████╗████████╗██████╗ ██╗   ██╗ ██████╗████████╗ ██████╗ ██████╗ 
+// ██████╗ ███████╗███████╗████████╗██████╗ ██╗   ██╗ ██████╗████████╗ ██████╗ ██████╗
 // ██╔══██╗██╔════╝██╔════╝╚══██╔══╝██╔══██╗██║   ██║██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
 // ██║  ██║█████╗  ███████╗   ██║   ██████╔╝██║   ██║██║        ██║   ██║   ██║██████╔╝
 // ██║  ██║██╔══╝  ╚════██║   ██║   ██╔══██╗██║   ██║██║        ██║   ██║   ██║██╔══██╗
@@ -1381,19 +1439,19 @@ _deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
 }
 
 
-// ██████╗ ███████╗███████╗ ██████╗██████╗ ██╗██████╗ ████████╗ ██████╗ ██████╗ 
+// ██████╗ ███████╗███████╗ ██████╗██████╗ ██╗██████╗ ████████╗ ██████╗ ██████╗
 // ██╔══██╗██╔════╝██╔════╝██╔════╝██╔══██╗██║██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗
 // ██║  ██║█████╗  ███████╗██║     ██████╔╝██║██████╔╝   ██║   ██║   ██║██████╔╝
 // ██║  ██║██╔══╝  ╚════██║██║     ██╔══██╗██║██╔═══╝    ██║   ██║   ██║██╔══██╗
 // ██████╔╝███████╗███████║╚██████╗██║  ██║██║██║        ██║   ╚██████╔╝██║  ██║
 // ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 //
-// ███╗   ███╗ █████╗ ███╗   ██╗ █████╗  ██████╗ ███████╗██████╗                
-// ████╗ ████║██╔══██╗████╗  ██║██╔══██╗██╔════╝ ██╔════╝██╔══██╗               
-// ██╔████╔██║███████║██╔██╗ ██║███████║██║  ███╗█████╗  ██████╔╝               
-// ██║╚██╔╝██║██╔══██║██║╚██╗██║██╔══██║██║   ██║██╔══╝  ██╔══██╗               
-// ██║ ╚═╝ ██║██║  ██║██║ ╚████║██║  ██║╚██████╔╝███████╗██║  ██║               
-// ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝               
+// ███╗   ███╗ █████╗ ███╗   ██╗ █████╗  ██████╗ ███████╗██████╗
+// ████╗ ████║██╔══██╗████╗  ██║██╔══██╗██╔════╝ ██╔════╝██╔══██╗
+// ██╔████╔██║███████║██╔██╗ ██║███████║██║  ███╗█████╗  ██████╔╝
+// ██║╚██╔╝██║██╔══██║██║╚██╗██║██╔══██║██║   ██║██╔══╝  ██╔══██╗
+// ██║ ╚═╝ ██║██║  ██║██║ ╚████║██║  ██║╚██████╔╝███████╗██║  ██║
+// ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝
 
 
 Pipeline_Layout_Info :: struct {
@@ -1542,8 +1600,8 @@ _destroy_descriptor_set_layout :: proc(descriptor_set_layout: vk.DescriptorSetLa
 
 // ██████╗ ██████╗ ██╗███╗   ███╗██╗████████╗██╗██╗   ██╗███████╗
 // ██╔══██╗██╔══██╗██║████╗ ████║██║╚══██╔══╝██║██║   ██║██╔════╝
-// ██████╔╝██████╔╝██║██╔████╔██║██║   ██║   ██║██║   ██║█████╗  
-// ██╔═══╝ ██╔══██╗██║██║╚██╔╝██║██║   ██║   ██║╚██╗ ██╔╝██╔══╝  
+// ██████╔╝██████╔╝██║██╔████╔██║██║   ██║   ██║██║   ██║█████╗
+// ██╔═══╝ ██╔══██╗██║██║╚██╔╝██║██║   ██║   ██║╚██╗ ██╔╝██╔══╝
 // ██║     ██║  ██║██║██║ ╚═╝ ██║██║   ██║   ██║ ╚████╔╝ ███████╗
 // ╚═╝     ╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═══╝  ╚══════╝
 

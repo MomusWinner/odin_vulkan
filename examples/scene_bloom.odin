@@ -1,11 +1,9 @@
 package main
 
 import ve ".."
-import "base:runtime"
 import "core:log"
 import "core:math"
 import "core:math/rand"
-import "core:time"
 
 CUBE_COUNT :: 16
 LIGHT_COUNT :: 4
@@ -174,13 +172,15 @@ bloom_scene_draw :: proc(s: ^Scene) {
 	ve.end_render_target(&d.rt)
 
 	for i in 0 ..< 3 {
+		brightness_color_attachment := []ve.Color_Attachment_Action{{index = 1, load_op = .Load, store_op = .Store}}
+
 		// Horizontal gaussian blur
-		ve.begin_render_target(&d.rt, {1})
+		ve.begin_render_target(&d.rt, brightness_color_attachment)
 		ve.draw_mesh(d.square, d.blur_hor_pipeline, handles = {h0 = d.blur_ubo})
 		ve.end_render_target(&d.rt)
 
 		// Vertical gaussian blur
-		ve.begin_render_target(&d.rt, {1})
+		ve.begin_render_target(&d.rt, brightness_color_attachment)
 		ve.draw_mesh(d.square, d.blur_ver_pipeline, handles = {h0 = d.blur_ubo})
 		ve.end_render_target(&d.rt)
 	}

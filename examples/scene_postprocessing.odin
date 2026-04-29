@@ -2,11 +2,6 @@ package main
 
 import ve ".."
 import "base:runtime"
-import sm "core:container/small_array"
-import "core:log"
-import "core:math"
-import "core:math/rand"
-import "core:time"
 
 @(buffer)
 Postprocessing :: struct {
@@ -57,7 +52,7 @@ postprocessing_scene_init :: proc(s: ^Scene) {
 	ve.trf_set_scale(&d.trf, 1)
 
 	ve.init_render_target(&d.rt, ve.screen_get_width(), ve.screen_get_height(), ._4)
-	color_attachment := ve.render_target_add_color_attachment(&d.rt, clear_value = {.01, .01, .01, 1.0})
+	color_attachment := ve.render_target_add_color_attachment(&d.rt)
 	ve.render_target_add_depth_attachment(&d.rt)
 
 	d.postproc_pipeline = create_postprocessing_pipeline()
@@ -83,7 +78,7 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 
 	ve.set_camera(d.camera)
 
-	ve.begin_render_target(&d.rt)
+	ve.begin_render_target(&d.rt, {{clear_value = {.01, .01, .01, 1.0}, load_op = .Clear, store_op = .Dont_Care}})
 	{
 		ve.draw_mesh(d.model, d.pipeline, ve.trf_get_matrix(d.trf), {h0 = d.ubo})
 	}
