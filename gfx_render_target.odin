@@ -272,7 +272,7 @@ begin_render_target :: proc(
 			attachment := sm.get(rt.color_attachments, i)
 			attachment.info.clearValue.color.float32 = {0, 0, 0, 0}
 			attachment.info.loadOp = .CLEAR
-			attachment.info.storeOp = .DONT_CARE
+			attachment.info.storeOp = .STORE
 			sm.append(&src_color_attachments, attachment)
 			sm.append(&active_color_attachments, i)
 		}
