@@ -76,7 +76,7 @@ Graphics :: struct {
 	pipeline_manager:          ^Pipeline_Manager,
 	descriptor_layout_manager: Descriptor_Layout_Manager,
 	bindless:                  ^Bindless,
-	deffered_destructor:       ^Deferred_Destructor,
+	deferred_destructor:       ^Deferred_Destructor,
 }
 
 Resource :: union {
@@ -486,7 +486,7 @@ end_pass :: proc() {
 		_resize_swapchain()
 	}
 
-	_clear_deffered_destructor()
+	_clear_deferred_destructor()
 }
 
 begin_draw :: proc(
@@ -1393,38 +1393,39 @@ _choose_swapchain_extent :: proc(window: glfw.WindowHandle, capabilities: vk.Sur
 // ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 
 @(private)
-_init_deffered_destructor :: proc() {
-	ctx.gfx.deffered_destructor = new(Deferred_Destructor)
-	ctx.gfx.deffered_destructor.next_index = 0
+_init_deferred_destructor :: proc() {
+	ctx.gfx.deferred_destructor = new(Deferred_Destructor)
+	ctx.gfx.deferred_destructor.next_index = 0
 }
 
 @(private)
-_deffered_destructor_add :: proc(resource: Resource) {
-	d := ctx.gfx.deffered_destructor
+_deferred_destructor_add :: proc(resource: Resource) {
+	d := ctx.gfx.deferred_destructor
 	d.resources[d.next_index] = resource
 	d.next_index += 1
-	assert(d.next_index < DEFERRED_DESTRUCTOR_SIZE, "Defered destructor is full. Increase DEFERRED_DESTRUCTOR_SIZE.")
+	assert(d.next_index < DEFERRED_DESTRUCTOR_SIZE, "Deferred destructor is full. Increase DEFERRED_DESTRUCTOR_SIZE.")
 }
 
 @(private)
-_clear_deffered_destructor :: proc() {
-	_deffered_destructor_clear(ctx.gfx.deffered_destructor)
+_clear_deferred_destructor :: proc() {
+	_deferred_destructor_clear(ctx.gfx.deferred_destructor)
 }
 
 @(private)
-_destroy_deffered_destructor :: proc() {
-	_deffered_destructor_clear(ctx.gfx.deffered_destructor)
-	free(ctx.gfx.deffered_destructor)
+_destroy_deferred_destructor :: proc() {
+	_deferred_destructor_clear(ctx.gfx.deferred_destructor)
+	free(ctx.gfx.deferred_destructor)
 }
 
 @(private = "file")
-_deffered_destructor_clear :: proc(d: ^Deferred_Destructor) {
+_deferred_destructor_clear :: proc(d: ^Deferred_Destructor) {
 	for i in 0 ..< d.next_index {
 		switch &resource in d.resources[i] {
 		case Buffer_Data:
 			_destroy_buffer(&resource)
 		case Buffer:
-			destroy_buffer(resource)
+			b := _acquire_buffer_h(resource)
+			_destroy_buffer(&b)
 		case Texture_Data:
 			_destroy_texture(&resource)
 		case Texture:

@@ -36,7 +36,7 @@ _init_gfx :: proc(init_info: Graphics_Init_Info) {
 	_init_pipeline_manager()
 	_init_sync_obj()
 	_init_swapchain(init_info.swapchain_sample_count)
-	_init_deffered_destructor()
+	_init_deferred_destructor()
 	_init_buffer_manager()
 	_init_bindless()
 }
@@ -46,7 +46,7 @@ _destroy_gfx :: proc() {
 	wait_render_completion()
 	_destroy_bindless()
 	_destroy_buffer_manager()
-	_destroy_deffered_destructor()
+	_destroy_deferred_destructor()
 	_destroy_descriptor_layout_manager()
 	_destroy_sync_obj()
 	_destroy_swapchain()
