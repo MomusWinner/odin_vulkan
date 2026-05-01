@@ -59,25 +59,25 @@ buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: 
 // used for generated uniform and storage object structs
 
 ubo_get_buffer :: proc(h: Uniform_Buffer) -> Buffer {
-	b := get_uniform_buffer(h)
+	b := ubo_get_data(h)
 	return b.buffer
 }
 
-store_uniform_buffer :: proc(ubo: Uniform_Buffer_Data) -> Uniform_Buffer {
+store_ubo :: proc(ubo: Uniform_Buffer_Data) -> Uniform_Buffer {
 	return hm.insert(&ctx.gfx.buffer_manager.uniform_buffers, ubo)
 }
 
-get_uniform_buffer :: proc(handle: Uniform_Buffer, loc := #caller_location) -> ^Uniform_Buffer_Data {
+ubo_get_data :: proc(handle: Uniform_Buffer, loc := #caller_location) -> ^Uniform_Buffer_Data {
 	b, ok := hm.get(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	assert(ok, "Invalid uniform buffer handle", loc)
 	return b
 }
 
-has_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
+ubo_is_valid :: proc(handle: Uniform_Buffer) -> bool {
 	return hm.has_handle(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 }
 
-destroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
+destroy_ubo :: proc(handle: Uniform_Buffer) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	if !ok do return false
 	destroy_buffer(uniform_buffer.buffer)
@@ -85,25 +85,25 @@ destroy_uniform_buffer :: proc(handle: Uniform_Buffer) -> bool {
 }
 
 sbo_get_buffer :: proc(h: Storage_Buffer) -> Buffer {
-	b := get_storage_buffer(h)
+	b := sbo_get_data(h)
 	return b.buffer
 }
 
-store_storage_buffer :: proc(sbo: Storage_Buffer_Data) -> Storage_Buffer {
+store_sbo :: proc(sbo: Storage_Buffer_Data) -> Storage_Buffer {
 	return hm.insert(&ctx.gfx.buffer_manager.storage_buffers, sbo)
 }
 
-has_storage_buffer :: proc(handle: Storage_Buffer) -> bool {
+sbo_is_valid :: proc(handle: Storage_Buffer) -> bool {
 	return hm.has_handle(&ctx.gfx.buffer_manager.storage_buffers, handle)
 }
 
-get_storage_buffer :: proc(handle: Storage_Buffer, loc := #caller_location) -> ^Storage_Buffer_Data {
+sbo_get_data :: proc(handle: Storage_Buffer, loc := #caller_location) -> ^Storage_Buffer_Data {
 	b, ok := hm.get(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	assert(ok, "Invalid uniform buffer handle", loc)
 	return b
 }
 
-destroy_storage_buffer :: proc(handle: Storage_Buffer) -> bool {
+destroy_sbo :: proc(handle: Storage_Buffer) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	if !ok do return false
 	destroy_buffer(storage_buffer.buffer)

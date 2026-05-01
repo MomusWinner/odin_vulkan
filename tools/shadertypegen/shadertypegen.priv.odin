@@ -4,10 +4,8 @@ package shadertypegen
 import "core:fmt"
 import "core:log"
 import "core:odin/ast"
-import "core:odin/parser"
 import "core:odin/tokenizer"
 import "core:os"
-import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
@@ -113,9 +111,9 @@ get_odin_buffer_handle_get_proc_name :: proc(s: Struct) -> string {
 	case .Material:
 		return "None"
 	case .Uniform_Buffer:
-		return "get_uniform_buffer"
+		return "ubo_get_data"
 	case .Storage_Buffer:
-		return "get_storage_buffer"
+		return "sbo_get_data"
 	}
 	return "None"
 }
@@ -568,7 +566,7 @@ create_sbo_{0:s} :: proc(
 	}
 
 	fmt.fprintfln(f, `
-	return {0:s}store_storage_buffer(s)
+	return {0:s}store_sbo(s)
 }}`, gfx_pref)
 	generate_odin_get_set_proc(f, s, gfx_pref)
 	generate_odin_apply_proc(f, s, gfx_pref)
@@ -619,7 +617,7 @@ create_ubo_{0:s} :: proc(
 	}
 
 	fmt.fprintfln(f, `
-	return {0:s}store_uniform_buffer(u)
+	return {0:s}store_ubo(u)
 }}`, gfx_pref)
 
 	generate_odin_get_set_proc(f, s, gfx_pref)
