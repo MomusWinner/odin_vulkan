@@ -889,12 +889,12 @@ _cmd_image_transition_layout :: proc(
 		dst_stage = {}
 	} else if old_layout == .COLOR_ATTACHMENT_OPTIMAL && new_layout == .SHADER_READ_ONLY_OPTIMAL {
 		src_access = {.COLOR_ATTACHMENT_WRITE}
-		dst_access = {.MEMORY_READ}
+		dst_access = {.INPUT_ATTACHMENT_READ}
 
 		src_stage = {.COLOR_ATTACHMENT_OUTPUT}
 		dst_stage = {.VERTEX_SHADER, .FRAGMENT_SHADER}
 	} else if old_layout == .SHADER_READ_ONLY_OPTIMAL && new_layout == .COLOR_ATTACHMENT_OPTIMAL {
-		src_access = {.MEMORY_READ}
+		src_access = {.INPUT_ATTACHMENT_READ}
 		// TODO: COLOR_ATTACHMENT_READ is needed only in specific cases
 		dst_access = {.COLOR_ATTACHMENT_WRITE, .COLOR_ATTACHMENT_READ}
 
