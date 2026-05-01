@@ -335,8 +335,7 @@ Error: %s`,
 _create_logical_device :: proc() {
 	indices := _find_queue_families(ctx.gfx.vk_state.physical_device, ctx.gfx.vk_state.surface)
 	// TODO: this is kinda messy.
-	indices_set := make(map[u32]struct {
-		}, allocator = context.temp_allocator)
+	indices_set := make(map[u32]struct{}, allocator = context.temp_allocator)
 	indices_set[indices.graphics.?] = {}
 	indices_set[indices.present.?] = {}
 
