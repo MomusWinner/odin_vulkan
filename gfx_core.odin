@@ -50,8 +50,10 @@ Graphics_Attachment_Flag :: enum {
 }
 
 Graphics_Init_Info :: struct {
-	swapchain_sample_count: Sample_Count_Flag,
-	attachments:            Graphics_Attachment_Flags,
+	swapchain: struct {
+		sample_count: Sample_Count_Flag,
+		attachments:  Graphics_Attachment_Flags,
+	},
 }
 
 Swapchain_Configuration :: struct {
@@ -1215,8 +1217,8 @@ _swapchain_setup :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer
 		_swapchain_setup_msaa_color_texture(swapchain)
 	}
 
-	if .Depth in ctx.info.gfx.attachments {
-		stencil := .Stencil in ctx.info.gfx.attachments
+	if .Depth in ctx.info.gfx.swapchain.attachments {
+		stencil := .Stencil in ctx.info.gfx.swapchain.attachments
 		_swapchain_setupt_depth_texture(swapchain, command_buffer, stencil)
 	}
 }
@@ -1228,7 +1230,7 @@ _swapchain_destroy :: proc(swapchain: ^Swapchain) {
 		_destroy_texture(&msaa_color_texture)
 	}
 
-	if .Depth in ctx.info.gfx.attachments {
+	if .Depth in ctx.info.gfx.swapchain.attachments {
 		_destroy_texture(&swapchain.depth_image)
 	}
 
@@ -1293,7 +1295,7 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 
 @(private = "file")
 _swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer, stencil: bool) {
-	assert(.Depth in ctx.info.gfx.attachments)
+	assert(.Depth in ctx.info.gfx.swapchain.attachments)
 
 	format: Format
 	if stencil {

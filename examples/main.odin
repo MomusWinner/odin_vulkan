@@ -62,7 +62,7 @@ main :: proc() {
 
 	ve.start(
 		{
-			gfx = {swapchain_sample_count = ._4, attachments = {.Depth, .Stencil}},
+			gfx = {swapchain = {sample_count = ._4, attachments = {.Depth, .Stencil}}},
 			window = {width = 800, height = 400, title = "Examples"},
 		},
 	)

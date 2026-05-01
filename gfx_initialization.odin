@@ -35,7 +35,7 @@ _init_gfx :: proc(init_info: Graphics_Init_Info) {
 
 	_init_pipeline_manager()
 	_init_sync_obj()
-	_init_swapchain(init_info.swapchain_sample_count)
+	_init_swapchain(init_info.swapchain.sample_count)
 	_init_deferred_destructor()
 	_init_buffer_manager()
 	_init_bindless()
