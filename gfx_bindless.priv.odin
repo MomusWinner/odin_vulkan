@@ -41,8 +41,8 @@ _has_texture_h :: proc(texture_h: Texture) -> bool {
 }
 
 @(require_results)
-_acquire_texture_h :: proc(texture_h: Texture) -> Texture_Data {
-	return _bindless_remove_texture(ctx.gfx.bindless, texture_h)
+_acquire_texture_h :: proc(texture_h: Texture, loc := #caller_location) -> Texture_Data {
+	return _bindless_remove_texture(ctx.gfx.bindless, texture_h, loc)
 }
 
 @(require_results)
