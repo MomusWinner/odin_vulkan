@@ -96,9 +96,14 @@ postprocessing_scene_draw :: proc(s: ^Scene) {
 postprocessing_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Postprocessing_Scene_Data)s.data
 
+	ve.destroy_camera(&d.camera)
 	ve.destroy_mesh(&d.model)
 	ve.destroy_mesh(&d.square)
+	ve.destroy_texture(d.texture)
 	ve.destroy_render_target(&d.rt)
+	ve.destroy_ubo(d.ubo)
+	ve.destroy_graphics_pipeline(d.pipeline)
+	ve.destroy_graphics_pipeline(d.postproc_pipeline)
 
 	free(d)
 }

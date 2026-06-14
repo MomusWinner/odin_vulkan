@@ -51,8 +51,8 @@ _store_buffer :: proc(buffer: Buffer_Data, loc := #caller_location) -> Buffer {
 }
 
 @(require_results)
-_acquire_buffer_h :: proc(buffer_h: Buffer) -> Buffer_Data {
-	return _bindless_remove_buffer(ctx.gfx.bindless, buffer_h)
+_acquire_buffer_h :: proc(buffer_h: Buffer, loc := #caller_location) -> Buffer_Data {
+	return _bindless_remove_buffer(ctx.gfx.bindless, buffer_h, loc)
 }
 
 @(require_results)

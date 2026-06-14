@@ -1,11 +1,7 @@
 package main
 
 import ve ".."
-import "base:runtime"
 import "core:log"
-import "core:math"
-import "core:math/rand"
-import "core:time"
 
 Skybox_Scene_Data :: struct {
 	cubemap:          ve.Texture,
@@ -81,5 +77,9 @@ skybox_scene_draw :: proc(s: ^Scene) {
 skybox_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Skybox_Scene_Data)s.data
 	ve.destroy_mesh(&d.cube)
+	ve.destroy_camera(&d.camera)
+	ve.destroy_texture(d.cubemap)
+	ve.destroy_graphics_pipeline(d.skybox_pipeline)
+	ve.destroy_graphics_pipeline(d.reflect_pipeline)
 	free(d)
 }

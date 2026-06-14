@@ -2,15 +2,12 @@ package main
 
 import ve ".."
 import "base:runtime"
-import sm "core:container/small_array"
 import "core:log"
 import "core:math"
 import "core:math/linalg/glsl"
 import "core:math/rand"
-import "core:slice"
-import "core:time"
 
-PARTICLE_COUNT :: 100_000
+PARTICLE_COUNT :: 500_000
 INVOCATION_SIZE :: 256
 GROUP_COUNT :: 1 + PARTICLE_COUNT / INVOCATION_SIZE
 
@@ -93,6 +90,12 @@ compute_scene_draw :: proc(s: ^Scene) {
 
 compute_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Compute_Scene_Data)s.data
+
+	ve.destroy_mesh(&d.mesh)
+	ve.destroy_ubo(d.time_ubo)
+	ve.destroy_graphics_pipeline(d.pipeline)
+	ve.destroy_compute_pipeline(d.compute_pipeline)
+
 	free(d)
 }
 

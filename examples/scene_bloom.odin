@@ -200,6 +200,22 @@ bloom_scene_destroy :: proc(s: ^Scene) {
 	ve.destroy_render_target(&d.rt)
 	ve.destroy_mesh(&d.cube)
 	ve.destroy_mesh(&d.square)
+	ve.destroy_camera(&d.camera)
+
+	for l in d.light_sources {
+		ve.destroy_ubo(l.box_ubo)
+	}
+
+	ve.destroy_ubo(d.light_box_ubo)
+	ve.destroy_ubo(d.multilight_ubo)
+	ve.destroy_ubo(d.hdr_ubo)
+	ve.destroy_ubo(d.blur_ubo)
+
+	ve.destroy_graphics_pipeline(d.blur_hor_pipeline)
+	ve.destroy_graphics_pipeline(d.blur_ver_pipeline)
+	ve.destroy_graphics_pipeline(d.multilight_pipeline)
+	ve.destroy_graphics_pipeline(d.hdr_pipeline)
+	ve.destroy_graphics_pipeline(d.light_source_pipeline)
 
 	free(d)
 }

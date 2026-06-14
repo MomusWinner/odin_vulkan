@@ -44,9 +44,9 @@ _init_gfx :: proc(init_info: Graphics_Init_Info) {
 @(private)
 _destroy_gfx :: proc() {
 	wait_render_completion()
+	_destroy_deferred_destructor()
 	_destroy_bindless()
 	_destroy_buffer_manager()
-	_destroy_deferred_destructor()
 	_destroy_descriptor_layout_manager()
 	_destroy_sync_obj()
 	_destroy_swapchain()

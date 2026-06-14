@@ -67,6 +67,10 @@ model_scene_draw :: proc(s: ^Scene) {
 
 model_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Model_Scene_Data)s.data
+	ve.destroy_camera(&d.camera)
 	ve.destroy_mesh(&d.mesh)
+	ve.destroy_texture(d.texture)
+	ve.destroy_ubo(d.ubo)
+	ve.destroy_graphics_pipeline(d.pipeline)
 	free(d)
 }

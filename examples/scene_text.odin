@@ -111,6 +111,7 @@ text_scene_draw :: proc(s: ^Scene) {
 text_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Text_Scene_Data)s.data
 
+	destroy_text(&d.text)
 	strings.builder_destroy(&d.builder)
 	ve.destroy_font(&d.font)
 
@@ -153,6 +154,11 @@ create_text :: proc(
 		text = text,
 		mesh = mesh,
 	}
+}
+
+destroy_text :: proc(t: ^Text) {
+	ve.destroy_ubo(t.ubo)
+	ve.destroy_mesh(&t.mesh)
 }
 
 text_set_color :: proc(text: ^Text, color: vec3, loc := #caller_location) {

@@ -80,6 +80,7 @@ ubo_is_valid :: proc(handle: Uniform_Buffer) -> bool {
 destroy_ubo :: proc(handle: Uniform_Buffer) -> bool {
 	uniform_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.uniform_buffers, handle)
 	if !ok do return false
+	free(uniform_buffer.data)
 	destroy_buffer(uniform_buffer.buffer)
 	return true
 }
@@ -106,6 +107,7 @@ sbo_get_data :: proc(handle: Storage_Buffer, loc := #caller_location) -> ^Storag
 destroy_sbo :: proc(handle: Storage_Buffer) -> bool {
 	storage_buffer, ok := hm.remove(&ctx.gfx.buffer_manager.storage_buffers, handle)
 	if !ok do return false
+	free(storage_buffer.data)
 	destroy_buffer(storage_buffer.buffer)
 	return true
 }

@@ -67,6 +67,10 @@ init_camera :: proc(camera: ^Camera, type: Camera_Projection_Type = .Perspective
 	camera.buffer = _store_buffer(buffer, loc)
 }
 
+destroy_camera :: proc(camera: ^Camera) {
+	destroy_buffer(camera.buffer)
+}
+
 camera_get_up :: proc(camera: Camera, loc := #caller_location) -> vec3 {
 	return lin.normalize_vec3(camera.up)
 }

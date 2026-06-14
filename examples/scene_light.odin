@@ -185,6 +185,28 @@ light_scene_destroy :: proc(s: ^Scene) {
 	ve.destroy_render_target(&d.rt)
 	ve.destroy_mesh(&d.suzanne_mesh)
 	ve.destroy_mesh(&d.ground_mesh)
+	ve.destroy_camera(&d.camera)
+	ve.destroy_camera(&d.light_camera)
+	ve.destroy_graphics_pipeline(d.light_pipeline)
+	ve.destroy_graphics_pipeline(d.depth_only_pipeline)
+	ve.destroy_ubo(d.light_ubo)
+	ve.destroy_ubo(d.light_data_ubo)
+	ve.destroy_ubo(d.surf_draw_ubo)
+
 
 	free(d)
 }
+
+// suzanne_mesh:        ve.Mesh,
+// suzanne_trf:         ve.Transform,
+// ground_mesh:         ve.Mesh,
+// ground_trf:          ve.Transform,
+// camera:              ve.Camera,
+// light_camera:        ve.Camera,
+// rt:                  ve.Render_Target,
+// shadow_map_texture:  ve.Texture,
+// light_pipeline:      ve.Graphics_Pipeline,
+// light_ubo:           ve.Uniform_Buffer,
+// light_data_ubo:      ve.Uniform_Buffer,
+// surf_draw_ubo:       ve.Uniform_Buffer,
+// depth_only_pipeline: ve.Graphics_Pipeline,

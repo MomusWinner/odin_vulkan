@@ -2,11 +2,7 @@ package main
 
 import ve ".."
 import "base:runtime"
-import sm "core:container/small_array"
 import "core:log"
-import "core:math"
-import "core:math/rand"
-import "core:time"
 
 @(buffer)
 Outline_UBO :: struct {
@@ -93,6 +89,9 @@ outline_scene_draw :: proc(s: ^Scene) {
 
 outline_scene_destroy :: proc(s: ^Scene) {
 	d := cast(^Outline_Scene_Data)s.data
+	ve.destroy_camera(&d.camera)
 	ve.destroy_mesh(&d.mesh)
+	ve.destroy_graphics_pipeline(d.outline_pipeline)
+	ve.destroy_ubo(d.outline_ubo)
 	free(d)
 }
