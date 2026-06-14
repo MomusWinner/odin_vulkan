@@ -31,6 +31,20 @@ Scene :: struct {
 TARGET_FPS :: 120
 
 current_scene: Scene
+current_scene_index: int
+scenes := []proc() -> Scene {
+	create_model_scene,
+	create_postprocessing_scene,
+	create_light_scene,
+	create_skybox_scene,
+	create_outline_scene,
+	create_bloom_scene,
+	create_instancing_scene,
+	create_compute_scene,
+	create_text_scene,
+	create_empty_scene,
+}
+
 
 main :: proc() {
 	when ODIN_DEBUG {
@@ -43,7 +57,7 @@ main :: proc() {
 				fmt.eprintf(
 					"=== %v allocations not freed: ===\n",
 					len(track.allocation_map),
-				);for _, entry in track.allocation_map {
+				); for _, entry in track.allocation_map {
 					fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
 				}
 			}
@@ -67,16 +81,7 @@ main :: proc() {
 		},
 	)
 
-	current_scene = create_model_scene()
-	// current_scene = create_postprocessing_scene()
-	// current_scene = create_light_scene()
-	// current_scene = create_skybox_scene()
-	// current_scene = create_outline_scene()
-	// current_scene = create_bloom_scene()
-	// current_scene = create_instancing_scene()
-	// current_scene = create_compute_scene()
-	// current_scene = create_text_scene()
-	// current_scene = create_empty_scene()
+	current_scene = scenes[current_scene_index]()
 
 	current_scene.init(&current_scene)
 
@@ -89,6 +94,27 @@ main :: proc() {
 
 		if (ve.key_is_pressed(.R)) {
 			ve.shaders_hot_reload()
+		}
+
+		if ve.key_is_pressed(.N) {
+			current_scene_index += 1
+			if current_scene_index > len(scenes) - 1 {
+				current_scene_index = 0
+			}
+		}
+
+		if ve.key_is_pressed(.B) {
+			current_scene_index -= 1
+			if current_scene_index < 0 {
+				current_scene_index = len(scenes) - 1
+			}
+		}
+
+		if ve.key_is_pressed(.N) || ve.key_is_pressed(.B) {
+			ve.wait_render_completion()
+			current_scene.destroy(&current_scene)
+			current_scene = scenes[current_scene_index]()
+			current_scene.init(&current_scene)
 		}
 
 		current_scene.update(&current_scene)
