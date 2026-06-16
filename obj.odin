@@ -1,13 +1,8 @@
 package ve
 
-import "core:fmt"
-import "core:hash"
-import "core:io"
 import "core:log"
-import "core:os"
 import "core:strconv"
 import "core:strings"
-import "math"
 
 Obj_Mesh :: struct {
 	name:     string,
@@ -48,7 +43,12 @@ parse_obj_from_memory :: proc(data: []byte, allocator := context.allocator) -> [
 	// position, texture coordinates, normal
 	parse_f :: proc(s: string) -> (p: int, t: int, n: int) {
 		indexes := strings.split(s, "/", context.temp_allocator)
-		return parse_int(indexes[0]) - 1, parse_int(indexes[1]) - 1, parse_int(indexes[2]) - 1
+		_p: int = parse_int(indexes[0]) - 1
+		_t := -1
+		_n := -1
+		if len(indexes) > 1 do _t = parse_int(indexes[1]) - 1
+		if len(indexes) > 2 do _n = parse_int(indexes[2]) - 1
+		return _p, _t, _n
 	}
 
 	data_string := string(data)
@@ -94,10 +94,12 @@ parse_obj_from_memory :: proc(data: []byte, allocator := context.allocator) -> [
 				hash := Obj_Vertex{p, t, n}
 				v_index, ok := index_by_vertex[hash]
 				if !ok {
-					append(
-						&vertices,
-						Vertex{position = positions[p], tex_coord = texture_coordinates[t], normal = normals[n]},
-					)
+					v: Vertex
+					if len(positions) > p && p != -1 do v.position = positions[p]
+					if len(texture_coordinates) > t && t != -1 do v.tex_coord = texture_coordinates[t]
+					if len(normals) > n && n != -1 do v.normal = normals[n]
+
+					append(&vertices, v)
 					v_index = cast(u16)len(vertices) - 1
 					index_by_vertex[hash] = v_index
 				}
