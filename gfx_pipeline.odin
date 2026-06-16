@@ -235,8 +235,8 @@ Vertex_Input_Description :: struct {
 }
 Vertex_Input_Descriptions :: sm.Small_Array(MAX_PIPELINE_BINDING_COUNT, Vertex_Input_Description)
 
-Compute_Pipeline :: distinct hm.Handle
 Graphics_Pipeline :: distinct hm.Handle
+Compute_Pipeline :: distinct hm.Handle
 
 Pipeline_Layout :: vk.PipelineLayout
 

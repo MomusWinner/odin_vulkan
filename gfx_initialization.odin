@@ -371,6 +371,7 @@ _create_logical_device :: proc() {
 
 	vk.GetDeviceQueue(ctx.gfx.vk_state.device, indices.graphics.?, 0, &ctx.gfx.vk_state.graphics_queue)
 	vk.GetDeviceQueue(ctx.gfx.vk_state.device, indices.present.?, 0, &ctx.gfx.vk_state.present_queue)
+	ctx.gfx.vk_state.queue_indices = indices
 }
 
 @(private)
@@ -560,6 +561,7 @@ _get_required_physical_device_features :: proc(features: ^Physical_Device_Featur
 	features.features.sType = .PHYSICAL_DEVICE_FEATURES_2
 	features.features.pNext = &features.features12
 	features.features.features.geometryShader = true
+	features.features.features.fillModeNonSolid = true
 	features.features.features.samplerAnisotropy = true
 	features.features.features.depthBiasClamp = true
 	features.features.features.fragmentStoresAndAtomics = true
@@ -666,14 +668,13 @@ _find_supported_format :: proc(
 	log.panic("Failed to find supported format!")
 }
 
-@(private)
-QueueFamilyIndices :: struct {
+Queue_Family_Indices :: struct {
 	graphics: Maybe(u32),
 	present:  Maybe(u32),
 }
 
 @(private)
-_find_queue_families :: proc(device: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> (ids: QueueFamilyIndices) {
+_find_queue_families :: proc(device: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> (ids: Queue_Family_Indices) {
 	count: u32
 	vk.GetPhysicalDeviceQueueFamilyProperties(device, &count, nil)
 

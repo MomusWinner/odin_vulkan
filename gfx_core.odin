@@ -33,6 +33,7 @@ Vulkan_State :: struct {
 	allocator:                vma.Allocator,
 	graphics_queue:           vk.Queue,
 	present_queue:            vk.Queue,
+	queue_indices:            Queue_Family_Indices,
 	surface:                  vk.SurfaceKHR,
 	command_pool:             vk.CommandPool,
 	descriptor_pool:          vk.DescriptorPool,
@@ -357,13 +358,18 @@ Format :: enum i32 {
 	D_f32_S_u8      = 130,
 }
 
+get_graphics_cmd :: proc() -> Command_Buffer {return _get_cmd()}
+
 @(private)
 _get_cmd :: proc() -> Command_Buffer {return ctx.gfx.cmd}
+
+vk_state_get_info :: proc() -> Vulkan_State {
+	return ctx.gfx.vk_state
+}
 
 begin_pass :: proc(loc := #caller_location) {
 	assert(!ctx.gfx.render_started, "Call end_pass() after begin_pass()", loc)
 
-	_update_buffers()
 
 	defer ctx.gfx.render_started = true
 
@@ -394,6 +400,8 @@ begin_pass :: proc(loc := #caller_location) {
 			_resize_swapchain()
 		}
 	}
+
+	_update_buffers()
 
 	must(vk.ResetFences(ctx.gfx.vk_state.device, 1, &ctx.gfx.fence))
 	must(vk.ResetCommandBuffer(_get_cmd(), {}))
@@ -957,8 +965,7 @@ _cmd_copy_buffer :: proc(cmd: Command_Buffer, src_buffer: vk.Buffer, dst_buffer:
 create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location) -> Mesh {
 	assert(len(vertices) > 0, loc = loc)
 
-	vertices_size := cast(vk.DeviceSize)(size_of(vertices[0]) * len(vertices))
-	vertex_buffer := create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
+	vertex_buffer := create_buffer({.Vertex}, size_of(vertices[0]) * len(vertices), raw_data(vertices), loc)
 
 	mesh := Mesh {
 		vertex_count = len(vertices),
@@ -966,8 +973,7 @@ create_mesh :: proc(vertices: []Vertex, indices: []u16, loc := #caller_location)
 	}
 
 	if len(indices) != 0 {
-		indices_size := cast(vk.DeviceSize)(size_of(indices[0]) * len(indices))
-		index_buffer := create_buffer({.Index}, indices_size, raw_data(indices), loc)
+		index_buffer := create_buffer({.Index}, size_of(indices[0]) * len(indices), raw_data(indices), loc)
 		mesh.ebo = index_buffer
 		mesh.index_count = len(indices)
 	} else {
@@ -1064,6 +1070,22 @@ _get_push_constants_data :: proc(trf: Maybe(mat4), handles: Handles, loc := #cal
 // ╚════██║██║███╗██║██╔══██║██╔═══╝     ██║     ██╔══██║██╔══██║██║██║╚██╗██║
 // ███████║╚███╔███╔╝██║  ██║██║         ╚██████╗██║  ██║██║  ██║██║██║ ╚████║
 // ╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝          ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝
+
+
+swapchain_get_color_format :: proc() -> Format {
+	return _swapchain_get_color_format()
+}
+
+swapchain_get_depth_format :: proc() -> Format {
+	return _swapchain_get_depth_format(ctx.gfx.swapchain)
+}
+
+swapchain_get_stencil_format :: proc() -> Format {
+	if _swapchain_has_stencil() {
+		return _swapchain_get_depth_format(ctx.gfx.swapchain)
+	}
+	return .None
+}
 
 @(private)
 _init_swapchain :: proc(sample_count: Sample_Count_Flag) {
@@ -1218,8 +1240,7 @@ _swapchain_setup :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer
 	}
 
 	if .Depth in ctx.info.gfx.swapchain.attachments {
-		stencil := .Stencil in ctx.info.gfx.swapchain.attachments
-		_swapchain_setupt_depth_texture(swapchain, command_buffer, stencil)
+		_swapchain_setupt_depth_texture(swapchain, command_buffer)
 	}
 }
 
@@ -1259,6 +1280,28 @@ _get_swapchaint_capabilites :: proc() -> (capabilities: vk.SurfaceCapabilitiesKH
 	return
 }
 
+@(private)
+_swapchain_has_stencil :: proc() -> bool {
+	return .Stencil in ctx.info.gfx.swapchain.attachments
+}
+
+@(private)
+_swapchain_get_depth_format :: proc(swapchain: ^Swapchain) -> Format {
+	format: Format
+
+	stencil := _swapchain_has_stencil()
+	if stencil {
+		return ctx.gfx.swapchain_cfg.depth_stencil_format
+	} else {
+		return ctx.gfx.swapchain_cfg.depth_format
+	}
+}
+
+@(private)
+_swapchain_get_color_format :: proc() -> Format {
+	return ctx.gfx.swapchain.color_format
+}
+
 @(private = "file")
 _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 	color_format := swapchain.color_format
@@ -1294,15 +1337,11 @@ _swapchain_setup_msaa_color_texture :: proc(swapchain: ^Swapchain) {
 }
 
 @(private = "file")
-_swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer, stencil: bool) {
+_swapchain_setupt_depth_texture :: proc(swapchain: ^Swapchain, command_buffer: vk.CommandBuffer) {
 	assert(.Depth in ctx.info.gfx.swapchain.attachments)
 
-	format: Format
-	if stencil {
-		format = ctx.gfx.swapchain_cfg.depth_stencil_format
-	} else {
-		format = ctx.gfx.swapchain_cfg.depth_format
-	}
+	stencil := _swapchain_has_stencil()
+	format: Format = _swapchain_get_depth_format(swapchain)
 
 	image, allocation, allocation_info := _create_vk_image(
 		cast(u32)swapchain.width,

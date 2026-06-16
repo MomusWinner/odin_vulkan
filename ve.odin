@@ -83,6 +83,8 @@ framebuffer_get_size :: proc() -> (int, int) {
 }
 
 @(require_results)
+window_get_glfw_handle :: proc() -> glfw.WindowHandle {return ctx.window.id}
+@(require_results)
 window_get_size :: proc() -> (int, int) {
 	w, h := glfw.GetWindowSize(ctx.window.id)
 	return cast(int)w, cast(int)h
@@ -219,6 +221,7 @@ load_obj :: proc {
 	load_obj_from_memory,
 }
 
+@(require_results)
 load_obj_from_file :: proc(path: string, allocator := context.allocator) -> []Mesh {
 	data, ok := read_file(path, context.temp_allocator)
 	if !ok {
