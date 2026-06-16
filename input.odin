@@ -185,11 +185,11 @@ key_is_released :: proc(key: Key) -> bool {
 	return ctx.input.keyboard.states[key] == glfw.RELEASE && ctx.input.keyboard.previous_states[key] == glfw.PRESS
 }
 
-key_is_just_pressed :: proc(button: MouseButton) -> bool {
+key_is_just_pressed :: proc(button: Key) -> bool {
 	return ctx.input.keyboard.states[button] == glfw.PRESS && ctx.input.keyboard.previous_states[button] != glfw.PRESS
 }
 
-key_is_just_released :: proc(button: MouseButton) -> bool {
+key_is_just_released :: proc(button: Key) -> bool {
 	return(
 		ctx.input.keyboard.states[button] == glfw.RELEASE &&
 		ctx.input.keyboard.previous_states[button] != glfw.RELEASE \
