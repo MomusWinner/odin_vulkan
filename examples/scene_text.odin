@@ -136,8 +136,7 @@ create_text :: proc(
 	ubo_text_set_color(ubo, color)
 
 	vertices, width, height := ve.create_text_mesh(font, text, size, context.temp_allocator, loc)
-	vertices_size := cast(ve.Device_Size)(size_of(ve.FontVertex) * len(vertices))
-	vbo := ve.create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
+	vbo := ve.create_buffer({.Vertex}, size_of(ve.FontVertex) * len(vertices), raw_data(vertices), loc)
 
 	mesh := ve.Mesh {
 		vbo          = vbo,
@@ -170,8 +169,7 @@ text_set_string :: proc(text: ^Text, text_str: string, loc := #caller_location) 
 	ve.destroy_mesh(&text.mesh, loc)
 
 	vertices, width, height := ve.create_text_mesh(text.font, text_str, text.size, context.temp_allocator, loc)
-	vertices_size := cast(ve.Device_Size)(size_of(ve.FontVertex) * len(vertices))
-	vbo := ve.create_buffer({.Vertex}, vertices_size, raw_data(vertices), loc)
+	vbo := ve.create_buffer({.Vertex}, size_of(ve.FontVertex) * len(vertices), raw_data(vertices), loc)
 
 	mesh := ve.Mesh {
 		vbo          = vbo,

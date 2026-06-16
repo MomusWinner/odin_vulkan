@@ -175,7 +175,7 @@ camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) 
 		position   = camera.position,
 		target     = camera.target,
 	}
-	buffer_fill(camera.buffer, &camera_ubo, size_of(Camera_UBO))
+	buffer_fill(camera.buffer, size_of(Camera_UBO), &camera_ubo)
 
 	return camera.buffer
 }

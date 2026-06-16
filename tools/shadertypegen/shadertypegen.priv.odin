@@ -513,7 +513,7 @@ generate_odin_apply_proc :: proc(f: ^os.File, s: Struct, ve_pkg: string) {
 	fmt.fprintf(
 		f,
 		`
-	{1:s}buffer_fill(b.buffer, gpu_data_ptr, size_of({0:s}), loc = loc)
+	{1:s}buffer_fill(b.buffer,size_of({0:s}), gpu_data_ptr, loc = loc)
 	b.dirty = false
 }}
 `,

@@ -32,13 +32,8 @@ Uniform_Buffer_Data :: Cached_Buffer
 Storage_Buffer_Data :: Cached_Buffer
 
 @(require_results)
-create_buffer :: proc(
-	usage: Buffer_Usage_Flags,
-	size: Device_Size,
-	data: rawptr = nil,
-	loc := #caller_location,
-) -> Buffer {
-	data := _create_buffer(usage, size, data, loc)
+create_buffer :: proc(usage: Buffer_Usage_Flags, size: int, data: rawptr = nil, loc := #caller_location) -> Buffer {
+	data := _create_buffer(usage, cast(Device_Size)size, data, loc)
 	return _store_buffer(data)
 }
 
@@ -46,14 +41,15 @@ destroy_buffer :: proc(b: Buffer, loc := #caller_location) {
 	_deferred_destructor_add(b)
 }
 
-buffer_fill :: proc(b: Buffer, data: rawptr, size: Device_Size, offset: Device_Size = 0, loc := #caller_location) {
+buffer_fill :: proc(b: Buffer, size: int, data: rawptr, offset: int = 0, loc := #caller_location) {
 	b_data := _get_buffer_h(b)
-	_buffer_fill(b_data, data, size, offset, loc)
+	_buffer_fill(b_data, data, cast(Device_Size)size, cast(Device_Size)offset, loc)
 }
 
-buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: Device_Size) {
+buffer_read :: proc(b: Buffer, loc := #caller_location) -> (data: rawptr, size: int) {
 	b_data := _get_buffer_h(b)
-	return _buffer_read(b_data, loc)
+	d, s := _buffer_read(b_data, loc)
+	return d, cast(int)s
 }
 
 // used for generated uniform and storage object structs
