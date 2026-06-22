@@ -105,11 +105,11 @@ generate_shader_types :: proc(
 		log.errorf("Unable to find directory src-path: \"%s\"", src_path)
 	}
 
-	if !os.is_dir(filepath.dir(output_glsl_path, context.temp_allocator)) {
+	if !os.is_dir(filepath.dir(output_glsl_path)) {
 		log.errorf("Unable to find output-glsl dir: \"%s\"", output_glsl_path)
 	}
 
-	if !os.is_dir(filepath.dir(output_odin_path, context.temp_allocator)) {
+	if !os.is_dir(filepath.dir(output_odin_path)) {
 		log.errorf("Unable to find output-odin dir: \"%s\"", output_odin_path)
 	}
 
