@@ -183,7 +183,7 @@ camera_get_buffer :: proc(camera: Camera, aspect: f32, loc := #caller_location) 
 camera_update_simple_controller :: proc(
 	camera: ^Camera,
 	speed: f32 = 2.0,
-	mouse_sens: f32 = 0.05,
+	mouse_sens: f32 = 0.0005,
 	zoom_speed: f32 = 2.5,
 ) {
 	speed := speed
@@ -195,7 +195,7 @@ camera_update_simple_controller :: proc(
 		forward := camera_get_forward(camera^)
 
 		{ 	// set camera pitch
-			angle: f32 = -m_delta.y * time_get_delta() * mouse_sens
+			angle: f32 = -m_delta.y * mouse_sens
 
 			maxAngleUp := vemath.vec3_angle(up, forward)
 			maxAngleUp -= 0.001
@@ -209,7 +209,7 @@ camera_update_simple_controller :: proc(
 		}
 
 		{ 	// set camera yaw
-			camera_set_yaw(camera, -m_delta.x * time_get_delta() * mouse_sens)
+			camera_set_yaw(camera, -m_delta.x * mouse_sens)
 		}
 	}
 
