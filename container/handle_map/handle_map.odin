@@ -1,12 +1,7 @@
 package handle_map
 
 import "base:builtin"
-import "core:fmt"
-import "core:log"
-import "core:math/linalg/glsl"
-import "core:slice"
 import "core:testing"
-import "core:time"
 
 Handle_Map :: struct($T: typeid, $HT: typeid) {
 	handles:        [dynamic]HT,
