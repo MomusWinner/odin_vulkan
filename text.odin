@@ -1,13 +1,9 @@
 package ve
 
 import "core:c"
-import sm "core:container/small_array"
 import "core:fmt"
 import "core:log"
-import "core:math/rand"
-import image "vendor:stb/image"
 import tt "vendor:stb/truetype"
-import vk "vendor:vulkan"
 
 Font :: struct {
 	size:                    f32,
@@ -172,8 +168,8 @@ destroy_font :: proc(font: ^Font, loc := #caller_location) {
 }
 
 @(private = "file")
-tt_must :: proc(status: i32, message: string = "Something went wrong with text rendering", loc := #caller_location) {
-	if status == 0 {
+tt_must :: proc(status: b32, message: string = "Something went wrong with text rendering", loc := #caller_location) {
+	if !status {
 		log.panic(message, loc)
 	}
 }
